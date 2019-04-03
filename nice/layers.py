@@ -75,7 +75,7 @@ class MultiplicativeCouplingLayer(_BaseCouplingLayer):
     def anticoupling_law(self,a,b):
         return tf.multiply(a,tf.reciprocal(b))
     def jacobian(self,a,b):
-        return tf.reduce_prod(tf.reciprocal(a))
+        return tf.reduce_prod(tf.reciprocal(b))
 
 class AffineCouplingLayer(_BaseCouplingLayer):
     def coupling_law(self,a,b):
@@ -129,7 +129,7 @@ class PiecewiseQuadratic(_BaseCouplingLayer):
         alpha, loc = self.get_alpha_bin(b)
         result = np.zeros_like(loc)
         for i,_ in enumerate(loc):
-            result[i] = tf.squar(alpha[i])/2.0*(V[i,int(loc[i])+1]-V[i,int(loc[i])]) \
+            result[i] = tf.square(alpha[i])/2.0*(V[i,int(loc[i])+1]-V[i,int(loc[i])]) \
                       + alpha*V[i,int(loc[i])]
             result[i] += tf.reduce_sum((V[i,:int(loc[i])]+V[i,:int(loc[i])+1)/2.0*W[i,:int(loc[i])])
 
