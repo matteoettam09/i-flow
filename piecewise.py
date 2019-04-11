@@ -21,7 +21,7 @@ class PiecewiseLinear(tfb.Bijector):
         self.id = layer_id
         self.nbins = nbins
         self.width = 1.0/self.nbins
-        self.range = np.arange(self.d)
+        self.range = tf.cast(tf.range(self.d),dtype=tf.int32)
         self.QMat = self.buildQ(self.d, self.nbins)
         self.trainable_variables = self.QMat.trainable_variables
         
@@ -37,42 +37,45 @@ class PiecewiseLinear(tfb.Bijector):
         
     def Q(self, xd):
         QMat = tf.nn.softmax(self.QMat(xd),axis=2)
-        QMat = np.insert(QMat,0,0,axis=2)
+        QMat = tf.pad(QMat,[[0,0],[0,0],[1,0]])
         return QMat
         
     def pdf(self,x):
         xd, xD = x[:, :self.d], x[:, self.d:]
         Q = self.Q(xd)
-        ibins = np.array(np.floor(xD*self.nbins),dtype=np.int32)+1
-        grid = np.array(np.meshgrid(np.arange(len(xD)),self.range)).T
-        bins = tf.concat([grid,ibins[np.arange(len(xD)),:,np.newaxis]],axis=2)
+        ibins = tf.cast(tf.floor(xD*self.nbins)+1,dtype=tf.int32)
+        batch_range = tf.range(tf.shape(xD)[0])
+        grid = tf.transpose(tf.meshgrid(batch_range,self.range))
+        bins = tf.concat([grid,tf.gather_nd(ibins,grid)[...,tf.newaxis]],axis=2)
         return tf.concat([xd, tf.gather_nd(Q,bins)/self.width], axis=1)
         
     def _forward(self, x):
         "Calculate forward coupling layer"
         xd, xD = x[:, :self.d], x[:, self.d:]
         Q = self.Q(xd)
-        ibins = np.array(np.floor(xD*self.nbins),dtype=np.int32)
+        ibins = tf.cast(tf.floor(xD*self.nbins),dtype=tf.int32)
         ibinsp1 = ibins+1
-        grid = np.array(np.meshgrid(np.arange(len(xD)),self.range)).T
-        bins = tf.concat([grid,ibinsp1[np.arange(len(xD)),:,np.newaxis]],axis=2)
-        binsSum = tf.concat([grid,ibins[np.arange(len(xD)),:,np.newaxis]],axis=2)
-        yD = (xD*self.nbins-ibins)*tf.gather_nd(Q,bins)+tf.gather_nd(np.cumsum(Q,axis=2),binsSum)
+        batch_range = tf.range(tf.shape(xD)[0])
+        grid = tf.transpose(tf.meshgrid(batch_range,self.range))
+        bins = tf.concat([grid,tf.gather_nd(ibinsp1,grid)[...,tf.newaxis]],axis=2)
+        binsSum = tf.concat([grid,tf.gather_nd(ibins,grid)[...,tf.newaxis]],axis=2)
+        yD = (xD*self.nbins-tf.cast(ibins,dtype=tf.float32))*tf.gather_nd(Q,bins)+tf.gather_nd(tf.cumsum(Q,axis=2),binsSum)
         return tf.concat([xd, yD], axis=1)
         
     def _inverse(self, y):
         "Calculate inverse coupling layer"
         yd, yD = y[:, :self.d], y[:, self.d:]
         Q = self.Q(yd)
-        ibins = tf.searchsorted(np.cumsum(Q,axis=2),yD[...,np.newaxis],side='right')
-        ibins = ibins.numpy().reshape(len(yD),self.d)
+        ibins = tf.cast(tf.searchsorted(tf.cumsum(Q,axis=2),yD[...,tf.newaxis],side='right'),dtype=tf.int32)
+        ibins = tf.reshape(ibins,[tf.shape(yD)[0],self.d])
         ibins = ibins-1
         ibinsp1 = ibins+1
-        grid = np.array(np.meshgrid(np.arange(len(yD)),self.range)).T
-        bins = tf.concat([grid,ibinsp1[np.arange(len(yD)),:,np.newaxis]],axis=2)
-        binsSum = tf.concat([grid,ibins[np.arange(len(yD)),:,np.newaxis]],axis=2)
-        xD = ((yD-tf.gather_nd(np.cumsum(Q,axis=2),binsSum))*tf.reciprocal(tf.gather_nd(Q,bins))\
-              +np.array(ibins,dtype=np.float32))*self.width
+        batch_range = tf.range(tf.shape(yD)[0])
+        grid = tf.transpose(tf.meshgrid(batch_range,self.range))
+        bins = tf.concat([grid,tf.gather_nd(ibinsp1,grid)[...,tf.newaxis]],axis=2)
+        binsSum = tf.concat([grid,tf.gather_nd(ibins,grid)[...,tf.newaxis]],axis=2)
+        xD = ((yD-tf.gather_nd(tf.cumsum(Q,axis=2),binsSum))*tf.reciprocal(tf.gather_nd(Q,bins))\
+              +tf.cast(ibins,dtype=tf.float32))*self.width
         xD = tf.where(tf.is_nan(xD), tf.ones_like(xD), xD)
         return tf.concat([yd, xD], axis=1)
     
@@ -84,12 +87,13 @@ class PiecewiseLinear(tfb.Bijector):
         "Calculate log determinant of Coupling Layer"
         yd, yD = y[:, :self.d], y[:, self.d:]
         Q = self.Q(yd)
-        ibins = tf.searchsorted(np.cumsum(Q,axis=2),yD[...,np.newaxis],side='right')
-        ibins = ibins.numpy().reshape(len(yD),self.d)
+        ibins = tf.cast(tf.searchsorted(tf.cumsum(Q,axis=2),yD[...,tf.newaxis],side='right'),dtype=tf.int32)
+        ibins = tf.reshape(ibins,[tf.shape(yD)[0],self.d])
         ibins = ibins-1
         ibinsp1 = ibins+1
-        grid = np.array(np.meshgrid(np.arange(len(yD)),self.range)).T
-        bins = tf.concat([grid,ibinsp1[np.arange(len(yD)),:,np.newaxis]],axis=2)
+        batch_range = tf.range(tf.shape(yD)[0])
+        grid = tf.transpose(tf.meshgrid(batch_range,self.range))
+        bins = tf.concat([grid,tf.gather_nd(ibinsp1,grid)[...,tf.newaxis]],axis=2)
         return -tf.reduce_sum(tf.log(tf.gather_nd(Q,bins)/self.width),axis=-1)
 
 class PiecewiseQuadratic(tfb.Bijector):
@@ -108,7 +112,7 @@ class PiecewiseQuadratic(tfb.Bijector):
         self.D, self.d = D, d
         self.id = layer_id
         self.nbins = nbins
-        self.range = np.arange(self.d)
+        self.range = tf.range(self.d)
         self.WMat = self.buildW(self.d, self.nbins)
         self.VMat = self.buildV(self.d, self.nbins)
         self.trainable_variables = [
@@ -136,31 +140,36 @@ class PiecewiseQuadratic(tfb.Bijector):
         
     def W(self, xd):
         WMat = tf.nn.softmax(self.WMat(xd),axis=2)
-        WMat = np.insert(WMat,0,0,axis=2)
+        WMat = tf.pad(WMat,[[0,0],[0,0],[1,0]])
         return WMat
               
     def V(self, xd, W):
         VMat = self.VMat(xd)
         VExp = tf.exp(VMat)
-        VSum = np.sum((VExp[...,0:self.nbins]+VExp[...,1:self.nbins+1])*W[...,1:self.nbins+1]/2,axis=2,keepdims=True)
-        VMat = np.true_divide(VExp,VSum)
-        VMat = np.insert(VMat,0,0,axis=2)
+        VSum = tf.reduce_sum((VExp[...,0:self.nbins]+VExp[...,1:self.nbins+1])*W[...,1:self.nbins+1]/2,axis=2,keepdims=True)
+        VMat = tf.truediv(VExp,VSum)
+        VMat = tf.pad(VMat,[[0,0],[0,0],[1,0]])
         return VMat
+
+    def _find_bins(self,x,y):
+        ibins = tf.cast(tf.searchsorted(y,x[...,tf.newaxis],side='right'),dtype=tf.int32)
+        ibins = tf.reshape(ibins,[tf.shape(x)[0],self.d])
+        ibins = ibins-1
+        ibinsp1 = ibins+1
+        batch_range = tf.range(tf.shape(x)[0])
+        grid = tf.transpose(tf.meshgrid(batch_range,self.range))
+        bins = tf.concat([grid,tf.gather_nd(ibinsp1,grid)[...,tf.newaxis]],axis=2)
+        binsSum = tf.concat([grid,tf.gather_nd(ibins,grid)[...,tf.newaxis]],axis=2)
+        return bins, binsSum
         
     def pdf(self,x):
         xd, xD = x[:, :self.d], x[:, self.d:]
         W = self.W(xd)
         V = self.V(xd,W)
-        WSum = np.cumsum(W,axis=2)
-        ibins = tf.searchsorted(WSum,xD[...,np.newaxis],side='right')
-        ibins = ibins.numpy().reshape(len(xD),self.d)
-        ibins = ibins-1
-        ibinsp1 = ibins+1
-        grid = np.array(np.meshgrid(np.arange(len(xD)),self.range)).T
-        bins = tf.concat([grid,ibinsp1[np.arange(len(xD)),:,np.newaxis]],axis=2)
-        binsSum = tf.concat([grid,ibins[np.arange(len(xD)),:,np.newaxis]],axis=2)
+        WSum = tf.cumsum(W,axis=2)
+        bins, binsSum = self._find_bins(xD,WSum)
         alpha = (xD-tf.gather_nd(WSum,binsSum))*tf.reciprocal(tf.gather_nd(W,bins))
-        result = tf.gather_nd(np.diff(V),bins)*alpha+tf.gather_nd(V,bins)
+        result = tf.gather_nd((V[...,1:]-V[...,0:-1]),bins)*alpha+tf.gather_nd(V,bins)
         return tf.concat([xd, result], axis=1) 
         
     def _forward(self, x):
@@ -168,17 +177,11 @@ class PiecewiseQuadratic(tfb.Bijector):
         xd, xD = x[:, :self.d], x[:, self.d:]
         W = self.W(xd)
         V = self.V(xd,W)
-        WSum = np.cumsum(W,axis=2)
-        VSum = np.cumsum((V[...,1:]+V[...,0:-1])*W/2.0,axis=2)
-        ibins = tf.searchsorted(WSum,xD[...,np.newaxis],side='right')
-        ibins = ibins.numpy().reshape(len(xD),self.d)
-        ibins = ibins-1
-        ibinsp1 = ibins+1
-        grid = np.array(np.meshgrid(np.arange(len(xD)),self.range)).T
-        bins = tf.concat([grid,ibinsp1[np.arange(len(xD)),:,np.newaxis]],axis=2)
-        binsSum = tf.concat([grid,ibins[np.arange(len(xD)),:,np.newaxis]],axis=2)
+        WSum = tf.cumsum(W,axis=2)
+        VSum = tf.cumsum((V[...,1:]+V[...,0:-1])*W/2.0,axis=2)
+        bins, binsSum = self._find_bins(xD,WSum)
         alpha = (xD-tf.gather_nd(WSum,binsSum))/tf.gather_nd(W,bins)
-        yD = alpha**2/2*tf.gather_nd(np.diff(V),bins)*tf.gather_nd(W,bins) \
+        yD = alpha**2/2*tf.gather_nd((V[...,1:]-V[...,0:-1]),bins)*tf.gather_nd(W,bins) \
            + alpha*tf.gather_nd(V,bins)*tf.gather_nd(W,bins) \
            + tf.gather_nd(VSum,binsSum)
         return tf.concat([xd, yD], axis=1)
@@ -188,16 +191,10 @@ class PiecewiseQuadratic(tfb.Bijector):
         yd, yD = y[:, :self.d], y[:, self.d:]
         W = self.W(yd)
         V = self.V(yd,W)
-        WSum = np.cumsum(W,axis=2)
-        VSum = np.cumsum((V[...,1:]+V[...,0:-1])*W/2.0,axis=2)
-        ibins = tf.searchsorted(VSum,yD[...,np.newaxis],side='right')
-        ibins = ibins.numpy().reshape(len(yD),self.d)
-        ibins = ibins-1
-        ibinsp1 = ibins+1
-        grid = np.array(np.meshgrid(np.arange(len(yD)),self.range)).T
-        bins = tf.concat([grid,ibinsp1[np.arange(len(yD)),:,np.newaxis]],axis=2)
-        binsSum = tf.concat([grid,ibins[np.arange(len(yD)),:,np.newaxis]],axis=2)
-        denom = tf.gather_nd(np.diff(V),bins)
+        WSum = tf.cumsum(W,axis=2)
+        VSum = tf.cumsum((V[...,1:]+V[...,0:-1])*W/2.0,axis=2)
+        bins, binsSum = self._find_bins(yD,VSum)
+        denom = tf.gather_nd((V[...,1:]-V[...,0:-1]),bins)
         beta = (yD - tf.gather_nd(VSum,binsSum))/tf.gather_nd(W,bins)
         Vbins = tf.gather_nd(V,bins)
         xD = tf.where(tf.equal(tf.zeros_like(denom),denom),
@@ -217,56 +214,58 @@ class PiecewiseQuadratic(tfb.Bijector):
         yd, yD = y[:, :self.d], y[:, self.d:]
         W = self.W(yd)
         V = self.V(yd,W)
-        WSum = np.cumsum(W,axis=1)
-        VSum = np.cumsum((V[...,1:]+V[...,0:-1])*W/2.0,axis=2)
-        ibins = tf.searchsorted(VSum,yD[...,np.newaxis],side='right')
-        ibins = ibins.numpy().reshape(len(yD),self.d)
-        ibins = ibins-1
-        ibinsp1 = ibins+1
-        grid = np.array(np.meshgrid(np.arange(len(yD)),self.range)).T
-        bins = tf.concat([grid,ibinsp1[np.arange(len(yD)),:,np.newaxis]],axis=2)
-        binsSum = tf.concat([grid,ibins[np.arange(len(yD)),:,np.newaxis]],axis=2)
-        denom = tf.gather_nd(np.diff(V),bins)
+        WSum = tf.cumsum(W,axis=1)
+        VSum = tf.cumsum((V[...,1:]+V[...,0:-1])*W/2.0,axis=2)
+        bins, binsSum = self._find_bins(yD,VSum)
+        denom = tf.gather_nd((V[...,1:]-V[...,0:-1]),bins)
         beta = (yD - tf.gather_nd(VSum,binsSum))/tf.gather_nd(W,bins)
         Vbins = tf.gather_nd(V,bins)
         alpha = tf.where(tf.equal(tf.zeros_like(denom),denom),
                       beta/Vbins,
                       1/denom*(-Vbins+tf.sqrt(Vbins**2+2*beta*denom))
                       )
-        result = tf.gather_nd(np.diff(V),bins)*alpha+Vbins
+        result = tf.gather_nd((V[...,1:]-V[...,0:-1]),bins)*alpha+Vbins
         return -tf.reduce_sum(tf.log(result),axis=-1)
 
 # Tests if run using main
 if __name__ == '__main__':
-    nevents = 2000000
+    nevents = 1000
     NP_DTYPE=np.float32
-    tf.enable_eager_execution()
 
-    # Piecewise Linear Tests
-    testLinear = PiecewiseLinear(6,3,5)
-    val = np.array(np.random.rand(nevents,6),dtype=NP_DTYPE)
-    forward = testLinear.forward(val)
-    inverse = testLinear.inverse(forward)
-    print(np.allclose(val,inverse.numpy()))
+    with tf.Session() as sess:
+        # Piecewise Linear Tests
+        testLinear = PiecewiseLinear(6,3,5)
+        val = np.array(np.random.rand(nevents,6),dtype=NP_DTYPE)
+        forward = testLinear.forward(val)
+        inverse = testLinear.inverse(forward)
 
-    forward_jacobian = testLinear.forward_log_det_jacobian(val,event_ndims=1)
-    inverse_jacobian = testLinear.inverse_log_det_jacobian(forward,event_ndims=1)
-    difference = forward_jacobian+inverse_jacobian
-    print(np.allclose(forward_jacobian,-inverse_jacobian))
-    print((difference/forward_jacobian).numpy()[np.logical_not(np.isclose(forward_jacobian,-inverse_jacobian))])
-    print(len((difference/forward_jacobian).numpy()[np.logical_not(np.isclose(forward_jacobian,-inverse_jacobian))])/nevents)
+        # Initialize all variables
+        sess.run(tf.global_variables_initializer())
 
-    # Piecewise Quadratic Tests
-    testQuadratic = PiecewiseQuadratic(6,3,5)
-    val = np.array(np.random.rand(nevents,6),dtype=NP_DTYPE)
-    forward = testQuadratic.forward(val)
-    inverse = testQuadratic.inverse(forward)
-    print(np.allclose(val,inverse.numpy()))
-    print(((val-inverse.numpy())/val)[np.logical_not(np.isclose(val,inverse.numpy()))])
+        # Preform calculations
+        print(np.allclose(val,sess.run(inverse)))
 
-    forward_jacobian = testQuadratic.forward_log_det_jacobian(val,event_ndims=1)
-    inverse_jacobian = testQuadratic.inverse_log_det_jacobian(forward,event_ndims=1)
-    difference = forward_jacobian+inverse_jacobian
-    print(np.allclose(forward_jacobian,-inverse_jacobian))
-    print((difference/forward_jacobian).numpy()[np.logical_not(np.isclose(forward_jacobian,-inverse_jacobian))])
-    print(len((difference/forward_jacobian).numpy()[np.logical_not(np.isclose(forward_jacobian,-inverse_jacobian))])/nevents)
+        forward_jacobian = testLinear.forward_log_det_jacobian(val,event_ndims=1)
+        inverse_jacobian = testLinear.inverse_log_det_jacobian(forward,event_ndims=1)
+        difference = forward_jacobian+inverse_jacobian
+        diff_result = sess.run(difference)
+        print(np.allclose(diff_result,np.zeros_like(diff_result)))
+
+    with tf.Session() as sess:
+        # Piecewise Quadratic Tests
+        testQuadratic = PiecewiseQuadratic(6,3,5)
+        val = np.array(np.random.rand(nevents,6),dtype=NP_DTYPE)
+        forward = testQuadratic.forward(val)
+        inverse = testQuadratic.inverse(forward)
+
+        # Initialize all variables
+        sess.run(tf.global_variables_initializer())
+
+        # Preform calculations
+        print(np.allclose(val,sess.run(inverse)))
+
+        forward_jacobian = testQuadratic.forward_log_det_jacobian(val,event_ndims=1)
+        inverse_jacobian = testQuadratic.inverse_log_det_jacobian(forward,event_ndims=1)
+        difference = forward_jacobian+inverse_jacobian
+        diff_result = sess.run(difference)
+        print(np.allclose(diff_result,np.zeros_like(diff_result),atol=1e-6))
