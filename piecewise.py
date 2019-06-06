@@ -147,6 +147,7 @@ class PiecewiseQuadratic(tfb.Bijector):
         out = layers.Dense(d*(2*nbins+1),activation='relu')(h2)
         out = layers.Reshape((d,2*nbins+1))(out)
         model = models.Model(inval,out)
+        model.summary()
         return model
 
     def GetWV(self, xd):
@@ -174,7 +175,7 @@ class PiecewiseQuadratic(tfb.Bijector):
         one_hot, one_hot_sum, one_hot_V = self._find_bins(xD,WSum)
         alpha = (xD-tf.reduce_sum(WSum*one_hot_sum,axis=-1)) \
                 *tf.reciprocal(tf.reduce_sum(W*one_hot,axis=-1))
-        result = tf.reduce_sum((V[...,1:]-V[...,0:-1])*one_hot,axis=-1)*alpha \
+        result = tf.reduce_sum((V[...,1:]-V[...,:-1])*one_hot,axis=-1)*alpha \
                 +tf.reduce_sum(V*one_hot_V,axis=-1)
         return tf.concat([xd, result], axis=-1) 
 
@@ -183,15 +184,14 @@ class PiecewiseQuadratic(tfb.Bijector):
         xd, xD = x[..., :self.d], x[..., self.d:]
         W, V = self.GetWV(xd)
         WSum = tf.cumsum(W,axis=-1)
-        VSum = tf.cumsum((V[...,1:]+V[...,0:-1])*W/2.0,axis=-1)
+        VSum = tf.cumsum((V[...,1:]+V[...,:-1])*W/2.0,axis=-1)
         one_hot, one_hot_sum, one_hot_V = self._find_bins(xD,WSum)
         alpha = (xD-tf.reduce_sum(WSum*one_hot_sum,axis=-1)) \
                 *tf.reciprocal(tf.reduce_sum(W*one_hot,axis=-1))
         yD = alpha**2/2*tf.reduce_sum((V[...,1:]-V[...,0:-1])*one_hot,axis=-1) \
-                + alpha*tf.reduce_sum(V*one_hot_V,axis=-1)\
+                *tf.reduce_sum(W*one_hot,axis=-1) \
+                + alpha*tf.reduce_sum(V*one_hot_V,axis=-1)*tf.reduce_sum(W*one_hot,axis=-1) \
                 + tf.reduce_sum(VSum*one_hot_sum,axis=-1)
-                #*tf.reduce_sum(W*one_hot,axis=-1) \ 
-                #*tf.reduce_sum(W*one_hot,axis=-1) \
         return tf.concat([xd, yD], axis=-1)
 
     def _inverse(self, y):
@@ -202,14 +202,14 @@ class PiecewiseQuadratic(tfb.Bijector):
         VSum = tf.cumsum((V[...,1:]+V[...,0:-1])*W/2.0,axis=-1)
         one_hot, one_hot_sum, one_hot_V = self._find_bins(yD,VSum)
         denom = tf.reduce_sum((V[...,1:]-V[...,0:-1])*one_hot,axis=-1)
-        beta = (yD - tf.reduce_sum(VSum*one_hot_sum,axis=-1))# \
-#                *tf.reciprocal(tf.reduce_sum(W*one_hot,axis=-1))
+        beta = (yD - tf.reduce_sum(VSum*one_hot_sum,axis=-1)) \
+                *tf.reciprocal(tf.reduce_sum(W*one_hot,axis=-1))
         Vbins = tf.reduce_sum(V*one_hot_V,axis=-1)
         xD = tf.where(tf.equal(tf.zeros_like(denom),denom),
                 beta/Vbins,
                 1/denom*(-Vbins+tf.sqrt(Vbins**2+2*beta*denom))
         )
-        xD = tf.reduce_sum(W*one_hot,axis=-1)*(xD + tf.reduce_sum(WSum*one_hot_sum,axis=-1))
+        xD = tf.reduce_sum(W*one_hot,axis=-1)*xD + tf.reduce_sum(WSum*one_hot_sum,axis=-1)
 #        xD = tf.where(tf.is_nan(xD), tf.ones_like(xD), xD)
         return tf.concat([yd, xD], axis=-1)
 
@@ -225,8 +225,8 @@ class PiecewiseQuadratic(tfb.Bijector):
         VSum = tf.cumsum((V[...,1:]+V[...,0:-1])*W/2.0,axis=-1)
         one_hot, one_hot_sum, one_hot_V = self._find_bins(yD,VSum)
         denom = tf.reduce_sum((V[...,1:]-V[...,0:-1])*one_hot,axis=-1)
-        beta = (yD - tf.reduce_sum(VSum*one_hot_sum,axis=-1))# \
-#                *tf.reciprocal(tf.reduce_sum(W*one_hot,axis=-1))
+        beta = (yD - tf.reduce_sum(VSum*one_hot_sum,axis=-1)) \
+                *tf.reciprocal(tf.reduce_sum(W*one_hot,axis=-1))
         Vbins = tf.reduce_sum(V*one_hot_V,axis=-1)
         alpha = tf.where(tf.equal(tf.zeros_like(denom),denom),
                 beta/Vbins,
