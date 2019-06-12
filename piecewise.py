@@ -207,7 +207,7 @@ class PiecewiseQuadratic(tfb.Bijector):
         Vbins = tf.reduce_sum(V*one_hot_V,axis=-1)
         xD = tf.where(tf.equal(tf.zeros_like(denom),denom),
                 beta/Vbins,
-                1/denom*(-Vbins+tf.sqrt(Vbins**2+2*beta*denom))
+                tf.div_no_nan((-Vbins+tf.sqrt(Vbins**2+2*beta*denom)),denom)
         )
         xD = tf.reduce_sum(W*one_hot,axis=-1)*xD + tf.reduce_sum(WSum*one_hot_sum,axis=-1)
 #        xD = tf.where(tf.is_nan(xD), tf.ones_like(xD), xD)
@@ -230,7 +230,7 @@ class PiecewiseQuadratic(tfb.Bijector):
         Vbins = tf.reduce_sum(V*one_hot_V,axis=-1)
         alpha = tf.where(tf.equal(tf.zeros_like(denom),denom),
                 beta/Vbins,
-                1/denom*(-Vbins+tf.sqrt(Vbins**2+2*beta*denom))
+                tf.div_no_nan((-Vbins+tf.sqrt(Vbins**2+2*beta*denom)),denom)
         )
         result = tf.reduce_sum((V[...,1:]-V[...,0:-1])*one_hot,axis=-1)*alpha+Vbins
         return -tf.reduce_sum(tf.log(result),axis=-1)
