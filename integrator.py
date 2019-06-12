@@ -21,6 +21,7 @@ class BijectorFactory:
 factory = BijectorFactory()
 factory.register_bijector('linear', piecewise.PiecewiseLinear)
 factory.register_bijector('quadratic', piecewise.PiecewiseQuadratic)
+factory.register_bijector('quadratic_const', piecewise.PiecewiseQuadraticConst)
 
 class Integrator():
     def __init__(self, func, ndims, layers=4, mode='quadratic', nbins=25):
