@@ -30,30 +30,54 @@ class Integrator():
         self.mode = mode
         self.nbins = nbins
         self.layers = layers
-        self.range = np.arange(ndims)
-        self.permute = np.array([self.range[ndims//2:],self.range[:ndims//2]]).flatten()
+
         self.losses = []
         self.integrals = []
         self.vars = []
         self.global_step = 0
 
-        if ndims%2==1:
-            self.odd = True
-        else:
-            self.odd = False
-
         self.bijectors = []
 
+        arange = np.arange(ndims)
+        permute = np.hstack([arange[ndims//2:],arange[:ndims//2]])
+        if ndims % 2 != 0:
+            permute_odd = np.hstack([arange[ndims//2+1:],arange[:ndims//2+1]])
+            odd = True
+        else:
+            odd = False
+
         for i in range(layers):
-            self.bijectors.append(factory.create(
-                mode,**{
-                    'D': ndims,
-                    'd': ndims//2,
-                    'nbins': nbins,
-                    'layer_id': i,
-                    }
-                ))
-            self.bijectors.append(tfb.Permute(permutation=self.permute))
+            if not odd:
+                self.bijectors.append(factory.create(
+                    mode,**{
+                        'D': ndims,
+                        'd': ndims//2,
+                        'nbins': nbins,
+                        'layer_id': i,
+                        }
+                    ))
+                self.bijectors.append(tfb.Permute(permutation=permute))
+            else:
+                if i % 2 == 0:
+                    self.bijectors.append(factory.create(
+                        mode,**{
+                            'D': ndims,
+                            'd': ndims//2+1,
+                            'nbins': nbins,
+                            'layer_id': i,
+                            }
+                        ))
+                    self.bijectors.append(tfb.Permute(permutation=permute))
+                else:
+                    self.bijectors.append(factory.create(
+                        mode,**{
+                            'D': ndims,
+                            'd': ndims//2,
+                            'nbins': nbins,
+                            'layer_id': i,
+                            }
+                        ))
+                    self.bijectors.append(tfb.Permute(permutation=permute_odd))
 
         # Remove the last permute layer
         self.bijectors = tfb.Chain(list(reversed(self.bijectors[:-1]))) 
@@ -93,10 +117,12 @@ class Integrator():
             self.integrals.append(np_integral)
             self.vars.append(np_var)
             if epoch % printout == 0:
-                print("Epoch %d: loss = %e, average integral = %e, average variance = %e"   
+                print("Epoch %4d: loss = %e, average integral = %e, average variance = %e"   
                         %(epoch, np_loss, np.mean(self.integrals), np.mean(self.vars))) 
+            if np.sqrt(np_var)/np_integral < stopping:
+                break
 
-        print("Epoch %d: loss = %e, average integral = %e, average variance = %e"   
+        print("Epoch %4d: loss = %e, average integral = %e, average variance = %e"   
                 %(epoch, np_loss, np.mean(self.integrals), np.mean(self.vars))) 
 
     def _plot(self,axis,labelsize=17,titlesize=20):
@@ -107,6 +133,7 @@ class Integrator():
     def plot_loss(self,axis,labelsize=17,titlesize=20,start=0):
         axis.plot(self.losses[start:])
         axis.set_ylabel('loss',fontsize=titlesize)
+        axis.set_yscale('log')
         axis = self._plot(axis,labelsize,titlesize)
         return axis
 
@@ -119,6 +146,7 @@ class Integrator():
     def plot_variance(self,axis,labelsize=17,titlesize=20,start=0):
         axis.plot(self.vars[start:])
         axis.set_ylabel('variance',fontsize=titlesize)
+        axis.set_yscale('log')
         axis = self._plot(axis,labelsize,titlesize)
         return axis
 
@@ -135,10 +163,10 @@ class Integrator():
 if __name__ == '__main__':
     import tensorflow as tf
     def normalChristina(x):
-        return 0.8* tf.exp((-0.5*((x[:,0]-0.5)* (50 *(x[:,0]-0.5) -  15* (x[:,1]-0.5)) + (-15*(x[:,0]-0.5) + 5*(x[:,1]-0.5))* (x[:,1]-0.5)))) 
+        return 0.8* tf.exp((-0.5*((x[:,0]-0.5)* (50 *(x[:,0]-0.5) -  15* (x[:,1]-0.5)) + (-15*(x[:,0]-0.5) + 5*(x[:,1]-0.5))* (x[:,1]-0.5)))) + x[:,2]
 
-    integrator = Integrator(normalChristina, 2)
-    integrator.make_optimizer()
+    integrator = Integrator(normalChristina, 3, mode='quadratic_const')
+    integrator.make_optimizer(nsamples=1000)
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         integrator.optimize(sess,epochs=5000)

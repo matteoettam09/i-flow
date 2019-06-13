@@ -30,8 +30,8 @@ class PiecewiseLinear(tfb.Bijector):
         inval = layers.Input(shape=(d,))
         h1 = layers.Dense(16,activation='relu')(inval)
         h2 = layers.Dense(16,activation='relu')(h1)
-        out = layers.Dense(d*nbins)(h2)
-        out = layers.Reshape((d,nbins))(out)
+        out = layers.Dense((self.D-d)*nbins)(h2)
+        out = layers.Reshape(((self.D-d),nbins))(out)
         model = models.Model(inval,out)
         model.summary()
         return model
@@ -64,7 +64,7 @@ class PiecewiseLinear(tfb.Bijector):
         yd, yD = y[..., :self.d], y[..., self.d:]
         Q = self.Q(yd)
         ibins = tf.cast(tf.searchsorted(tf.cumsum(Q,axis=-1),yD[...,tf.newaxis],side='right'),dtype=tf.int32)
-        ibins = tf.reshape(ibins,[tf.shape(yD)[0],self.d])
+        ibins = tf.reshape(ibins,[tf.shape(yD)[0],self.D-self.d])
         one_hot = tf.one_hot(ibins,depth=self.nbins)
         one_hot2 = tf.one_hot(ibins-1,depth=self.nbins)
         xD = (yD-tf.reduce_sum(tf.cumsum(Q,axis=-1)*one_hot2,axis=-1)) \
@@ -81,7 +81,7 @@ class PiecewiseLinear(tfb.Bijector):
         yd, yD = y[..., :self.d], y[..., self.d:]
         Q = self.Q(yd)
         ibins = tf.cast(tf.searchsorted(tf.cumsum(Q,axis=-1),yD[...,tf.newaxis],side='right'),dtype=tf.int32)
-        ibins = tf.reshape(ibins,[tf.shape(yD)[0],self.d])
+        ibins = tf.reshape(ibins,[tf.shape(yD)[0],self.D-self.d])
         one_hot = tf.one_hot(ibins,depth=self.nbins)
         return -tf.reduce_sum(tf.log(tf.reduce_sum(Q*one_hot,axis=-1)/self.width),axis=-1)
 
@@ -105,7 +105,7 @@ class PiecewiseQuadratic(tfb.Bijector):
         self.range = tf.range(self.d)
 #        self.WMat = self.buildW(self.d, self.nbins)
 #        self.VMat = self.buildV(self.d, self.nbins)
-        self.NNMat = self.buildNN(self.d, self.nbins)
+        self.NNMat = self.buildNN()
         self.trainable_variables = [
                 self.NNMat.trainable_variables,
 #                self.VMat.trainable_variables,
@@ -140,12 +140,12 @@ class PiecewiseQuadratic(tfb.Bijector):
 #        VMat = tf.truediv(VExp,VSum)
 #        return VMat
 
-    def buildNN(self, d, nbins):
-        inval = layers.Input(shape=(d,))
+    def buildNN(self):
+        inval = layers.Input(shape=(self.d,))
         h1 = layers.Dense(64,activation='relu')(inval)
         h2 = layers.Dense(64,activation='relu')(h1)
-        out = layers.Dense(d*(2*nbins+1),activation='relu')(h2)
-        out = layers.Reshape((d,2*nbins+1))(out)
+        out = layers.Dense((self.D-self.d)*(2*self.nbins+1),activation='relu')(h2)
+        out = layers.Reshape(((self.D-self.d),2*self.nbins+1))(out)
         model = models.Model(inval,out)
         model.summary()
         return model
@@ -161,7 +161,7 @@ class PiecewiseQuadratic(tfb.Bijector):
 
     def _find_bins(self,x,y):
         ibins = tf.cast(tf.searchsorted(y,x[...,tf.newaxis],side='right'),dtype=tf.int32)
-        ibins = tf.reshape(ibins,[tf.shape(x)[0],self.d])
+        ibins = tf.reshape(ibins,[tf.shape(x)[0],self.D-self.d])
         one_hot = tf.one_hot(ibins,depth=self.nbins)
         one_hot_sum = tf.one_hot(ibins-1,depth=self.nbins)
         one_hot_V = tf.one_hot(ibins,depth=self.nbins+1)
@@ -239,13 +239,13 @@ class PiecewiseQuadraticConst(tfb.Bijector):
     """
     Piecewise Quadratic with constant bin widths: based on 1808.03856
     """
-    def __init__(self, D, d, nbins, layer_id=0, validate_args=False, name="PiecewiseQuadratic"):
+    def __init__(self, D, d, nbins, layer_id=0, validate_args=False, name="PiecewiseQuadraticConst"):
         """
         Args:
             D: number of dimensions
             d: First d units are pass-thru units.
         """
-        super(PiecewiseQuadratic, self).__init__(
+        super(PiecewiseQuadraticConst, self).__init__(
                 forward_min_event_ndims=1, validate_args=validate_args, name=name,
         )
 
@@ -270,8 +270,8 @@ class PiecewiseQuadraticConst(tfb.Bijector):
 #        model = models.Model(inval,out)
 #        return model
         inval = layers.Input(shape=(d,))
-        out = layers.Dense(d*nbins,activation='relu')(inval)
-        out = layers.Reshape((d,nbins))(out)
+        out = layers.Dense((self.D-d)*nbins,activation='relu')(inval)
+        out = layers.Reshape((self.D-d,nbins))(out)
         out = layers.Lambda(lambda x: (1./nbins)*tf.ones_like(x))(out)
         model = models.Model(inval,out)
         return model
@@ -280,8 +280,8 @@ class PiecewiseQuadraticConst(tfb.Bijector):
         inval = layers.Input(shape=(d,))
         h1 = layers.Dense(16,activation='relu')(inval)
         h2 = layers.Dense(16,activation='relu')(h1)
-        out = layers.Dense(d*(nbins+1),activation='relu')(h2)
-        out = layers.Reshape((d,nbins+1))(out)
+        out = layers.Dense((self.D-d)*(nbins+1),activation='relu')(h2)
+        out = layers.Reshape(((self.D-d),nbins+1))(out)
         model = models.Model(inval,out)
         model.summary()
         return model
@@ -289,7 +289,7 @@ class PiecewiseQuadraticConst(tfb.Bijector):
     def W(self, xd):
         #WMat = tf.nn.softmax(self.WMat(xd),axis=-1)
         #return WMat
-        return tf.constant(1./self.nbins,shape=(np.shape(xd)[0],self.d,self.nbins))
+        return tf.constant(1./self.nbins,shape=(np.shape(xd)[0],self.D-self.d,self.nbins))
 
     def V(self, xd, W):
         VMat = self.VMat(xd)
@@ -319,7 +319,7 @@ class PiecewiseQuadraticConst(tfb.Bijector):
 
     def _find_bins(self,x,y):
         ibins = tf.cast(tf.searchsorted(y,x[...,tf.newaxis],side='right'),dtype=tf.int32)
-        ibins = tf.reshape(ibins,[tf.shape(x)[0],self.d])
+        ibins = tf.reshape(ibins,[tf.shape(x)[0],self.D-self.d])
         one_hot = tf.one_hot(ibins,depth=self.nbins)
         one_hot_sum = tf.one_hot(ibins-1,depth=self.nbins)
         one_hot_V = tf.one_hot(ibins,depth=self.nbins+1)
