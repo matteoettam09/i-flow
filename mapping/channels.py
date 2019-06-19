@@ -78,7 +78,7 @@ class SChannelDecay:
         rans = [ (1.+ct)/2., phi/(2.*m.pi) ]
 
         ps = m.sqrt(self.Lambda(p.M2(),s1,s2))/(2.*ecm)
-        wgt = ps/(16.*m.pi**2*ecm)
+        wgt = 4.*m.pi*ps/(16.*m.pi**2*ecm)
         logger.debug("  rans = {0}".format(rans))
         logger.debug("  weight = {0}".format(wgt))
         logger.debug("}")
