@@ -80,6 +80,7 @@ class eetojjj:
         # The matrix element
         lome = self.ME2(fl,(pa+pb).M2(),(pa-p[0]).M2())
         dxs = 5.*lome*3.89379656e8/(8.*m.pi)/(2.*pow(self.ecms,2))
+        dxs *= wsum
         event = [
             Particle(-11,-pa),
             Particle(11,-pb),
@@ -110,7 +111,7 @@ from durham import Analysis
 
 import sys, logging
 logging.basicConfig()
-logging.getLogger('eejjj').setLevel(logging.DEBUG)
+#logging.getLogger('eejjj').setLevel(logging.DEBUG)
 #logging.getLogger('channels').setLevel(logging.DEBUG)
 
 alphas = AlphaS(91.1876,0.118)
