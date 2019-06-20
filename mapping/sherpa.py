@@ -13,27 +13,8 @@ logger = logging.getLogger('eejjj')
 class eetojjj:
 
     def __init__(self,alphas,ecms=91.2):
-        self.alphas = alphas
         self.ecms = ecms
-        self.MZ2 = pow(91.1876,2.)
-        self.GZ2 = pow(2.4952,2.)
-        self.alpha = 1./128.802
-        self.sin2tw = 0.22293
         self.duralg = Algorithm()
-
-    def ME2(self,fl,s,t):
-        qe = -1.
-        ae = -0.5
-        ve = ae - 2.*qe*self.sin2tw;
-        qf = 2./3. if fl in [2,4] else -1./3.
-        af = 0.5 if fl in [2,4] else -0.5
-        vf = af - 2.*qf*self.sin2tw;
-        kappa = 1./(4.*self.sin2tw*(1.-self.sin2tw))
-        chi1 = kappa * s * (s-self.MZ2)/(pow(s-self.MZ2,2.) + self.GZ2*self.MZ2);
-        chi2 = pow(kappa * s,2.)/(pow(s-self.MZ2,2.) + self.GZ2*self.MZ2);
-        term1 = (1+pow(1.+2.*t/s,2.))*(pow(qf*qe,2.)+2.*(qf*qe*vf*ve)*chi1+(ae*ae+ve*ve)*(af*af+vf*vf)*chi2)
-        term2 = (1.+2.*t/s)*(4.*qe*qf*ae*af*chi1+8.*ae*ve*af*vf*chi2)
-        return pow(4.*m.pi*self.alpha,2.)*3.*(term1+term2)
 
     def GeneratePoint(self):
         pa = Vec4(self.ecms/2,0,0,self.ecms/2)
