@@ -1,7 +1,7 @@
 
 import math as m
 
-from vector import Vec4
+from vector import *
 
 class Particle:
 
@@ -24,7 +24,7 @@ class Particle:
                (self.col[1] > 0 and self.col[1] == p.col[0])
 
 def CheckEvent(event):
-    psum = Vec4()
+    psum = Vector4()
     csum = {}
     for p in event:
         psum += p.mom

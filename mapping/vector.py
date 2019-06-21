@@ -1,111 +1,58 @@
 
 import numpy as np
 
-class Vec4:
+def Vector4(E=np.zeros(1),Px=np.zeros(1),Py=np.zeros(1),Pz=np.zeros(2)):
+    return np.array([E,Px,Py,Pz]).T
 
-    def __init__(self,E=0,px=0,py=0,pz=0):
-        self.E = E
-        self.px = px
-        self.py = py
-        self.pz = pz
+def Dot(pi,pj):
+    return  pi[:,0]*pj[:,0]-pi[:,1]*pj[:,1]-pi[:,2]*pj[:,2]-pi[:,3]*pj[:,3] 
 
-    def __getitem__(self,i):
-        if i == 0: return self.E
-        if i == 1: return self.px
-        if i == 2: return self.py
-        if i == 3: return self.pz
-        raise Exception('Vec4D')
+def Mass2(p):
+    return Dot(p,p)
 
-    def __setitem__(self,i,x):
-        if i == 0:
-            self.E = x
-            return
-        if i == 1:
-            self.px = x
-            return
-        if i == 2:
-            self.py = x
-            return
-        if i == 3:
-            self.pz = x
-            return
-        raise Exception('Vec4D')
+def Mass(p):
+    return np.sqrt(Dot(p,p))
 
-    def __repr__(self):
-        return '({0},{1},{2},{3})'.format(self.E,self.px,self.py,self.pz)
+def Momentum2(p):
+    return p[:,1]*p[:,1]+p[:,2]*p[:,2]+p[:,3]*p[:,3]
 
-    def __str__(self):
-        return '({0},{1},{2},{3})'.format(self.E,self.px,self.py,self.pz)
+def Momentum(p):
+    return np.sqrt(Momentum2(p))
 
-    def __add__(self,v):
-        return Vec4(self.E+v.E,self.px+v.px,self.py+v.py,self.pz+v.pz)
+def PT2(p):
+    return p[:,1]**2+p[:,2]**2
 
-    def __sub__(self,v):
-        return Vec4(self.E-v.E,self.px-v.px,self.py-v.py,self.pz-v.pz)
+def PT(p):
+    return np.sqrt(PT2(p))
 
-    def __neg__(self):
-        return Vec4(-self.E,-self.px,-self.py,-self.pz)
+def Theta(p):
+    return np.acos(p[:,3]/Momentum(p))
 
-    def __mul__(self,v):
-        if isinstance(v,Vec4):
-            return self.E*v.E-self.px*v.px-self.py*v.py-self.pz*v.pz
-        return Vec4(self.E*v,self.px*v,self.py*v,self.pz*v)
+def Phi(p):
+    return np.where(np.logical_and(p[:,1]==0,p[:,2]==0),
+                    np.zeros_like(p[:,1]),
+                    np.atan2(p[:,2],p[:,1]))
 
-    def __rmul__(self,v):
-        if isinstance(v,Vec4):
-            return self.E*v.E-self.px*v.px-self.py*v.py-self.pz*v.pz
-        return Vec4(self.E*v,self.px*v,self.py*v,self.pz*v)
+def Cross(pi,pj):
+    return Vector4(np.zeros_like(pi[:,1]),
+                   pi[:,2]*pj[:,3]-pi[:,3]*pj[:,2],
+                   pi[:,3]*pj[:,1]-pi[:,1]*pj[:,3],
+                   pi[:,1]*pj[:,2]-pi[:,2]*pj[:,1])
 
-    def __div__(self,v):
-        return Vec4(self.E/v,self.px/v,self.py/v,self.pz/v)
+def Boost(p,v):
+    rsq = Mass(p)
+    v0 = Dot(p,v)/rsq
+    c1 = (v[:,0]+v0)/(rsq+p[:,0])
+    return Vector4(v0,
+                   v[:,1]-c1*p[:,1],
+                   v[:,2]-c1*p[:,2],
+                   v[:,3]-c1*p[:,3])
 
-    def M2(self):
-        return self*self
-
-    def M(self):
-        return np.sqrt(self.M2())
-
-    def P2(self):
-        return self.px*self.px+self.py*self.py+self.pz*self.pz
-
-    def P(self):
-        return np.sqrt(self.P2())
-
-    def PT2(self):
-        return self.px*self.px+self.py*self.py
-
-    def PT(self):
-        return np.sqrt(self.PT2())
-
-    def Theta(self) :
-        return np.acos(self.pz/self.P())
-
-    def Phi(self) :
-        if self.px==0 and self.py==0:
-            return 0.0
-        else:
-            return np.atan2(self.py,self.px)
-
-    def Cross(self,v):
-        return Vec4(np.zeros_like(self.py),
-                    self.py*v.pz-self.pz*v.py,
-                    self.pz*v.px-self.px*v.pz,
-                    self.px*v.py-self.py*v.px)
-
-    def Boost(self,v):
-        rsq = self.M()
-        v0 = (self.E*v.E-self.px*v.px-self.py*v.py-self.pz*v.pz)/rsq;
-        c1 = (v.E+v0)/(rsq+self.E)
-        return Vec4(v0,
-                    v.px-c1*self.px,
-                    v.py-c1*self.py,
-                    v.pz-c1*self.pz)
-
-    def BoostBack(self,v):
-        rsq = self.M()
-        v0 = (self.E*v.E+self.px*v.px+self.py*v.py+self.pz*v.pz)/rsq;
-        c1 = (v.E+v0)/(rsq+self.E)
-        return Vec4(v0,
-                    v.px+c1*self.px,
-                    v.py+c1*self.py,
-                    v.pz+c1*self.pz)
+def BoostBack(p,v):
+    rsq = Mass(p)
+    v0 = (p[:,0]*v[:,0]+p[:,1]*v[:,1]+p[:,2]*v[:,2]+p[:,3]*v[:,3])/rsq
+    c1 = (v[:,0]+v0)/(rsq+p[:,0])
+    return Vector4(v0,
+                   v[:,1]+c1*p[:,1],
+                   v[:,2]+c1*p[:,2],
+                   v[:,3]+c1*p[:,3])
