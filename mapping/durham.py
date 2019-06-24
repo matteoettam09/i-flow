@@ -1,7 +1,7 @@
 
 import math as m
 
-from vector import Vec4
+from vector import *
 from particle import Particle
 
 class Algorithm:

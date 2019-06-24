@@ -1,3 +1,4 @@
+
 import numpy as np
 
 from vector import *
@@ -11,34 +12,14 @@ logger = logging.getLogger('eejjj')
 class eetojjj:
 
     def __init__(self,alphas,ecms=91.2):
-        self.alphas = alphas
         self.ecms = ecms
-        self.MZ2 = pow(91.1876,2.)
-        self.GZ2 = pow(2.4952,2.)
-        self.alpha = 1./128.802
-        self.sin2tw = 0.22293
         self.duralg = Algorithm()
         self.prop = Propagator()
         self.decay = SChannelDecay()
 
-    def ME2(self,fl,s,t):
-        qe = -1.
-        ae = -0.5
-        ve = ae - 2.*qe*self.sin2tw;
-        qf = 2./3. if fl in [2,4] else -1./3.
-        af = 0.5 if fl in [2,4] else -0.5
-        vf = af - 2.*qf*self.sin2tw;
-        kappa = 1./(4.*self.sin2tw*(1.-self.sin2tw))
-        chi1 = kappa * s * (s-self.MZ2)/(pow(s-self.MZ2,2.) + self.GZ2*self.MZ2);
-        chi2 = pow(kappa * s,2.)/(pow(s-self.MZ2,2.) + self.GZ2*self.MZ2);
-        term1 = (1+pow(1.+2.*t/s,2.))*(pow(qf*qe,2.)+2.*(qf*qe*vf*ve)*chi1+(ae*ae+ve*ve)*(af*af+vf*vf)*chi2)
-        term2 = (1.+2.*t/s)*(4.*qe*qf*ae*af*chi1+8.*ae*ve*af*vf*chi2)
-        return pow(4.*m.pi*self.alpha,2.)*3.*(term1+term2)
-
     def GeneratePoint(self,batch):
         pa = Vector4(self.ecms/2*np.ones(batch),np.zeros(batch),np.zeros(batch),self.ecms/2*np.ones(batch))
         pb = Vector4(self.ecms/2*np.ones(batch),np.zeros(batch),np.zeros(batch),-self.ecms/2*np.ones(batch))
-        fl = np.random.randint(1,5,size=(batch))
         # The phase space generation
         rans = np.random.random((batch,5))
         if np.random.random()<0.5:
@@ -77,57 +58,62 @@ class eetojjj:
 #            logger.debug("rans = {0}".format([ rans[i] - rans1[i] for i in range(0,5)]))
 #        else: logger.debug("rans = {0}".format([ rans[i] - rans2[i] for i in range(0,5)]))
         # The matrix element
-        lome = self.ME2(fl,Mass2(pa+pb),Mass2(pa-p[0]))
-        dxs = 5.*lome*3.89379656e8/(8.*m.pi)/(2.*pow(self.ecms,2))
-        dxs *= wsum
+        Process.SetMomentum(0,pa[0],pa[1],pa[2],pa[3])
+        Process.SetMomentum(1,pb[0],pb[1],pb[2],pb[3])
+        for i in range(0,3):
+            Process.SetMomentum(i+2,p[i][0],p[i][1],p[i][2],p[i][3])
+        lome = Process.CSMatrixElement()
+        dxs = 5.*lome*wsum
         event = [
             Particle(-11,-pa),
             Particle(11,-pb),
-            Particle(fl,p[0],[2,0]),
-            Particle(-fl,p[1],[0,1]),
+            Particle(1,p[0],[2,0]),
+            Particle(-1,p[1],[0,1]),
             Particle(21,p[2],[1,2]) ]
         kt2 = self.duralg.Cluster(event)
         mu = self.ecms
         if kt2[-1]<1e-3:
             dxs = 0.
-        else:
-            s12 = 2.*p[0]*p[1]
-            s13 = 2.*p[0]*p[2]
-            s23 = 2.*p[1]*p[2]
-            R = lome*(s23/s13+s13/s23+2.*s12*(s12+s13+s23)/(s13*s23))
-            cpl = 8.*m.pi*self.alphas(mu*mu)*4./3.
-            dxs = dxs*cpl*R
         return ( event, dxs, lome )
 
     def GenerateLOPoint(self,batch):
         lo = self.GeneratePoint(batch)
-        return np.array( [lo[:,0], lo[:,1]] )
+        return ( lo[0], lo[1] )
 
 from qcd import AlphaS
 from durham import Analysis
 
 # build and run the generator
 
+from mpi4py import MPI
+import sys, os
+sys.path.append('/home/stefan/hep/sherpa/rel-2-2-7/lib/python2.7/site-packages')
+argv=['Sherpa','SHERPA_LDADD=ModelMain ToolsOrg ToolsPhys ToolsMath PDF']
+import Sherpa
+
+Generator=Sherpa.Sherpa()
+Generator.InitializeTheRun(len(argv),argv)
+Process=Sherpa.MEProcess(Generator)
+Process.AddInFlav(11);
+Process.AddInFlav(-11);
+Process.AddOutFlav(1);
+Process.AddOutFlav(-1);
+Process.AddOutFlav(21);
+Process.Initialize();
+
 import sys, logging
 logging.basicConfig()
-logging.getLogger('eejjj').setLevel(logging.DEBUG)
-logging.getLogger('channels').setLevel(logging.DEBUG)
+#logging.getLogger('eejjj').setLevel(logging.DEBUG)
+#logging.getLogger('channels').setLevel(logging.DEBUG)
 
 alphas = AlphaS(91.1876,0.118)
 hardxs = eetojjj(alphas)
 jetrat = Analysis()
 
-flavs = { 21:[0,0,2] }
-for i in range(-5,0):
-    flavs[i] = [0,0,1]
-for i in range(1,6):
-    flavs[i] = [0,0,1]
-
 np.random.seed(123456)
-event, weight = hardxs.GenerateLOPoint(10)
-#for i in range(100000):
-#    sys.stdout.write('\rEvent {0}'.format(i))
-#    sys.stdout.flush()
-#    jetrat.Analyze(event,weight)
-#jetrat.Finalize("Analysis")
-#print("")
+event, weight = hardxs.GenerateLOPoint(100)
+sys.stdout.write('\rEvent {0}'.format(i))
+sys.stdout.flush()
+jetrat.Analyze(event,weight)
+jetrat.Finalize("Analysis")
+print("")
