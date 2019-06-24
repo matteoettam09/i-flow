@@ -13,6 +13,17 @@ class SChannelDecay:
     def Lambda(self,a,b,c):
         return (a-b-c)**2-4*b*c
 
+    def _find_axes(self,p):
+        pl = np.where(np.logical_and(p[:,1]==0,np.logical_and(p[:,2]==0,p[:,3] == 0))[:,np.newaxis],
+                Vector4(np.zeros_like(p[:,1]),np.zeros_like(p[:,1]),np.zeros_like(p[:,1]),np.ones_like(p[:,1])),
+                p/np.where(Momentum(p)==np.zeros_like(p[:,1]),np.ones_like(p[:,1]),Momentum(p))[:,np.newaxis])
+        pl[:,0] = np.zeros_like(pl[:,1])
+        pt1 = Cross(pl,Vector4(np.zeros_like(pl[:,0]),np.ones_like(pl[:,1]),np.zeros_like(pl[:,2]),np.zeros_like(pl[:,3])))
+        pt1 = pt1/Momentum(pt1)[:,np.newaxis]
+        pt2 = Cross(pt1,pl)
+        pt2 = pt2/Momentum(pt2)[:,np.newaxis]
+        return pl, pt1, pt2
+
     def GeneratePoint(self,p,s1,s2,rans):
         logger.debug("IsotropicPoint: {")
         logger.debug("  rans = {0}".format(rans))
@@ -42,17 +53,6 @@ class SChannelDecay:
         logger.debug("}")
         return [ p1, p2 ]
 
-    def _find_axes(self,p):
-        pl = np.where(np.logical_and(p[:,1]==0,np.logical_and(p[:,2]==0,p[:,3] == 0))[:,np.newaxis], 
-                Vector4(np.zeros_like(p[:,1]),np.zeros_like(p[:,1]),np.zeros_like(p[:,1]),np.ones_like(p[:,1])),
-                p/np.where(Momentum(p)==np.zeros_like(p[:,1]),np.ones_like(p[:,1]),Momentum(p))[:,np.newaxis])
-        pl[:,0] = np.zeros_like(pl[:,1])
-        pt1 = Cross(pl,Vector4(np.zeros_like(pl[:,0]),np.ones_like(pl[:,1]),np.zeros_like(pl[:,2]),np.zeros_like(pl[:,3])))
-        pt1 = pt1/Momentum(pt1)[:,np.newaxis]
-        pt2 = Cross(pt1,pl)
-        pt2 = pt2/Momentum(pt2)[:,np.newaxis]
-        return pl, pt1, pt2
-        
     def GenerateWeight(self,p,s1,s2,p1,p2):
         logger.debug("IsotropicWeight: {")
         logger.debug("  p   = {0}".format(p))
@@ -90,7 +90,7 @@ class Propagator:
 
     def GeneratePoint(self,smin,smax,ran):
         s = smin*(smax/smin)**ran
-        logger.debug("MasslessPoint: ran = {0}, s_min = {1}, s_max = {2}, s = {3}".format(ran,s,smin,smax))
+        logger.debug("MasslessPoint: ran = {0}, s_min = {1}, s_max = {2}, s = {3}".format(ran,smin,smax,s))
         return s
 
     def GenerateWeight(self,smin,smax,p):
@@ -98,5 +98,5 @@ class Propagator:
         I = np.log(smax/smin)
         ran = np.log(s/smin)/I
         wgt = I/(2.*m.pi)
-        logger.debug("MasslessWeight: ran = {0}, s_min = {1}, s_max = {2}, s = {3}".format(ran,s,smin,smax))
+        logger.debug("MasslessWeight: ran = {0}, s_min = {1}, s_max = {2}, s = {3}".format(ran,smin,smax,s))
         return [ wgt, ran ]
