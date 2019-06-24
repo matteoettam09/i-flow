@@ -28,6 +28,21 @@ class PiecewiseLinear(tfb.Bijector):
 
     def buildQ(self, d, nbins):
         inval = layers.Input(shape=(d,))
+        
+        #h1 = layers.Dense(256,activation='relu')(inval)
+        #h2 = layers.Dense(128,activation='relu')(h1)
+        #h3 = layers.Dense(64,activation='relu')(h2)
+        #h4 = layers.Dense(32,activation='relu')(h3)
+        #h5 = layers.Dense(32,activation='relu')(h4)
+        #h5 = layers.concatenate([h5,h3], axis=-1)
+        #h6 = layers.Dense(64,activation='relu')(h5)
+        #h6 = layers.concatenate([h6,h2], axis=-1)
+        #h7 = layers.Dense(128,activation='relu')(h6)
+        #h7 = layers.concatenate([h7,h1], axis=-1)
+        #h8 = layers.Dense(256,activation='relu')(h7)        
+        #out = layers.Dense((self.D-self.d)*(2*self.nbins+1),activation='relu')(h8)
+        
+        
         h1 = layers.Dense(16,activation='relu')(inval)
         h2 = layers.Dense(16,activation='relu')(h1)
         out = layers.Dense((self.D-d)*nbins)(h2)
@@ -174,6 +189,7 @@ class PiecewiseQuadratic(tfb.Bijector):
     def GetWV(self, xd):
         NNMat = self.NNMat(xd)
         W = tf.nn.softmax(NNMat[...,:self.nbins],axis=-1)
+        W = tf.where(tf.less(W,1e-6*tf.ones_like(W)),1e-6*tf.ones_like(W),W)
         V = NNMat[...,self.nbins:]
         VExp = tf.exp(V)
         VSum = tf.reduce_sum((VExp[...,:self.nbins]+VExp[...,1:])*W/2,axis=-1,keepdims=True)
@@ -182,6 +198,7 @@ class PiecewiseQuadratic(tfb.Bijector):
 
     def _find_bins(self,x,y):
         ibins = tf.cast(tf.searchsorted(y,x[...,tf.newaxis],side='right'),dtype=tf.int32)
+        ibins = tf.where(tf.equal(ibins,self.nbins*tf.ones_like(ibins)),ibins-1,ibins)
         ibins = tf.reshape(ibins,[tf.shape(x)[0],self.D-self.d])
         one_hot = tf.one_hot(ibins,depth=self.nbins)
         one_hot_sum = tf.one_hot(ibins-1,depth=self.nbins)
@@ -340,6 +357,7 @@ class PiecewiseQuadraticConst(tfb.Bijector):
 
     def _find_bins(self,x,y):
         ibins = tf.cast(tf.searchsorted(y,x[...,tf.newaxis],side='right'),dtype=tf.int32)
+        ibins = tf.where(tf.equal(ibins,self.nbins*tf.ones_like(ibins)),ibins-1,ibins)
         ibins = tf.reshape(ibins,[tf.shape(x)[0],self.D-self.d])
         one_hot = tf.one_hot(ibins,depth=self.nbins)
         one_hot_sum = tf.one_hot(ibins-1,depth=self.nbins)

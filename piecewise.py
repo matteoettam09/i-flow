@@ -153,6 +153,7 @@ class PiecewiseQuadratic(tfb.Bijector):
     def GetWV(self, xd):
         NNMat = self.NNMat(xd)
         W = tf.nn.softmax(NNMat[...,:self.nbins],axis=-1)
+        W = tf.where(tf.less(W,1e-6*tf.ones_like(W)),1e-6*tf.ones_like(W),W)
         V = NNMat[...,self.nbins:]
         VExp = tf.exp(V)
         VSum = tf.reduce_sum((VExp[...,:self.nbins]+VExp[...,1:])*W/2,axis=-1,keepdims=True)
@@ -161,6 +162,7 @@ class PiecewiseQuadratic(tfb.Bijector):
 
     def _find_bins(self,x,y):
         ibins = tf.cast(tf.searchsorted(y,x[...,tf.newaxis],side='right'),dtype=tf.int32)
+        ibins = tf.where(tf.equal(ibins,self.nbins*tf.ones_like(ibins)),ibins-1,ibins)
         ibins = tf.reshape(ibins,[tf.shape(x)[0],self.D-self.d])
         one_hot = tf.one_hot(ibins,depth=self.nbins)
         one_hot_sum = tf.one_hot(ibins-1,depth=self.nbins)
@@ -319,6 +321,7 @@ class PiecewiseQuadraticConst(tfb.Bijector):
 
     def _find_bins(self,x,y):
         ibins = tf.cast(tf.searchsorted(y,x[...,tf.newaxis],side='right'),dtype=tf.int32)
+        ibins = tf.where(tf.equal(ibins,self.nbins*tf.ones_like(ibins)),ibins-1,ibins)
         ibins = tf.reshape(ibins,[tf.shape(x)[0],self.D-self.d])
         one_hot = tf.one_hot(ibins,depth=self.nbins)
         one_hot_sum = tf.one_hot(ibins-1,depth=self.nbins)
