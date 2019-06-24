@@ -64,6 +64,7 @@ class PiecewiseLinear(tfb.Bijector):
         yd, yD = y[..., :self.d], y[..., self.d:]
         Q = self.Q(yd)
         ibins = tf.cast(tf.searchsorted(tf.cumsum(Q,axis=-1),yD[...,tf.newaxis],side='right'),dtype=tf.int32)
+        ibins = tf.where(tf.equal(ibins,self.nbins*tf.ones_like(ibins)),ibins-1,ibins)
         ibins = tf.reshape(ibins,[tf.shape(yD)[0],self.D-self.d])
         one_hot = tf.one_hot(ibins,depth=self.nbins)
         one_hot2 = tf.one_hot(ibins-1,depth=self.nbins)
@@ -81,6 +82,7 @@ class PiecewiseLinear(tfb.Bijector):
         yd, yD = y[..., :self.d], y[..., self.d:]
         Q = self.Q(yd)
         ibins = tf.cast(tf.searchsorted(tf.cumsum(Q,axis=-1),yD[...,tf.newaxis],side='right'),dtype=tf.int32)
+        ibins = tf.where(tf.equal(ibins,self.nbins*tf.ones_like(ibins)),ibins-1,ibins)
         ibins = tf.reshape(ibins,[tf.shape(yD)[0],self.D-self.d])
         one_hot = tf.one_hot(ibins,depth=self.nbins)
         return -tf.reduce_sum(tf.log(tf.reduce_sum(Q*one_hot,axis=-1)/self.width),axis=-1)
