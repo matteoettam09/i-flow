@@ -1,8 +1,8 @@
 
 from mpi4py import MPI
 import sys, os
-sys.path.append('/home/stefan/hep/sherpa/rel-2-2-7/lib/python2.7/site-packages')
-argv=['Sherpa','SHERPA_LDADD=ModelMain ToolsOrg ToolsPhys ToolsMath PDF']
+sys.path.append('/home/isaacson/Programs/lib/python3.7/site-packages')
+argv=[]#,'SHERPA_LDADD=ModelMain ToolsOrg ToolsPhys ToolsMath PDF']
 import Sherpa
 import numpy as np
 
@@ -10,7 +10,7 @@ class Comix:
 
     def __init__(self,flin,flout):
         f = open("Run.dat","w")
-        f.write("(run){{\n\
+        f.write("(run){{\n SHERPA_LDADD ModelMain ToolsOrg ToolsPhys ToolsMath PDF \n\
   EVENTS 0; GENERATE_RESULT_DIRECTORY -1;\n\
   BEAM_1 11 45.6; BEAM_2 -11 45.6;\n\
   SCALES VAR{{Abs2(p[0]+p[1])}};\n\
@@ -26,11 +26,12 @@ class Comix:
                         len(flout)))
         f.close()
         self.sherpa = Sherpa.Sherpa()
-        self.sherpa.InitializeTheRun(len(argv),argv)
+        print(argv)
+        self.sherpa.InitializeTheRun(1,argv)
         self.process = Sherpa.MEProcess(self.sherpa)
 	# for i in flin: self.process.AddInFlav(i);
 	# for i in flout: self.process.AddInFlav(i);
-	self.process.Initialize();
+        self.process.Initialize();
 
     def ME2(self,p):
         me2 = np.zeros(len(p[0]))
