@@ -76,12 +76,12 @@ class SChannelDecay:
         logger.debug("  pl   = {0}".format(pl))
         logger.debug("  p_T1 = {0}".format(pt1))
         logger.debug("  p_T2 = {0}".format(pt2))
-        logger.debug("  \\cos\\theta = {0}, \\phi = {1}".format(ct,phi))
+#        logger.debug("  \\cos\\theta = {0}, \\phi = {1}".format(ct,phi))
         rans = [ (1.+ct)/2., phi/(2.*m.pi) ]
 
         ps = np.sqrt(self.Lambda(Mass2(p),s1,s2))/(2.*ecm)
         wgt = 4.*m.pi*ps/(16.*m.pi**2*ecm)
-        logger.debug("  rans = {0}".format(rans))
+#        logger.debug("  rans = {0}".format(rans))
         logger.debug("  weight = {0}".format(wgt))
         logger.debug("}")
         return [ wgt, rans ]
@@ -89,13 +89,15 @@ class SChannelDecay:
 class Propagator:
 
     def GeneratePoint(self,smin,smax,ran):
-        s = smin*(smax/smin)**ran
+        #s = smin*(smax/smin)**ran
+        s = ran*(smax-smin) + smin
         logger.debug("MasslessPoint: ran = {0}, s_min = {1}, s_max = {2}, s = {3}".format(ran,smin,smax,s))
         return s
 
     def GenerateWeight(self,smin,smax,p):
         s = Mass2(p)
-        I = np.log(smax/smin)
+        #I = np.log(smax/smin)
+        I = smax-smin
         ran = np.log(s/smin)/I
         wgt = I/(2.*m.pi)
         logger.debug("MasslessWeight: ran = {0}, s_min = {1}, s_max = {2}, s = {3}".format(ran,smin,smax,s))

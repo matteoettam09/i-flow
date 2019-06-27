@@ -1,9 +1,12 @@
 import numpy as np
 import piecewise
 import tensorflow_probability as tfp
+import time
 tfd = tfp.distributions
 tfb = tfp.bijectors
 import matplotlib.pyplot as plt
+import tensorflow as tf
+import corner
 
 class BijectorFactory:
     def __init__(self):
@@ -95,30 +98,36 @@ class Integrator():
     def _loss_fn(self,nsamples):
         x = self.dist.sample(nsamples)
         logq = self.dist.log_prob(x)
-        p = self.func(x)
+        p = tf.stop_gradient(tf.py_function(self.func,[x],tf.float32))
         q = self.dist.prob(x)
         xsec = p/q
         p = p/tf.reduce_mean(xsec)
         mean, var = tf.nn.moments(xsec,axes=[0])
-        return tf.reduce_mean(p/q*(tf.log(p)-logq)), mean, var/nsamples
+        return tf.reduce_mean(p/q*(tf.log(p)-logq)), mean, var/nsamples, x, q
 
     def make_optimizer(self,learning_rate=1e-4,nsamples=500):
-        self.loss, self.integral, self.var = self._loss_fn(nsamples) 
+        self.loss, self.integral, self.var, self.x, self.q = self._loss_fn(nsamples) 
         optimizer = tf.train.AdamOptimizer(learning_rate)
         grads = optimizer.compute_gradients(self.loss)
         self.opt_op = optimizer.apply_gradients(grads)
 
     def optimize(self,sess,epochs=1000,learning_rate=1e-4,
                  nsamples=500,stopping=1e-4,printout=100):
+        current = time.time()
         for epoch in range(epochs):
-            _, np_loss, np_integral, np_var = sess.run([self.opt_op, self.loss, self.integral, self.var])
+            _, np_loss, np_integral, np_var, xpts, qpts = sess.run([self.opt_op, self.loss, self.integral, self.var,self.x,self.q])
             self.global_step += 1
             self.losses.append(np_loss)
             self.integrals.append(np_integral)
             self.vars.append(np_var)
             if epoch % printout == 0:
-                print("Epoch %4d: loss = %e, average integral = %e, average variance = %e"   
-                        %(epoch, np_loss, np.mean(self.integrals), np.mean(self.vars))) 
+                last = current
+                current = time.time()
+                print("Epoch %4d: loss = %e, average integral = %e, average variance = %e, time = %e"   
+                        %(epoch, np_loss, np.mean(self.integrals), np.mean(self.vars),current-last)) 
+                figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], weights = qpts, show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
+                plt.savefig('fig_{:04d}.pdf'.format(epoch))
+                plt.close()
             if np.sqrt(np_var)/np_integral < stopping:
                 break
 
@@ -162,10 +171,17 @@ class Integrator():
 
 if __name__ == '__main__':
     import tensorflow as tf
+    from tensorflow.python.client import timeline
     def normalChristina(x):
         return 0.8* tf.exp((-0.5*((x[:,0]-0.5)* (50 *(x[:,0]-0.5) -  15* (x[:,1]-0.5)) + (-15*(x[:,0]-0.5) + 5*(x[:,1]-0.5))* (x[:,1]-0.5)))) + x[:,2]
 
-    integrator = Integrator(normalChristina, 3, mode='quadratic_const')
+    def step(x,x0,k=50):
+        return 0.5*(1+tf.tanh(k*(x0-x)))
+
+    def dsigmaTrain(x):
+        return (x[:,0]**2+x[:,1]**2)/((1-x[:,0])*(1-x[:,1]))*step(x[:,0],0.9)*step(x[:,1],0.9)   
+
+    integrator = Integrator(normalChristina, 3, mode='linear')
     integrator.make_optimizer(nsamples=1000)
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())

@@ -1,0 +1,9 @@
+ SHERPA_LDADD = ModelMain ToolsOrg ToolsPhys ToolsMath PDF; 
+ EVENTS = 0; 
+ GENERATE_RESULT_DIRECTORY = -1; 
+ BEAM_1 = 11 45.6; 
+ BEAM_2 = -11 45.6; 
+ SCALES = VAR{Abs2(p[0]+p[1])}; 
+ SHERPA_RUN_PATH = /home/isaacson/Documents/Projects/MLIntegration/NICE/integration
+ SHERPA_CPP_PATH = /home/isaacson/Documents/Projects/MLIntegration/NICE/integration
+ SHERPA_LIB_PATH = /home/isaacson/Documents/Projects/MLIntegration/NICE/integration/Process/Amegic/lib

@@ -1,0 +1,14 @@
+(run){
+ SHERPA_LDADD ModelMain ToolsOrg ToolsPhys ToolsMath PDF 
+  EVENTS 0; GENERATE_RESULT_DIRECTORY -1;
+  BEAM_1 11 45.6; BEAM_2 -11 45.6;
+  SCALES VAR{Abs2(p[0]+p[1])};
+}(run);
+(processes){
+  Process 11 -11 -> 1 -1 21;
+  Order (*,2);
+  End process;
+}(processes);
+(selector){
+  FastjetFinder kt 3 5 0 0;
+}(selector);
