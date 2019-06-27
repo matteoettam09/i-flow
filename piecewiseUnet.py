@@ -220,7 +220,7 @@ class PiecewiseQuadratic(tfb.Bijector):
                 +tf.reduce_sum(V*one_hot_V,axis=-1)
         return tf.concat([xd, result], axis=-1) 
 
-    def _inverse(self, x): #forward
+    def _forward(self, x): #forward
         "Calculate forward coupling layer"
         xd, xD = x[..., :self.d], x[..., self.d:]
         W, V = self.GetWV(xd)
@@ -235,7 +235,7 @@ class PiecewiseQuadratic(tfb.Bijector):
                 + tf.reduce_sum(VSum*one_hot_sum,axis=-1)
         return tf.concat([xd, yD], axis=-1)
 
-    def _forward(self, y): #inverse
+    def _inverse(self, y): #inverse
         "Calculate inverse coupling layer"
         yd, yD = y[..., :self.d], y[..., self.d:]
         W, V = self.GetWV(yd)
@@ -254,11 +254,11 @@ class PiecewiseQuadratic(tfb.Bijector):
 #        xD = tf.where(tf.is_nan(xD), tf.ones_like(xD), xD)
         return tf.concat([yd, xD], axis=-1)
 
-    def _inverse_log_det_jacobian(self, x): #forward
+    def _forward_log_det_jacobian(self, x): #forward
         "Calculate log determinant of Coupling Layer"
         return tf.reduce_sum(tf.log(self.pdf(x)[...,self.d:]),axis=-1)
 
-    def _forward_log_det_jacobian(self, y): #inverse
+    def _inverse_log_det_jacobian(self, y): #inverse
         "Calculate log determinant of Coupling Layer"
         yd, yD = y[..., :self.d], y[..., self.d:]
         W, V = self.GetWV(yd)
@@ -319,9 +319,15 @@ class PiecewiseQuadraticConst(tfb.Bijector):
 
     def buildV(self, d, nbins):
         inval = layers.Input(shape=(d,))
-        h1 = layers.Dense(16,activation='relu')(inval)
-        h2 = layers.Dense(16,activation='relu')(h1)
-        out = layers.Dense((self.D-d)*(nbins+1),activation='relu')(h2)
+        h1 = layers.Dense(128,activation='relu')(inval)
+        h2 = layers.Dense(64,activation='relu')(h1)
+        h3 = layers.Dense(32,activation='relu')(h2)
+        h4 = layers.Dense(32,activation='relu')(h3)
+        h4 = layers.concatenate([h4,h2], axis=-1)
+        h5 = layers.Dense(64,activation='relu')(h4)
+        h5 = layers.concatenate([h5,h1], axis=-1)
+        h6 = layers.Dense(128,activation='relu')(h5)
+        out = layers.Dense((self.D-d)*(nbins+1),activation='relu')(h6)
         out = layers.Reshape(((self.D-d),nbins+1))(out)
         model = models.Model(inval,out)
         model.summary()
@@ -381,7 +387,7 @@ class PiecewiseQuadraticConst(tfb.Bijector):
                 +tf.reduce_sum(V*one_hot_V,axis=-1)
         return tf.concat([xd, result], axis=-1) 
 
-    def _inverse(self, x): #forward
+    def _forward(self, x): #forward
         "Calculate forward coupling layer"
         xd, xD = x[..., :self.d], x[..., self.d:]
 #        W, V = self.GetWV(xd)
@@ -399,7 +405,7 @@ class PiecewiseQuadraticConst(tfb.Bijector):
                 + tf.reduce_sum(VSum*one_hot_sum,axis=-1)
         return tf.concat([xd, yD], axis=-1)
 
-    def _forward(self, y): #inverse
+    def _inverse(self, y): #inverse
         "Calculate inverse coupling layer"
         yd, yD = y[..., :self.d], y[..., self.d:]
 #        W, V = self.GetWV(yd)
@@ -421,11 +427,11 @@ class PiecewiseQuadraticConst(tfb.Bijector):
 #        xD = tf.where(tf.is_nan(xD), tf.ones_like(xD), xD)
         return tf.concat([yd, xD], axis=-1)
 
-    def _inverse_log_det_jacobian(self, x): #forward
+    def _forward_log_det_jacobian(self, x): #forward
         "Calculate log determinant of Coupling Layer"
         return tf.reduce_sum(tf.log(self.pdf(x)[...,self.d:]),axis=-1)
 
-    def _forward_log_det_jacobian(self, y): #inverse
+    def _inverse_log_det_jacobian(self, y): #inverse
         "Calculate log determinant of Coupling Layer"
         yd, yD = y[..., :self.d], y[..., self.d:]
 #        W, V = self.GetWV(yd)
