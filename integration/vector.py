@@ -11,7 +11,7 @@ def Mass2(p):
     return Dot(p,p)
 
 def Mass(p):
-    return np.where(Dot(p,p) > 0, np.sqrt(Dot(p,p)), 0)
+    return np.nan_to_num(np.sqrt(Dot(p,p)))
 
 def Momentum2(p):
     return p[:,1]*p[:,1]+p[:,2]*p[:,2]+p[:,3]*p[:,3]
