@@ -47,13 +47,26 @@ class PiecewiseLinear(tfb.Bijector):
         model = models.Model(inval,out)
         model.summary()
         return model
-
+    
+    def one_blob(self, xd):
+        y = tf.tile(((0.5*self.width) + tf.range(0.,1.,delta = self.width)),[tf.size(xd)]) 
+        y = tf.reshape(y,(-1,self.d,self.nbins))
+        res = tf.exp(((-self.nbins*self.nbins)/2.)*(y-xd[...,tf.newaxis])**2)
+        return res
+        
     def Q(self, xd):
-        ibins = tf.cast(tf.floor(xd*self.nbins),dtype=tf.int32)
-        ibins = tf.where(tf.equal(ibins,self.nbins*tf.ones_like(ibins)),ibins-1,ibins)
-        one_hot = tf.one_hot(ibins,depth=self.nbins, axis=-1)
-        one_hot = tf.reshape(one_hot,[-1,self.d*self.nbins])
-        QMat = tf.nn.softmax(self.QMat(one_hot),axis=-1)
+        ## one hot encoding:
+        #ibins = tf.cast(tf.floor(xd*self.nbins),dtype=tf.int32)
+        #ibins = tf.where(tf.equal(ibins,self.nbins*tf.ones_like(ibins)),ibins-1,ibins)
+        #one_hot = tf.one_hot(ibins,depth=self.nbins, axis=-1)
+        #one_hot = tf.reshape(one_hot,[-1,self.d*self.nbins])
+        #QMat = tf.nn.softmax(self.QMat(one_hot),axis=-1)
+        
+        
+        ## one blob encoding:
+        One_blob = tf.reshape(self.one_blob(xd),[-1,self.d*self.nbins])
+        QMat = tf.nn.softmax(self.QMat(One_blob),axis=-1)
+        
         return QMat
 
     def pdf(self,x):
@@ -193,13 +206,24 @@ class PiecewiseQuadratic(tfb.Bijector):
         model.summary()
         return model
 
+    def one_blob(self, xd):
+        y = tf.tile(((0.5/self.nbins) + tf.range(0.,1.,delta = 1./self.nbins)),[tf.size(xd)]) 
+        y = tf.reshape(y,(-1,self.d,self.nbins))
+        res = tf.exp(((-self.nbins*self.nbins)/2.)*(y-xd[...,tf.newaxis])**2)
+        return res    
+    
     def GetWV(self, xd):
-        ibins = tf.cast(tf.floor(xd*self.nbins),dtype=tf.int32)
-        ibins = tf.where(tf.equal(ibins,self.nbins*tf.ones_like(ibins)),ibins-1,ibins)
-        one_hot = tf.one_hot(ibins,depth=self.nbins, axis=-1)
-        one_hot = tf.reshape(one_hot,[-1,self.d*self.nbins])
-
-        NNMat = self.NNMat(one_hot)
+        ## one hot encoding:
+        #ibins = tf.cast(tf.floor(xd*self.nbins),dtype=tf.int32)
+        #ibins = tf.where(tf.equal(ibins,self.nbins*tf.ones_like(ibins)),ibins-1,ibins)
+        #one_hot = tf.one_hot(ibins,depth=self.nbins, axis=-1)
+        #one_hot = tf.reshape(one_hot,[-1,self.d*self.nbins])
+        #NNMat = self.NNMat(one_hot)
+        
+        ## one blob encoding:
+        One_blob = tf.reshape(self.one_blob(xd),[-1,self.d*self.nbins])
+        NNMat = self.NNMat(One_blob)
+        
         W = tf.nn.softmax(NNMat[...,:self.nbins],axis=-1)
         W = tf.where(tf.less(W,1e-6*tf.ones_like(W)),1e-6*tf.ones_like(W),W)
         V = NNMat[...,self.nbins:]
@@ -341,7 +365,13 @@ class PiecewiseQuadraticConst(tfb.Bijector):
         model = models.Model(inval,out)
         model.summary()
         return model
-
+    
+    #def one_blob(self, xd):
+        #y = tf.tile(((0.5/self.nbins) + tf.range(0.,1.,delta = 1./self.nbins)),[tf.size(xd)]) 
+        #y = tf.reshape(y,(-1,self.d,self.nbins))
+        #res = tf.exp(((-self.nbins*self.nbins)/2.)*(y-xd[...,tf.newaxis])**2)
+        #return res    
+    
     def W(self, xd):
         #WMat = tf.nn.softmax(self.WMat(xd),axis=-1)
         #return WMat
