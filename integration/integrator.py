@@ -1,5 +1,6 @@
 import numpy as np
 import piecewise
+import piecewiseUnet_one_hot
 import tensorflow_probability as tfp
 tfd = tfp.distributions
 tfb = tfp.bijectors
@@ -24,6 +25,9 @@ factory = BijectorFactory()
 factory.register_bijector('linear', piecewise.PiecewiseLinear)
 factory.register_bijector('quadratic', piecewise.PiecewiseQuadratic)
 factory.register_bijector('quadratic_const', piecewise.PiecewiseQuadraticConst)
+factory.register_bijector('linear_unet', piecewiseUnet_one_hot.PiecewiseLinearUNet)
+factory.register_bijector('quadratic_unet', piecewiseUnet_one_hot.PiecewiseQuadraticUNet)
+factory.register_bijector('quadratic_const_unet', piecewiseUnet_one_hot.PiecewiseQuadraticConstUNet)
 
 class Integrator():
     def __init__(self, func, ndims, layers=4, mode='quadratic', nbins=25):
@@ -41,16 +45,9 @@ class Integrator():
         self.bijectors = []
 
         arange = np.arange(ndims)
-        permute = np.hstack([arange[ndims//2:],arange[:ndims//2]])
-        if ndims % 2 != 0:
-            permute_odd = np.hstack([arange[ndims//2+1:],arange[:ndims//2+1]])
-            odd = True
-        else:
-            odd = False
-
-        for i in range(layers):
-            if not odd:
-                self.bijectors.append(factory.create(
+        permute = np.hstack([arange[1:],arange[0]])
+        for i in range(ndims):
+            self.bijectors.append(factory.create(
                     mode,**{
                         'D': ndims,
                         'd': ndims//2,
@@ -58,31 +55,48 @@ class Integrator():
                         'layer_id': i,
                         }
                     ))
-                self.bijectors.append(tfb.Permute(permutation=permute))
-            else:
-                if i % 2 == 0:
-                    self.bijectors.append(factory.create(
-                        mode,**{
-                            'D': ndims,
-                            'd': ndims//2+1,
-                            'nbins': nbins,
-                            'layer_id': i,
-                            }
-                        ))
-                    self.bijectors.append(tfb.Permute(permutation=permute))
-                else:
-                    self.bijectors.append(factory.create(
-                        mode,**{
-                            'D': ndims,
-                            'd': ndims//2,
-                            'nbins': nbins,
-                            'layer_id': i,
-                            }
-                        ))
-                    self.bijectors.append(tfb.Permute(permutation=permute_odd))
+            self.bijectors.append(tfb.Permute(permutation=permute))
+#        if ndims % 2 != 0:
+#            permute_odd = np.hstack([arange[ndims//2+1:],arange[:ndims//2+1]])
+#            odd = True
+#        else:
+#            odd = False
+#
+#        for i in range(layers):
+#            if not odd:
+#                self.bijectors.append(factory.create(
+#                    mode,**{
+#                        'D': ndims,
+#                        'd': ndims//2,
+#                        'nbins': nbins,
+#                        'layer_id': i,
+#                        }
+#                    ))
+#                self.bijectors.append(tfb.Permute(permutation=permute))
+#            else:
+#                if i % 2 == 0:
+#                    self.bijectors.append(factory.create(
+#                        mode,**{
+#                            'D': ndims,
+#                            'd': ndims//2+1,
+#                            'nbins': nbins,
+#                            'layer_id': i,
+#                            }
+#                        ))
+#                    self.bijectors.append(tfb.Permute(permutation=permute))
+#                else:
+#                    self.bijectors.append(factory.create(
+#                        mode,**{
+#                            'D': ndims,
+#                            'd': ndims//2,
+#                            'nbins': nbins,
+#                            'layer_id': i,
+#                            }
+#                        ))
+#                    self.bijectors.append(tfb.Permute(permutation=permute_odd))
 
         # Remove the last permute layer
-        self.bijectors = tfb.Chain(list(reversed(self.bijectors[:-1]))) 
+        self.bijectors = tfb.Chain(list(reversed(self.bijectors))) 
 
         self.base_dist = tfd.Uniform(low=ndims*[0.],high=ndims*[1.])
         self.base_dist = tfd.Independent(distribution=self.base_dist,
@@ -121,7 +135,7 @@ class Integrator():
             if epoch % printout == 0:
                 print("Epoch %4d: loss = %e, average integral = %e, average variance = %e"   
                         %(epoch, np_loss, np.mean(self.integrals), np.mean(self.vars))) 
-                figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], weights = qpts, show_titles=True, title_kwargs={"fontsize": 12}, range=5*[[0,1]])
+                figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
                 plt.savefig('fig_{:04d}.pdf'.format(epoch))
                 plt.close()
 #            if np.sqrt(np_var)/np_integral < stopping:
@@ -129,6 +143,9 @@ class Integrator():
 
         print("Epoch %4d: loss = %e, average integral = %e, average variance = %e"   
                 %(epoch, np_loss, np.mean(self.integrals), np.mean(self.vars))) 
+        figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
+        plt.savefig('fig_{:04d}.pdf'.format(epoch))
+        plt.close()
 
     def _plot(self,axis,labelsize=17,titlesize=20):
         axis.set_xlabel('epoch',fontsize=titlesize)
@@ -162,7 +179,12 @@ class Integrator():
         integral, var = tf.nn.moments(p/q,axes=[0])
         error = tf.sqrt(var/nsamples)
 
-        return sess.run([integral, error])
+        np_int, np_error, xpts, qpts = sess.run([integral,error,x,q])
+        figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], weights = qpts, show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
+        plt.savefig('xsec_final.pdf')
+        plt.close()
+
+        return np_int, np_error
         
 
 if __name__ == '__main__':

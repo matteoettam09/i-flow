@@ -99,6 +99,6 @@ class Propagator:
         I = np.log(smax/smin)
         #I = smax-smin
         #ran = np.log(s/smin)/I
-        wgt = I/(2.*m.pi)
+        wgt = s*I/(2.*m.pi)
         logger.debug("MasslessWeight: s_min = {0}, s_max = {1}, s = {2}".format(smin,smax,s))
         return wgt

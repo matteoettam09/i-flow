@@ -14,13 +14,14 @@ class Comix:
   EVENTS 0; GENERATE_RESULT_DIRECTORY -1;\n\
   BEAM_1 11 45.6; BEAM_2 -11 45.6;\n\
   SCALES VAR{{Abs2(p[0]+p[1])}};\n\
+  KFACTOR FASTJET[A:kt]{{min(MU_22,1)}};\n\
 }}(run);\n(processes){{\n\
   Process {0} -> {1};\n\
   Order (*,2);\n\
   End process;\n\
 }}(processes);\n\
 (selector){{\n\
-  FastjetFinder kt {2} 5 0 0;\n\
+#  FastjetFinder kt {2} 5 0 0;\n\
 }}(selector);\n".format(" ".join([str(fl) for fl in flin]),\
                         " ".join([str(fl) for fl in flout]),\
                         len(flout)))
