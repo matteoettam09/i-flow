@@ -108,6 +108,8 @@ class Integrator():
                 bijector=self.bijectors,
                 )
 
+        self.saver = tf.train.Saver()
+
     def _loss_fn(self,nsamples):
         x = self.dist.sample(nsamples)
         logq = self.dist.log_prob(x)
@@ -125,9 +127,17 @@ class Integrator():
         self.opt_op = optimizer.apply_gradients(grads)
 
     def optimize(self,sess,epochs=1000,learning_rate=1e-4,
-                 nsamples=500,stopping=1e-4,printout=100):
+                 nsamples=500,stopping=1e-4,printout=100,
+                 profiler=None,options=None):
+
         for epoch in range(epochs):
-            _, np_loss, np_integral, np_var, xpts, ppts, qpts = sess.run([self.opt_op, self.loss, self.integral, self.var, self.x, self.p, self.q])
+            if profiler is not None:
+                run_metadata = tf.RunMetadata()
+            else:
+                run_metadata = None
+            _, np_loss, np_integral, np_var, xpts, ppts, qpts = sess.run([self.opt_op, self.loss, self.integral, self.var, self.x, self.p, self.q],options=options,run_metadata=run_metadata)
+            if profiler is not None:
+                profiler.add_step(epoch, run_metadata)
             self.global_step += 1
             self.losses.append(np_loss)
             self.integrals.append(np_integral)
@@ -135,7 +145,7 @@ class Integrator():
             if epoch % printout == 0:
                 print("Epoch %4d: loss = %e, average integral = %e, average variance = %e"   
                         %(epoch, np_loss, np.mean(self.integrals), np.mean(self.vars))) 
-                figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
+                figure = corner.corner(xpts, labels=[r'$x_{}$'.format(i) for i in range(self.ndims)], show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
                 plt.savefig('fig_{:04d}.pdf'.format(epoch))
                 plt.close()
 #            if np.sqrt(np_var)/np_integral < stopping:
@@ -143,9 +153,17 @@ class Integrator():
 
         print("Epoch %4d: loss = %e, average integral = %e, average variance = %e"   
                 %(epoch, np_loss, np.mean(self.integrals), np.mean(self.vars))) 
-        figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
+        figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$',r'$x_6$',r'$x_7$',r'$x_8$'], show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
         plt.savefig('fig_{:04d}.pdf'.format(epoch))
         plt.close()
+
+    def save(self,sess,name):
+        save_path = self.saver.save(sess, name)
+        print("Model saved at: {}".format(save_path))
+
+    def load(self,sess,name):
+        self.saver.restore(sess, name)
+        print("Model resotred")
 
     def _plot(self,axis,labelsize=17,titlesize=20):
         axis.set_xlabel('epoch',fontsize=titlesize)
@@ -180,11 +198,23 @@ class Integrator():
         error = tf.sqrt(var/nsamples)
 
         np_int, np_error, xpts, qpts = sess.run([integral,error,x,q])
-        figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], weights = qpts, show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
+        figure = corner.corner(xpts, labels=[r'$x_{}$'.format(i) for i in range(self.ndims)], weights = qpts, show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
         plt.savefig('xsec_final.pdf')
         plt.close()
 
         return np_int, np_error
+
+    def acceptance(self,sess,nsamples=10000):
+        x = self.dist.sample(nsamples)
+        q = self.dist.prob(x)
+        p = self.func(x)
+        integral, var = tf.nn.moments(p/q,axes=[0])
+        p = p/integral
+        r = tf.minimum(p/q,1.0)
+
+        np_r = sess.run(r)
+
+        return np.mean(np_r)
         
 
 if __name__ == '__main__':

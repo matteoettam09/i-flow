@@ -1,7 +1,12 @@
 
 import math as m
 
+import tensorflow as tf
+
 class Vec4:
+
+    def __len__(self):
+        return 4
 
     def __init__(self,E=0,px=0,py=0,pz=0):
         self.E = E
@@ -48,28 +53,28 @@ class Vec4:
         return self*self
 
     def M(self):
-        return m.sqrt(self.M2())
+        return tf.sqrt(self.M2())
 
     def P2(self):
         return self.px*self.px+self.py*self.py+self.pz*self.pz
 
     def P(self):
-        return m.sqrt(self.P2())
+        return tf.sqrt(self.P2())
 
     def PT2(self):
         return self.px*self.px+self.py*self.py
 
     def PT(self):
-        return m.sqrt(self.PT2())
+        return tf.sqrt(self.PT2())
 
     def Theta(self) :
-        return m.acos(self.pz/self.P())
+        return tf.acos(self.pz/self.P())
 
     def Phi(self) :
         if self.px==0 and self.py==0:
             return 0.0
         else:
-            return m.atan2(self.py,self.px)
+            return tf.atan2(self.py,self.px)
 
     def Cross(self,v):
         return Vec4(0.0,

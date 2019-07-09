@@ -1,6 +1,6 @@
 import numpy as np
 
-from vector import Vec4
+from flatmc.vector import Vec4
 
 def u_2(r):
     """
@@ -77,7 +77,7 @@ def rho_massless(Min, Mout):
     M22 = Mout*Mout
     return 0.125 * np.sqrt( M2*M2 - 2*M2*M22 + M22*M22) / M2
 
-def generate_point(pa,pb,rans):
+def generate_point(pa,pb,rans,NP):
 
     # The final momenta
     MOM = [ -rans[-1]*pa, -rans[-2]*pb ]

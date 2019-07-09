@@ -96,9 +96,9 @@ class Propagator:
 
     def GenerateWeight(self,smin,smax,p):
         s = Mass2(p)
-        #I = np.log(smax/smin)
-        I = smax-smin
+        I = np.log(smax/smin)
+        #I = smax-smin
         ran = np.log(s/smin)/I
-        wgt = I/(2.*m.pi)
+        wgt = s*I/(2.*m.pi)
         logger.debug("MasslessWeight: ran = {0}, s_min = {1}, s_max = {2}, s = {3}".format(ran,smin,smax,s))
         return [ wgt, ran ]

@@ -1,0 +1,7 @@
+*.pyc
+*.pdf
+Status*
+Process*
+*.png
+Run.dat
+Sherpa*

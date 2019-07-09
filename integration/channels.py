@@ -11,6 +11,9 @@ logger = logging.getLogger('channels')
 class SChannelDecay:
 
     def Lambda(self,a,b,c):
+        result = (a-b-c)**2-4*b*c
+        if np.any(result) < 0 or np.any(result) is np.inf:
+            print(a,b,c,result)
         return (a-b-c)**2-4*b*c
 
     def _find_axes(self,p):
@@ -59,7 +62,7 @@ class SChannelDecay:
         logger.debug("  p_1 = {0}".format(p1))
         logger.debug("  p_2 = {0}".format(p2))
         logger.debug("  sum = {0}".format(p-p1-p2))
-        ecm = Mass(p)
+        ecm2 = np.maximum(Mass2(p),1e-7)
 #        q1 = Boost(p,p1)
 #        q2 = Boost(p,p2)
 
@@ -79,8 +82,8 @@ class SChannelDecay:
 #        logger.debug("  \\cos\\theta = {0}, \\phi = {1}".format(ct,phi))
 #        rans = [ (1.+ct)/2., phi/(2.*m.pi) ]
 
-        ps = np.sqrt(self.Lambda(Mass2(p),s1,s2))/(2.*ecm)
-        wgt = 4.*m.pi*ps/(16.*m.pi**2*ecm)
+        ps = np.sqrt(self.Lambda(Mass2(p),s1,s2))/(2.*ecm2)
+        wgt = 4.*m.pi*ps/(16.*m.pi**2)
 #        logger.debug("  rans = {0}".format(rans))
         logger.debug("  weight = {0}".format(wgt))
         logger.debug("}")
@@ -100,5 +103,6 @@ class Propagator:
         #I = smax-smin
         #ran = np.log(s/smin)/I
         wgt = s*I/(2.*m.pi)
+        #wgt = I/(2*m.pi)
         logger.debug("MasslessWeight: s_min = {0}, s_max = {1}, s = {2}".format(smin,smax,s))
         return wgt

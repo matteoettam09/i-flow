@@ -6,17 +6,24 @@ argv=[]#,'SHERPA_LDADD=ModelMain ToolsOrg ToolsPhys ToolsMath PDF']
 import Sherpa
 import numpy as np
 
+import logging
+logger = logging.getLogger('eejjj')
+
 class Comix:
 
     def __init__(self,flin,flout):
         f = open("Run.dat","w")
-        f.write("(run){{\n SHERPA_LDADD ModelMain ToolsOrg ToolsPhys ToolsMath PDF \n\
+        f.write("(run){{\n SHERPA_LDADD ModelMain ToolsOrg ToolsPhys ToolsMath PDF Zfunctions\n\
+#  OUTPUT 15;\n\
+  ME_SIGNAL_GENERATOR Comix;\n\
   EVENTS 0; GENERATE_RESULT_DIRECTORY -1;\n\
   BEAM_1 11 45.6; BEAM_2 -11 45.6;\n\
   SCALES VAR{{Abs2(p[0]+p[1])}};\n\
-  KFACTOR FASTJET[A:kt]{{min(MU_22,1)}};\n\
+  PDF_SET None;\n\
+  KFACTOR FASTJET[A:kt]{{min(MU_{3}2,1)}};\n\
 }}(run);\n(processes){{\n\
   Process {0} -> {1};\n\
+#  ME_Generator Amegic; \n\
   Order (*,2);\n\
   End process;\n\
 }}(processes);\n\
@@ -24,7 +31,7 @@ class Comix:
 #  FastjetFinder kt {2} 5 0 0;\n\
 }}(selector);\n".format(" ".join([str(fl) for fl in flin]),\
                         " ".join([str(fl) for fl in flout]),\
-                        len(flout)))
+                        len(flout),len(flout)-1))
         f.close()
         self.sherpa = Sherpa.Sherpa()
         print(argv)
@@ -39,5 +46,6 @@ class Comix:
         for i in range(0,len(p[0])):
             for j in range(0,len(p)):
                 self.process.SetMomentum(j,p[j,i,0],p[j,i,1],p[j,i,2],p[j,i,3])
+            logger.debug(p[:,i])
             me2[i] = self.process.CSMatrixElement()
         return me2

@@ -1,7 +1,7 @@
 
 from mpi4py import MPI
 import sys, os
-sys.path.append('/home/claudius/Dropbox/Projects/MachineLearning/sherpa/lib/python2.7/site-packages')
+sys.path.append('/home/isaacson/Programs/lib/python3.7/site-packages')
 argv=[]#,'SHERPA_LDADD=ModelMain ToolsOrg ToolsPhys ToolsMath PDF']
 import Sherpa
 import numpy as np
