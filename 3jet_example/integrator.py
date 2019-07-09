@@ -126,15 +126,25 @@ class Integrator():
         
     def optimize(self,sess,epochs=1000,learning_rate=1e-4,
                  nsamples=500,stopping=1e-4,printout=100):
+        floating_av = np.array([])
+        floating_int = np.array([])
         for epoch in range(epochs):
             _, np_loss, np_integral, np_var, xpts, ppts, qpts = sess.run([self.opt_op, self.loss, self.integral, self.var, self.x, self.p, self.q])
             self.global_step += 1
             self.losses.append(np_loss)
             self.integrals.append(np_integral)
             self.vars.append(np_var)
+            if epoch // 10 == 0:
+                floating_int=np.append(floating_av,np_integral)
+                floating_av=np.append(floating_av,np_var)
+            else:
+                floating_int[epoch % 10] = np_integral
+                floating_av[epoch % 10] = np_var
             if epoch % printout == 0:
                 print("Epoch %4d: loss = %e, average integral = %e, average variance = %e, average stddev = %e"   
-                        %(epoch, np_loss, np.mean(self.integrals), np.mean(self.vars),np.sqrt(np.mean(self.vars)))) 
+                        %(epoch, np_loss, np.mean(self.integrals), np.mean(self.vars),np.sqrt(np.mean(self.vars))))
+                print("Epoch %4d: loss = %e, float.  integral = %e, float.  variance = %e, float.  stddev = %e"   
+                        %(epoch, np_loss, np.mean(floating_int), np.mean(floating_av),np.sqrt(np.mean(floating_av))))
                 figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
                 plt.savefig('fig_{:04d}.pdf'.format(epoch))
                 plt.close()
@@ -142,7 +152,9 @@ class Integrator():
 #                break
 
         print("Epoch %4d: loss = %e, average integral = %e, average variance = %e, average stddev = %e"   
-                %(epoch, np_loss, np.mean(self.integrals), np.mean(self.vars),np.sqrt(np.mean(self.vars)))) 
+                %(epoch, np_loss, np.mean(self.integrals), np.mean(self.vars),np.sqrt(np.mean(self.vars))))
+        print("Epoch %4d: loss = %e, float.  integral = %e, float.  variance = %e, float.  stddev = %e"   
+                        %(epoch, np_loss, np.mean(floating_int), np.mean(floating_av),np.sqrt(np.mean(floating_av))))
         figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
         plt.savefig('fig_{:04d}.pdf'.format(epoch))
         plt.close()

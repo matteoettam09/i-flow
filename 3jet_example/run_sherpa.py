@@ -240,7 +240,7 @@ if __name__ == '__main__':
     from tensorflow.python import debug
 
     integrator = Integrator(func_int, 5, mode='linear_blob',nbins=16)
-    integrator.make_optimizer(nsamples=1000, learning_rate=5e-4)
+    integrator.make_optimizer(nsamples=750, learning_rate=1e-3)
 
     with tf.Session(config=tf.ConfigProto(device_count={'GPU':0})) as sess:
         #sess=debug.LocalCLIDebugWrapperSession(sess)
