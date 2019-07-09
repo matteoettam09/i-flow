@@ -1,4 +1,5 @@
 import numpy as np
+import piecewise
 import piecewiseUnet_one_blob
 import tensorflow_probability as tfp
 tfd = tfp.distributions
@@ -21,6 +22,12 @@ class BijectorFactory:
         return bijector(**kwargs)
 
 factory = BijectorFactory()
+factory.register_bijector('linear', piecewise.PiecewiseLinear)
+factory.register_bijector('quadratic', piecewise.PiecewiseQuadratic)
+factory.register_bijector('quadratic_const', piecewise.PiecewiseQuadraticConst)
+#factory.register_bijector('linear_unet', piecewiseUnet_one_hot.PiecewiseLinearUNet)
+#factory.register_bijector('quadratic_unet', piecewiseUnet_one_hot.PiecewiseQuadraticUNet)
+#factory.register_bijector('quadratic_const_unet', piecewiseUnet_one_hot.PiecewiseQuadraticConstUNet)
 factory.register_bijector('linear_blob', piecewiseUnet_one_blob.PiecewiseLinear)
 factory.register_bijector('quadratic_blob', piecewiseUnet_one_blob.PiecewiseQuadratic)
 factory.register_bijector('quadraticConst_blob', piecewiseUnet_one_blob.PiecewiseQuadraticConst)
@@ -191,12 +198,17 @@ class Integrator():
         integral, var = tf.nn.moments(p/q,axes=[0])
         error = tf.sqrt(var/nsamples)
 
-        np_int, np_error, xpts, qpts = sess.run([integral,error,x,q])
+        np_int, np_error, xpts, qpts, ppts = sess.run([integral,error,x,q,p])
         #figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], weights = 1./qpts, show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
         #plt.savefig('xsec_final_invq.pdf')
         #plt.close()
         figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
         plt.savefig('xsec_final_x.pdf')
+        plt.close()
+        wgt = ppts/qpts
+        print("Unweighting in Integrate: "+str(np.mean(wgt)/np.max(wgt)))
+        plt.hist(wgt,log=True,density=True)
+        plt.savefig('unweighting_eff.pdf')
         plt.close()
 
         return np_int, np_error
