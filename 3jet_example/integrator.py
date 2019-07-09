@@ -207,7 +207,8 @@ class Integrator():
         plt.close()
         wgt = ppts/qpts
         print("Unweighting in Integrate: "+str(np.mean(wgt)/np.max(wgt)))
-        plt.hist(wgt,log=True,density=True)
+        plt.hist(wgt,bins=np.logspace(np.log10(np.min(wgt)),np.log10(np.max(wgt)),50),log=True,density=True)
+        plt.xscale("log")
         plt.savefig('unweighting_eff.pdf')
         plt.close()
 
