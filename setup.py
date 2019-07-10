@@ -15,7 +15,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name='integrator',
+    name='vegasNN',
     version='1.0',
     description='Monte-Carlo Integration using Neural Networks',
     long_description=long_description,
