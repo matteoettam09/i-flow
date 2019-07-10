@@ -15,7 +15,7 @@ class eetojjj:
         self.prop = Propagator()
         self.decay = SChannelDecay()
         self.channels = {}
-#        self.channels[0] = self.ChannelIso
+        self.channels[0] = self.ChannelIso
 #        self.channels[1] = self.ChannelIso
 #        self.channels[2] = self.ChannelIso
 #        self.channels[3] = self.ChannelIso
@@ -23,18 +23,18 @@ class eetojjj:
 #        self.channels[5] = self.ChannelIso
 #        self.channels[6] = self.ChannelIso
 #        self.channels[7] = self.ChannelIso
-        self.channels[0] = self.ChannelA1
-        self.channels[1] = self.ChannelA2
-        self.channels[2] = self.ChannelA3
-        self.channels[3] = self.ChannelA4
-        self.channels[4] = self.ChannelA5
-        self.channels[5] = self.ChannelA6
-        self.channels[6] = self.ChannelA7
-        self.channels[7] = self.ChannelA8
-        self.channels[8] = self.ChannelB1
-        self.channels[9] = self.ChannelB2
-        self.channels[10] = self.ChannelB3
-        self.channels[11] = self.ChannelB4
+#        self.channels[0] = self.ChannelA1
+#        self.channels[1] = self.ChannelA2
+#        self.channels[2] = self.ChannelA3
+#        self.channels[3] = self.ChannelA4
+#        self.channels[4] = self.ChannelA5
+#        self.channels[5] = self.ChannelA6
+#        self.channels[6] = self.ChannelA7
+#        self.channels[7] = self.ChannelA8
+#        self.channels[8] = self.ChannelB1
+#        self.channels[9] = self.ChannelB2
+#        self.channels[10] = self.ChannelB3
+#        self.channels[11] = self.ChannelB4
 
     def GenerateMomenta(self,channel,rans,pa,pb):
         return self.channels[channel](rans,pa,pb)
@@ -226,8 +226,9 @@ class eetojjj:
 if __name__ == '__main__':
     from qcd import AlphaS
     from comix import Comix
-    from integrator import *
+    from vegasNN import integrator
     import tensorflow as tf
+    import matplotlib.pyplot as plt
 
     import logging
     logging.basicConfig()
@@ -238,8 +239,8 @@ if __name__ == '__main__':
     alphas = AlphaS(91.1876,0.118)
     hardxs = eetojjj(alphas)
     in_part = [11,-11]
-    out_part = [1,-1,21,21]
-#    out_part = [1,-1]
+#    out_part = [1,-1,21,21]
+    out_part = [1,-1]
     npart = len(out_part)
     ndims = 3*npart - 4
     sherpa = Comix(in_part,out_part)
@@ -253,40 +254,39 @@ if __name__ == '__main__':
     def func2(x):
         return tf.stop_gradient(tf.py_function(hardxs.GeneratePoint2,[x],tf.float32))
 
-#    integrator = Integrator(func2, ndims, mode='linear')
-#    integrator.make_optimizer(nsamples=1000, learning_rate=1e-3)
-#
-#    with tf.Session(config=tf.ConfigProto(device_count={'GPU':0})) as sess:
-#        try:
-#            integrator.load(sess,"models/eejj.ckpt")
-#        except: 
-#            sess.run(tf.global_variables_initializer())
-##            profiler = tf.profiler.Profiler(sess.graph)
-##            options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-#            profiler = None
-#            options = None
-#            integrator.optimize(sess,epochs=20,printout=10,profiler=profiler,options=options)
-#            integrator.save(sess,"models/eejj.ckpt")
-#
-#            if profiler is not None:
-#                option_builder = tf.profiler.ProfileOptionBuilder
-#                opts = (option_builder(option_builder.time_and_memory()).
-#                        with_step(-1). # with -1, should compute the average of all registered steps.
-#                        with_file_output('test.txt').
-#                        select(['micros','bytes','occurrence']).order_by('micros').
-#                        build())
-#                # Profiling infos about ops are saved in 'test-%s.txt' % FLAGS.out
-#                profiler.profile_operations(options=opts)
-#        print(integrator.integrate(sess,100000))
-#        print(integrator.acceptance(sess,100000))
-#
-#    fig, (ax1, ax2, ax3) = plt.subplots(1,3,figsize=(16,5))
-#    ax1 = integrator.plot_loss(ax1)
-#    ax2 = integrator.plot_integral(ax2)
-#    ax3 = integrator.plot_variance(ax3)
-#    plt.savefig('loss.pdf') 
-#
-#    raise
+    integrator = integrator.Integrator(func2, ndims, mode='linear')
+    integrator.make_optimizer(nsamples=1000, learning_rate=1e-3)
+
+    with tf.Session(config=tf.ConfigProto(device_count={'GPU':0})) as sess:
+        try:
+            integrator.load(sess,"models/eejj.ckpt")
+        except: 
+            sess.run(tf.global_variables_initializer())
+#            profiler = tf.profiler.Profiler(sess.graph)
+#            options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+            profiler = None
+            options = None
+            integrator.optimize(sess,epochs=20,printout=10,profiler=profiler,options=options)
+            integrator.save(sess,"models/eejj.ckpt")
+
+            if profiler is not None:
+                option_builder = tf.profiler.ProfileOptionBuilder
+                opts = (option_builder(option_builder.time_and_memory()).
+                        with_step(-1). # with -1, should compute the average of all registered steps.
+                        with_file_output('test.txt').
+                        select(['micros','bytes','occurrence']).order_by('micros').
+                        build())
+                # Profiling infos about ops are saved in 'test-%s.txt' % FLAGS.out
+                profiler.profile_operations(options=opts)
+        print(integrator.integrate(sess,100000,acceptance=True))
+
+    fig, (ax1, ax2, ax3) = plt.subplots(1,3,figsize=(16,5))
+    ax1 = integrator.plot_loss(ax1)
+    ax2 = integrator.plot_integral(ax2)
+    ax3 = integrator.plot_variance(ax3)
+    plt.savefig('loss.pdf') 
+
+    raise
 
     def func(x):
         return tf.stop_gradient(tf.py_function(hardxs.GeneratePoint,[x],tf.float32))
