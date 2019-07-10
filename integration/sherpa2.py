@@ -226,7 +226,7 @@ class eetojjj:
 if __name__ == '__main__':
     from qcd import AlphaS
     from comix import Comix
-    from vegasNN import integrator
+    from flow import integrator
     import tensorflow as tf
     import matplotlib.pyplot as plt
 
@@ -297,9 +297,7 @@ if __name__ == '__main__':
     figure = corner.corner(x, labels=[r'$x_{}$'.format(i) for i in range(ndims)], weights=p, show_titles=True, title_kwargs={"fontsize": 12})
     plt.savefig('matrix.pdf')
 
-    import tensorflow as tf
-
-    integrator = Integrator(func, ndims, mode='linear')
+    integrator = integrator.Integrator(func, ndims, mode='linear')
     integrator.make_optimizer(nsamples=2000, learning_rate=1e-3)
 
     with tf.Session(config=tf.ConfigProto(device_count={'GPU':0})) as sess:

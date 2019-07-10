@@ -8,3 +8,5 @@ Sherpa*
 .ipynb_checkpoints
 dist
 build
+makelibs
+models
