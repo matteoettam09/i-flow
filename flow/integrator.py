@@ -18,7 +18,9 @@ Todo:
     * Clean up options
     * Allow more flexibility in plotting
     * Improve the speed of running
-    * Figure out how to appropriate permute dimensions for high dimensionality problems
+    * Figure out how to appropriately permute dimensions for high dimensionality problems
+    * Save the best network and reload at the end
+    * Allow for MPI training
 """
 
 import corner
@@ -54,8 +56,7 @@ def ewma(data, window):
 
 class BijectorFactory:
 
-    """
-    Implement a bijector factory.
+    """Implement a bijector factory.
 
     The integrator requires bijector layers for training the integrator. To
     allow the user flexibility in the integrator, the different bijector layers 
