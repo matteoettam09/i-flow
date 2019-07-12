@@ -40,6 +40,7 @@ class Piecewise(tfb.Bijector):
         self.hot = hot
         self.model = model
         self.unet = unet
+        self.width = 1.0/self.nbins
 
     def _one_blob(self, xd):
         y = tf.tile(((0.5*self.width) + tf.range(0., 1.,
@@ -87,7 +88,7 @@ class Piecewise(tfb.Bijector):
         return h
 
     def _build_model(self, nbins):
-        inval = self.build_input()
+        inval = self._build_input()
 
         if self.model is not None:
             if isinstance(self.model, models.Model):
@@ -96,13 +97,13 @@ class Piecewise(tfb.Bijector):
                 return model
             else:
                 print('WARNING: Passed in network is not valid. Defaulting to Unet.')
-                unet = self.build_unet(inval)
+                unet = self._build_unet(inval)
                 out = layers.Dense((self.D-self.d)*nbins)(unet)
         elif self.unet:
-            unet = self.build_unet(inval)
+            unet = self._build_unet(inval)
             out = layers.Dense((self.D-self.d)*nbins)(unet)
         else:
-            dense = self.build_dense(inval)
+            dense = self._build_dense(inval)
             out = layers.Dense((self.D-self.d)*nbins)(dense)
 
         out = layers.Reshape(((self.D-self.d), nbins))(out)
@@ -137,7 +138,6 @@ class PiecewiseLinear(Piecewise):
                                               forward_min_event_ndims=1, validate_args=validate_args, name=name, **kwargs
                                               )
         self.id = layer_id
-        self.width = 1.0/self.nbins
         self.QMat = self._build_model(self.nbins)
         self.trainable_variables = self.QMat.trainable_variables
 

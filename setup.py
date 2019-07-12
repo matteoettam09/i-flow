@@ -42,8 +42,10 @@ setup(
     python_requires='>=2.7, !=3.0.*, !=3.1.*, !=3.2.*, <4',
     install_requires=[
         'numpy',
-        'tensorflow',
-        'tensorflow_probability',
+#        'tensorflow',
+#        'tensorflow_probability',
+#        'matplotlib',
+#        'corner',
         ],
     # Provide executable script to run the main code
     entry_points={},

@@ -23,6 +23,7 @@ Todo:
     * Allow for MPI training
 """
 
+import os
 import corner
 import tensorflow as tf
 import matplotlib.pyplot as plt
@@ -114,7 +115,7 @@ class Integrator():
     """
 
     def __init__(self, func, ndims, layers=4,
-                 mode='quadratic', **kwargs):
+                 mode='quadratic', name = None, **kwargs):
         """Initialize the integrator class.
 
         Setup all the needed options for the integrator, such as: the function to evaluate,
@@ -127,13 +128,13 @@ class Integrator():
             func (function): The function to be integrated.
             ndims (int): Number of dimensions to integrate over.
             layers (int): The number of layers for the network to have (not used currently).
-            mode (str): The string to determine which bijector to use.
+            mode (str): String to determine which bijector to use.
+            name (str): Name of the integral, used for saving/loading the model and other files.
             kwargs: Additional arguments to be passed to the bijector layer.
         """
         self.func = func
         self.ndims = ndims
         self.mode = mode
-        self.nbins = nbins
         self.layers = layers
 
         self.losses = []
@@ -168,6 +169,7 @@ class Integrator():
             bijector=self.bijectors,
         )
 
+        self.name = name
         self.saver = tf.train.Saver()
 
     def _loss_fn(self, nsamples):
@@ -201,6 +203,9 @@ class Integrator():
         The training runs for a given number of epochs using the gradient to minimize
         the loss function (KL-divergence).
 
+        Note: To end the training early, but continue running the code, use the command
+        <ctrl>-c.
+
         Args:
             sess (tf.Session): Tensorflow session that contains the neural network.
             **kwargs: Additional options to set for optimizing. Options are:
@@ -230,36 +235,49 @@ class Integrator():
             profiler = None
             options = None
 
+        min_loss = 1e99
+        if self.name is not None:
+            try:
+                self.load(sess,'models/{}.ckpt'.format(self.name))
+            except:
+                pass
+
         # Preform training
-        for epoch in range(epochs):
-            if profiler is not None:
-                run_metadata = tf.RunMetadata()
-            else:
-                run_metadata = None
-            (_, np_loss, np_integral,
-             np_var, xpts, ppts, qpts) = sess.run([self.opt_op, self.loss,
-                                                   self.integral, self.var,
-                                                   self.x, self.p, self.q],
-                                                  options=options,
-                                                  run_metadata=run_metadata)
-            if profiler is not None:
-                profiler.add_step(epoch, run_metadata)
-            self.global_step += 1
-            self.losses.append(np_loss)
-            self.integrals.append(np_integral)
-            self.vars.append(np_var)
-            if epoch % printout == 0:
-                print("Epoch {:4d}: loss = {:e}, integral = {:e} +/- {:e}".format(
-                    epoch, np_loss, ewma(self.integrals, 10),
-                    np.sqrt(ewma(self.vars, 10)))
-                )
-                if 'plot' in kwargs:
-                    figure = corner.corner(xpts, labels=self.labels,
-                                           show_titles=True, title_kwargs={"fontsize": 12},
-                                           range=self.ndims*[[0, 1]]
-                                           )
-                    plt.savefig('fig_{:04d}.pdf'.format(epoch))
-                    plt.close()
+        try:
+            for epoch in range(epochs):
+                if profiler is not None:
+                    run_metadata = tf.RunMetadata()
+                else:
+                    run_metadata = None
+                (_, np_loss, np_integral,
+                 np_var, xpts, ppts, qpts) = sess.run([self.opt_op, self.loss,
+                                                       self.integral, self.var,
+                                                       self.x, self.p, self.q],
+                                                      options=options,
+                                                      run_metadata=run_metadata)
+                if profiler is not None:
+                    profiler.add_step(epoch, run_metadata)
+                self.global_step += 1
+                if np_loss < min_loss and self.name is not None:
+                    self.save(sess,'models/{}.ckpt'.format(self.name))
+                    min_loss = np_loss
+                self.losses.append(np_loss)
+                self.integrals.append(np_integral)
+                self.vars.append(np_var)
+                if epoch % printout == 0:
+                    print("Epoch {:4d}: loss = {:e}, integral = {:e} +/- {:e}".format(
+                        epoch, np_loss, ewma(self.integrals, 10),
+                        np.sqrt(ewma(self.vars, 10)))
+                    )
+                    if 'plot' in kwargs:
+                        figure = corner.corner(xpts, labels=self.labels,
+                                               show_titles=True, title_kwargs={"fontsize": 12},
+                                               range=self.ndims*[[0, 1]]
+                                               )
+                        plt.savefig('fig_{:04d}.pdf'.format(epoch))
+                        plt.close()
+        except KeyboardInterrupt:
+            print('Caught Crtl-C. Ending training early.')
 
         print("Epoch {:4d}: loss = {:e}, integral = {:e} +/- {:e}".format(
             epoch, np_loss, ewma(self.integrals, 10),
@@ -377,12 +395,26 @@ class Integrator():
             else:
                 nbins = 100
 
+            if 'path' in kwargs:
+                path = kwargs['path']
+                del kwargs['path']
+            else:
+                path = os.getcwd()
+
+            if 'fname' in kwargs:
+                fname = '_{}'.format(kwargs['fname'])
+                del kwargs['fname']
+            else:
+                fname = ''
+
+            np.savetxt(os.path.join(path,'weights{}.txt'.format(fname)),results[-1],delimiter='\n')
+
             plt.hist(results[-1], bins=np.logspace(np.log10(min_val),
                                                    np.log10(max_val),
                                                    nbins), **kwargs)
             plt.yscale('log')
             plt.xscale('log')
-            plt.savefig('acceptance.pdf')
+            plt.savefig(os.path.join(path,'acceptance{}.pdf'.format(fname)))
             plt.close()
             return results[0], results[1], np.mean(results[-1])/np.max(results[-1])
 
