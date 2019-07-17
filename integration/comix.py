@@ -15,7 +15,7 @@ class Comix:
         f = open("Run.dat","w")
         f.write("(run){{\n SHERPA_LDADD ModelMain ToolsOrg ToolsPhys ToolsMath PDF Zfunctions\n\
 #  OUTPUT 15;\n\
-  ME_SIGNAL_GENERATOR Comix;\n\
+#  ME_SIGNAL_GENERATOR Comix;\n\
   EVENTS 0; GENERATE_RESULT_DIRECTORY -1;\n\
   BEAM_1 11 45.6; BEAM_2 -11 45.6;\n\
   SCALES VAR{{Abs2(p[0]+p[1])}};\n\
@@ -23,7 +23,7 @@ class Comix:
   KFACTOR FASTJET[A:kt]{{min(MU_{3}2,1)}};\n\
 }}(run);\n(processes){{\n\
   Process {0} -> {1};\n\
-#  ME_Generator Amegic; \n\
+  ME_Generator Amegic; \n\
   Order (*,2);\n\
   End process;\n\
 }}(processes);\n\

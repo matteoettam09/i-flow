@@ -10,6 +10,10 @@ logger = logging.getLogger('channels')
 
 class SChannelDecay:
 
+    def __init__(self,alpha=0):
+        self.alpha = alpha
+        self.eps = 1e-4
+
     def Lambda(self,a,b,c):
         result = (a-b-c)**2-4*b*c
         if np.any(result) < 0 or np.any(result) is np.inf:
@@ -31,7 +35,10 @@ class SChannelDecay:
         logger.debug("IsotropicPoint: {")
         logger.debug("  rans = {0}".format(rans))
         ecm = Mass(p)
-        ct = 2.*rans[:,0]-1.
+
+        ct = 1.-(((1-rans[:,0])*self.eps**(1-self.alpha) 
+            + rans[:,0]*((2.-self.eps)**(1-self.alpha))) ** (1./(1-self.alpha)))
+
         st = np.sqrt(1.-ct*ct)
         phi = 2.*m.pi*rans[:,1]
 
@@ -63,46 +70,56 @@ class SChannelDecay:
         logger.debug("  p_2 = {0}".format(p2))
         logger.debug("  sum = {0}".format(p-p1-p2))
         ecm2 = np.maximum(Mass2(p),1e-7)
-#        q1 = Boost(p,p1)
-#        q2 = Boost(p,p2)
+        q1 = Boost(p,p1)
+        q2 = Boost(p,p2)
 
-#        pl, pt1, pt2 = self._find_axes(p)
+        pl, pt1, pt2 = self._find_axes(p)
 
 #        ct = -(pl*q1)/Momentum(q1)[:,np.newaxis]
-#        phi = np.arctan2((q1*pt2),(q1*pt1))
+        ct = -Dot(pl,q1)/Momentum(q1)#[:,np.newaxis]
+        phi = np.arctan(Dot(q1,pt2)/Dot(q1,pt1))
 
         #if ((q1*pt1)>0): phi += m.pi
         #else:
         #    if phi<0: phi += 2.*m.pi
-#        phi = np.where(phi<np.zeros_like(phi),phi+2*m.pi,phi)
+        phi = np.where(Dot(q1,pt1)>0,phi+m.pi,np.where(phi<0,phi+2*m.pi,phi))
 
-#        logger.debug("  pl   = {0}".format(pl))
-#        logger.debug("  p_T1 = {0}".format(pt1))
-#        logger.debug("  p_T2 = {0}".format(pt2))
-#        logger.debug("  \\cos\\theta = {0}, \\phi = {1}".format(ct,phi))
-#        rans = [ (1.+ct)/2., phi/(2.*m.pi) ]
+        logger.debug("  pl   = {0}".format(pl))
+        logger.debug("  p_T1 = {0}".format(pt1))
+        logger.debug("  p_T2 = {0}".format(pt2))
+        logger.debug("  \\cos\\theta = {0}, \\phi = {1}".format(ct,phi))
 
         ps = np.sqrt(self.Lambda(Mass2(p),s1,s2))/(2.*ecm2)
-        wgt = 4.*m.pi*ps/(16.*m.pi**2)
-#        logger.debug("  rans = {0}".format(rans))
+        I = (1./(1-self.alpha) )* ((2.-self.eps)**(1-self.alpha)-self.eps**(1-self.alpha))
+        wgt = 2.*m.pi*ps/(16.*m.pi**2)
+
+        rans = np.array([ ((1-ct)**(1-self.alpha)-(self.eps)**(1-self.alpha))/(1-self.alpha)/I, phi/(2.*m.pi) ])
+
+        wgt *= ((1.-ct)**self.alpha)*I
+        logger.debug("  rans = {0}".format(rans))
         logger.debug("  weight = {0}".format(wgt))
         logger.debug("}")
         return wgt
         
 class Propagator:
+    def __init__(self,alpha = 0.5):
+        self.alpha = alpha
 
     def GeneratePoint(self,smin,smax,ran):
-        s = smin*(smax/smin)**ran
+        #s = smin*(smax/smin)**ran
         #s = ran*(smax-smin) + smin
+        s = ((1-ran)*smin**(1-self.alpha) + ran*(smax**(1-self.alpha))) ** (1./(1-self.alpha))
         logger.debug("MasslessPoint: ran = {0}, s_min = {1}, s_max = {2}, s = {3}".format(ran,smin,smax,s))
         return s
 
     def GenerateWeight(self,smin,smax,p):
         s = Mass2(p)
-        I = np.log(smax/smin)
+        #I = np.log(smax/smin)
         #I = smax-smin
-        #ran = np.log(s/smin)/I
-        wgt = s*I/(2.*m.pi)
+        I = (1./(1-self.alpha) )* (smax**(1-self.alpha)-smin**(1-self.alpha))
+        ran = np.log(s/smin)/I
+        #wgt = s*I/(2.*m.pi)
         #wgt = I/(2*m.pi)
-        logger.debug("MasslessWeight: s_min = {0}, s_max = {1}, s = {2}".format(smin,smax,s))
+        wgt = (s**self.alpha)*I/(2.*m.pi)
+        logger.debug("MasslessWeight: s_min = {0}, s_max = {1}, s = {2}, ran = {3}".format(smin,smax,s,ran))
         return wgt

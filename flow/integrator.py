@@ -172,7 +172,7 @@ class Integrator():
         self.name = name
         self.saver = tf.train.Saver()
 
-    def _loss_fn(self, nsamples):
+    def _loss_fn(self, nsamples, alpha):
         x = self.dist.sample(nsamples)
         logq = self.dist.log_prob(x)
         p = self.func(x)
@@ -180,10 +180,17 @@ class Integrator():
         xsec = p/q
         p = p/tf.reduce_mean(xsec)
         mean, var = tf.nn.moments(xsec, axes=[0])
-        return (tf.reduce_mean(p/q*(tf.log(p)-logq)), mean,
+        acceptance = tf.reduce_mean(xsec)/tf.reduce_max(xsec)
+#        return (1.0/acceptance**2, mean,
+#                var/nsamples, x, p, q)
+#        return (tf.reduce_mean(p/q*(tf.log(p)-logq))/acceptance**2, mean,
+#                var/nsamples, x, p, q)
+        return ((1-alpha)*tf.reduce_mean(p/q*(tf.log(p)-logq))-alpha*acceptance, mean,
                 var/nsamples, x, p, q)
+#        return (tf.reduce_mean(p/q*(tf.log(p)-logq)), mean,
+#                var/nsamples, x, p, q)
 
-    def make_optimizer(self, learning_rate=1e-4, nsamples=500):
+    def make_optimizer(self, learning_rate=1e-4, nsamples=500, alpha=0):
         """Create the optimizer.
 
         Args:
@@ -191,7 +198,7 @@ class Integrator():
             nsamples (int): Number of samples to use when estimating the loss.
         """
         (self.loss, self.integral, self.var,
-            self.x, self.p, self.q) = self._loss_fn(nsamples)
+            self.x, self.p, self.q) = self._loss_fn(nsamples,alpha)
         optimizer = tf.train.AdamOptimizer(learning_rate)
         grads = optimizer.compute_gradients(self.loss)
         self.opt_op = optimizer.apply_gradients(grads)
@@ -215,30 +222,19 @@ class Integrator():
                 options (tf.options): Tensorflow options for the profiler.
         """
         # Break out the possible keyword arguments
-        if 'epochs' in kwargs:
-            epochs = kwargs['epochs']
+        epochs = kwargs.get('epochs',1000)
+        printout = kwargs.get('printout',100)
+        profiler = kwargs.get('profiler')
+        if profiler is not None:
+            options = kwargs.get('options')
         else:
-            epochs = 1000
-
-        if 'printout' in kwargs:
-            printout = kwargs['printout']
-        else:
-            printout = 100
-
-        if 'profiler' in kwargs:
-            profiler = kwargs['profiler']
-            if 'options' in kwargs:
-                options = kwargs['options']
-            else:
-                options = None
-        else:
-            profiler = None
             options = None
+        plot = kwargs.get('plot',False)
 
         min_loss = 1e99
         if self.name is not None:
             try:
-                self.load(sess,'models/{}.ckpt'.format(self.name))
+                self.load(sess,'models/'.format(self.name))
             except:
                 pass
 
@@ -259,7 +255,7 @@ class Integrator():
                     profiler.add_step(epoch, run_metadata)
                 self.global_step += 1
                 if np_loss < min_loss and self.name is not None:
-                    self.save(sess,'models/{}.ckpt'.format(self.name))
+                    self.save(sess,'models/')
                     min_loss = np_loss
                 self.losses.append(np_loss)
                 self.integrals.append(np_integral)
@@ -269,7 +265,7 @@ class Integrator():
                         epoch, np_loss, ewma(self.integrals, 10),
                         np.sqrt(ewma(self.vars, 10)))
                     )
-                    if 'plot' in kwargs:
+                    if plot:
                         figure = corner.corner(xpts, labels=self.labels,
                                                show_titles=True, title_kwargs={"fontsize": 12},
                                                range=self.ndims*[[0, 1]]
@@ -283,22 +279,22 @@ class Integrator():
             epoch, np_loss, ewma(self.integrals, 10),
             np.sqrt(ewma(self.vars, 10)))
         )
-        if 'plot' in kwargs:
+        if plot:
             figure = corner.corner(xpts, labels=self.labels, show_titles=True,
                                    title_kwargs={"fontsize": 12}, range=self.ndims*[[0, 1]]
                                    )
             plt.savefig('fig_{:04d}.pdf'.format(epoch))
             plt.close()
 
-    def save(self, sess, name):
+    def save(self, sess, path = 'models/'):
         """Save the model file."""
-        save_path = self.saver.save(sess, name)
+        save_path = self.saver.save(sess, os.path.join(path,'{}.ckpt'.format(self.name)))
         print("Model saved at: {}".format(save_path))
 
-    def load(self, sess, name):
+    def load(self, sess, path = 'models/'):
         """Load the saved model file."""
-        self.saver.restore(sess, name)
-        print("Model resotred")
+        self.saver.restore(sess,  os.path.join(path,'{}.ckpt'.format(self.name)))
+        print("Model restored")
 
     def _plot(self, axis, labelsize=17, titlesize=20):
         axis.set_xlabel('epoch', fontsize=titlesize)
@@ -343,9 +339,10 @@ class Integrator():
             plot (bool): Flag to plot 2-D and 1-D projections of the variables.
             acceptance (bool): Flag to plot and calculate the acceptance for unweighting.
             **kwargs: Additional options to be used for the code. Options are:
-                min (float): minimum value for the acceptance plot
-                max (float): maximum value for the acceptance plot
-                nbins (int): number of bins to be used in the acceptance plot
+                min (float): minimum value for the acceptance plot.
+                max (float): maximum value for the acceptance plot.
+                nbins (int): number of bins to be used in the acceptance plot.
+                plot_kwargs: Additional kwargs to be passed to the matplotlib plotting routine.
 
         Returns:
             integral (float): Estimated value for the integral
@@ -377,33 +374,13 @@ class Integrator():
 
         if acceptance:
             # Load options
-            if 'min' in kwargs:
-                min_val = kwargs['min']
-                del kwargs['min']
-            else:
-                min_val = 1e-7
-
-            if 'max' in kwargs:
-                max_val = kwargs['max']
-                del kwargs['max']
-            else:
-                max_val = 10
-
-            if 'nbins' in kwargs:
-                nbins = kwargs['nbins']
-                del kwargs['nbins']
-            else:
-                nbins = 100
-
-            if 'path' in kwargs:
-                path = kwargs['path']
-                del kwargs['path']
-            else:
-                path = os.getcwd()
+            min_val = kwargs.get('min',1e-7)
+            max_val = kwargs.get('max',10)
+            nbins = kwargs.get('nbins',100)
+            path = kwargs.get('path',os.getcwd())
 
             if 'fname' in kwargs:
                 fname = '_{}'.format(kwargs['fname'])
-                del kwargs['fname']
             else:
                 fname = ''
 
@@ -411,7 +388,7 @@ class Integrator():
 
             plt.hist(results[-1], bins=np.logspace(np.log10(min_val),
                                                    np.log10(max_val),
-                                                   nbins), **kwargs)
+                                                   nbins), **kwargs.get('plot_kwargs',{}))
             plt.yscale('log')
             plt.xscale('log')
             plt.savefig(os.path.join(path,'acceptance{}.pdf'.format(fname)))
@@ -423,6 +400,7 @@ class Integrator():
 
 if __name__ == '__main__':
     import tensorflow as tf
+    import multiprocessing
 
     def normalChristina(x):
         """Example function to integrate."""
@@ -431,16 +409,61 @@ if __name__ == '__main__':
                 - 15 * (x[:, 1]-0.5)) + (-15*(x[:, 0]-0.5) + 5*(x[:, 1]-0.5))
                    * (x[:, 1]-0.5)))) + x[:, 2]
 
-    integrator = Integrator(
-        normalChristina, 3, mode='linear', unet=True, blob=True)
-    integrator.make_optimizer(nsamples=1000)
-    with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
-        integrator.optimize(sess, epochs=1000)
-        print(integrator.integrate(sess, 100000, acceptance=True))
+    acceptances = []
+    errors = []
+    alphas = np.logspace(-5,0,100)
+    
+    def alpha_scan(alpha,error_send,acceptance_send):
+        name = 'test_func_{}'.format(alpha)
+        integrator = Integrator(
+            normalChristina, 3, mode='linear', unet=True, blob=True, name=name)
 
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(16, 5))
-    ax1 = integrator.plot_loss(ax1)
-    ax2 = integrator.plot_integral(ax2)
-    ax3 = integrator.plot_variance(ax3)
+        integrator.make_optimizer(nsamples=5000,alpha=alpha)
+        with tf.Session() as sess:
+            sess.run(tf.global_variables_initializer())
+            try:
+                integrator.load(sess)
+            except:
+                integrator.optimize(sess, epochs=2000)
+                integrator.load(sess)
+            integral, error, acceptance = integrator.integrate(sess, 100000, acceptance=True)
+            error_send.send(error)
+            acceptance_send.send(acceptance)
+
+    for alpha in alphas:
+        error_recv, error_send = multiprocessing.Pipe(False)
+        acceptance_recv, acceptance_send = multiprocessing.Pipe(False)
+        p = multiprocessing.Process(target=alpha_scan, args=(alpha,error_send,acceptance_send,))
+        errors.append(error_recv)
+        acceptances.append(acceptance_recv)
+        p.start()
+        p.join()
+
+    errors = [x.recv() for x in errors]
+    acceptances = [x.recv() for x in acceptances]
+
+    print(acceptances)
+    print(errors)
+    fig, (ax1, ax2, ax3) = plt.subplots(1,3, figsize=(16,5))
+    ax1.plot(alphas,acceptances)
+    ax2.plot(alphas,errors)
+    ax3.plot(acceptances,errors)
+
+    ax1.set_xlabel(r'$\alpha$')
+    ax1.set_ylabel(r'Acceptance')
+    ax1.set_xscale('log')
+
+    ax2.set_xlabel(r'$\alpha$')
+    ax2.set_ylabel(r'Error')
+    ax2.set_xscale('log')
+
+    ax2.set_xlabel(r'Acceptance')
+    ax2.set_ylabel(r'Error')
+
     plt.show()
+
+    #fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(16, 5))
+    #ax1 = integrator.plot_loss(ax1)
+    #ax2 = integrator.plot_integral(ax2)
+    #ax3 = integrator.plot_variance(ax3)
+    #plt.show()

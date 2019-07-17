@@ -11,49 +11,67 @@ hbarc2 = 0.3893e9
 class eetojjj:
 
     def __init__(self,alphas,ecms=91.2):
+        self.cutoff = 1e-2
         self.ecms = ecms
         self.prop = Propagator()
-        self.decay = SChannelDecay()
+        self.decayIso = SChannelDecay()
+        self.decayGluon = SChannelDecay(0.99)
         self.channels = {}
-        self.channels[0] = self.ChannelIso
-#        self.channels[1] = self.ChannelIso
-#        self.channels[2] = self.ChannelIso
-#        self.channels[3] = self.ChannelIso
-#        self.channels[4] = self.ChannelIso
-#        self.channels[5] = self.ChannelIso
-#        self.channels[6] = self.ChannelIso
-#        self.channels[7] = self.ChannelIso
-#        self.channels[0] = self.ChannelA1
+#        self.channels[0] = self.ChannelIso
+        self.channels[0] = self.ChannelA1
 #        self.channels[1] = self.ChannelA2
 #        self.channels[2] = self.ChannelA3
 #        self.channels[3] = self.ChannelA4
-#        self.channels[4] = self.ChannelA5
-#        self.channels[5] = self.ChannelA6
-#        self.channels[6] = self.ChannelA7
-#        self.channels[7] = self.ChannelA8
+#        self.channels[4] = self.ChannelC1
+#        self.channels[5] = self.ChannelC2
+#        self.channels[6] = self.ChannelC3
+#        self.channels[7] = self.ChannelC4
 #        self.channels[8] = self.ChannelB1
 #        self.channels[9] = self.ChannelB2
 #        self.channels[10] = self.ChannelB3
 #        self.channels[11] = self.ChannelB4
 
+        self.weights = {}
+        self.weights[0] = self.WeightA1
+        self.weights[1] = self.WeightA2
+        self.weights[2] = self.WeightA3
+        self.weights[3] = self.WeightA4
+        self.weights[4] = self.WeightC1
+        self.weights[5] = self.WeightC2
+        self.weights[6] = self.WeightC3
+        self.weights[7] = self.WeightC4
+        self.weights[8] = self.WeightB1
+        self.weights[9] = self.WeightB2
+        self.weights[10] = self.WeightB3
+        self.weights[11] = self.WeightB4
+
     def GenerateMomenta(self,channel,rans,pa,pb):
         return self.channels[channel](rans,pa,pb)
 
     def ChannelA(self,rans,pa,pb):
-        s134 = self.prop.GeneratePoint(1,self.ecms**2,rans[:,0])
-        s13 = self.prop.GeneratePoint(1,s134,rans[:,1])
-        p134, p2 = self.decay.GeneratePoint(pa+pb,s134,0.0,np.array([rans[:,2], rans[:,3]]).T)
-        p13, p4 = self.decay.GeneratePoint(p134,s13,0.0,np.array([rans[:,4], rans[:,5]]).T)
-        p1, p3 = self.decay.GeneratePoint(p13,0.0,0.0,np.array([rans[:,6], rans[:,7]]).T)
+        s134 = self.prop.GeneratePoint(self.cutoff,self.ecms**2,rans[:,0])
+        s13 = self.prop.GeneratePoint(self.cutoff,s134,rans[:,1])
+        p134, p2 = self.decayIso.GeneratePoint(pa+pb,s134,0.0,np.array([rans[:,2], rans[:,3]]).T)
+        p13, p4 = self.decayGluon.GeneratePoint(p134,s13,0.0,np.array([rans[:,4], rans[:,5]]).T)
+        p1, p3 = self.decayGluon.GeneratePoint(p13,0.0,0.0,np.array([rans[:,6], rans[:,7]]).T)
 
         return p1, p2, p3, p4
 
     def ChannelB(self,rans,pa,pb):
-        s13 = self.prop.GeneratePoint(1,(self.ecms-1)**2,rans[:,0])
-        s24 = self.prop.GeneratePoint(1,(self.ecms-np.sqrt(s13))**2,rans[:,1])
-        p13, p24 = self.decay.GeneratePoint(pa+pb,s13,s24,np.array([rans[:,2], rans[:,3]]).T)
-        p1, p3 = self.decay.GeneratePoint(p13,0.0,0.0,np.array([rans[:,4], rans[:,5]]).T)
-        p2, p4 = self.decay.GeneratePoint(p24,0.0,0.0,np.array([rans[:,6], rans[:,7]]).T)
+        s13 = self.prop.GeneratePoint(self.cutoff,(self.ecms-self.cutoff)**2,rans[:,0])
+        s24 = self.prop.GeneratePoint(self.cutoff,(self.ecms-np.sqrt(s13))**2,rans[:,1])
+        p13, p24 = self.decayIso.GeneratePoint(pa+pb,s13,s24,np.array([rans[:,2], rans[:,3]]).T)
+        p1, p3 = self.decayGluon.GeneratePoint(p13,0.0,0.0,np.array([rans[:,4], rans[:,5]]).T)
+        p2, p4 = self.decayGluon.GeneratePoint(p24,0.0,0.0,np.array([rans[:,6], rans[:,7]]).T)
+
+        return p1, p2, p3, p4
+
+    def ChannelC(self,rans,pa,pb):
+        s134 = self.prop.GeneratePoint(self.cutoff,self.ecms**2,rans[:,0])
+        s34 = self.prop.GeneratePoint(self.cutoff,s134,rans[:,1])
+        p134, p2 = self.decayIso.GeneratePoint(pa+pb,s134,0.0,np.array([rans[:,2], rans[:,3]]).T)
+        p1, p34 = self.decayGluon.GeneratePoint(p134,0.0,s34,np.array([rans[:,4], rans[:,5]]).T)
+        p3, p4 = self.decayGluon.GeneratePoint(p34,0.0,0.0,np.array([rans[:,6], rans[:,7]]).T)
 
         return p1, p2, p3, p4
 
@@ -70,23 +88,23 @@ class eetojjj:
         return p1, p2, p3, p4
 
     def ChannelA4(self,rans,pa,pb):
-        p2, p1, p3, p4 = self.ChannelA(rans,pa,pb)
+        p2, p1, p4, p3 = self.ChannelA(rans,pa,pb)
         return p1, p2, p3, p4
 
-    def ChannelA5(self,rans,pa,pb):
-        p3, p2, p1, p4 = self.ChannelA(rans,pa,pb)
+    def ChannelC1(self,rans,pa,pb):
+        p1, p2, p3, p4 = self.ChannelC(rans,pa,pb)
         return p1, p2, p3, p4
 
-    def ChannelA6(self,rans,pa,pb):
-        p3, p1, p2, p4 = self.ChannelA(rans,pa,pb)
+    def ChannelC2(self,rans,pa,pb):
+        p1, p2, p4, p3 = self.ChannelC(rans,pa,pb)
         return p1, p2, p3, p4
 
-    def ChannelA7(self,rans,pa,pb):
-        p4, p2, p1, p3 = self.ChannelA(rans,pa,pb)
+    def ChannelC3(self,rans,pa,pb):
+        p2, p1, p3, p4 = self.ChannelC(rans,pa,pb)
         return p1, p2, p3, p4
 
-    def ChannelA8(self,rans,pa,pb):
-        p4, p1, p2, p3 = self.ChannelA(rans,pa,pb)
+    def ChannelC4(self,rans,pa,pb):
+        p2, p1, p4, p3 = self.ChannelC(rans,pa,pb)
         return p1, p2, p3, p4
 
     def ChannelB1(self,rans,pa,pb):
@@ -108,24 +126,71 @@ class eetojjj:
     def Weight1(self,pa,pb,p1,p2,p3,p4):
         p13 = p1+p3
         p134 = p13+p4
-        ws134 = self.prop.GenerateWeight(1,self.ecms**2,p134)
-        ws13 = self.prop.GenerateWeight(1,Dot(p134,p134),p13)
-        wp134_2 = self.decay.GenerateWeight(pa+pb,Mass2(p134),0.0,p134,p2)
-        wp13_4 = self.decay.GenerateWeight(p13+p4,Mass2(p13),0.0,p13,p4)
-        wp1_3 = self.decay.GenerateWeight(p1+p3,0.0,0.0,p1,p3)
+        ws134 = self.prop.GenerateWeight(self.cutoff,self.ecms**2,p134)
+        ws13 = self.prop.GenerateWeight(self.cutoff,Dot(p134,p134),p13)
+        wp134_2 = self.decayIso.GenerateWeight(pa+pb,Mass2(p134),0.0,p134,p2)
+        wp13_4 = self.decayGluon.GenerateWeight(p13+p4,Mass2(p13),0.0,p13,p4)
+        wp1_3 = self.decayGluon.GenerateWeight(p1+p3,0.0,0.0,p1,p3)
 
         return ws134*ws13*wp134_2*wp13_4*wp1_3
 
     def Weight2(self,pa,pb,p1,p2,p3,p4):
         p13 = p1+p3
         p24 = p2+p4
-        ws13 = self.prop.GenerateWeight(1,self.ecms**2,p13)
-        ws24 = self.prop.GenerateWeight(1,self.ecms**2-Mass2(p13),p24)
-        wp13_24 = self.decay.GenerateWeight(pa+pb,Mass2(p13),Mass2(p24),p13,p24)
-        wp1_3 = self.decay.GenerateWeight(p1+p3,0.0,0.0,p1,p3)
-        wp2_4 = self.decay.GenerateWeight(p2+p4,0.0,0.0,p2,p4)
+        ws13 = self.prop.GenerateWeight(self.cutoff,self.ecms**2,p13)
+        ws24 = self.prop.GenerateWeight(self.cutoff,(self.ecms-Mass(p13))**2,p24)
+        wp13_24 = self.decayIso.GenerateWeight(pa+pb,Mass2(p13),Mass2(p24),p13,p24)
+        wp1_3 = self.decayGluon.GenerateWeight(p1+p3,0.0,0.0,p1,p3)
+        wp2_4 = self.decayGluon.GenerateWeight(p2+p4,0.0,0.0,p2,p4)
 
         return ws24*ws13*wp13_24*wp2_4*wp1_3
+
+    def Weight3(self,pa,pb,p1,p2,p3,p4):
+        p34 = p3+p4
+        p134 = p34+p1
+        ws134 = self.prop.GenerateWeight(self.cutoff,self.ecms**2,p134)
+        ws34 = self.prop.GenerateWeight(self.cutoff,Dot(p134,p134),p34)
+        wp134_2 = self.decayIso.GenerateWeight(pa+pb,Mass2(p134),0.0,p134,p2)
+        wp1_34 = self.decayGluon.GenerateWeight(p34+p1,0.0,Mass2(p34),p1,p34)
+        wp3_4 = self.decayGluon.GenerateWeight(p3+p4,0.0,0.0,p3,p4)
+
+        return ws134*ws34*wp134_2*wp1_34*wp3_4
+
+    def WeightA1(self,pa,pb,p1,p2,p3,p4):
+        return self.Weight1(pa,pb,p1,p2,p3,p4)
+
+    def WeightA2(self,pa,pb,p1,p2,p3,p4):
+        return self.Weight1(pa,pb,p1,p2,p4,p3)
+
+    def WeightA3(self,pa,pb,p1,p2,p3,p4):
+        return self.Weight1(pa,pb,p2,p1,p3,p4)
+
+    def WeightA4(self,pa,pb,p1,p2,p3,p4):
+        return self.Weight1(pa,pb,p2,p1,p4,p3)
+
+    def WeightB1(self,pa,pb,p1,p2,p3,p4):
+        return self.Weight2(pa,pb,p1,p2,p3,p4)
+
+    def WeightB2(self,pa,pb,p1,p2,p3,p4):
+        return self.Weight2(pa,pb,p1,p2,p4,p3)
+
+    def WeightB3(self,pa,pb,p1,p2,p3,p4):
+        return self.Weight2(pa,pb,p2,p1,p3,p4)
+
+    def WeightB4(self,pa,pb,p1,p2,p3,p4):
+        return self.Weight2(pa,pb,p2,p1,p4,p3)
+
+    def WeightC1(self,pa,pb,p1,p2,p3,p4):
+        return self.Weight3(pa,pb,p1,p2,p3,p4)
+
+    def WeightC2(self,pa,pb,p1,p2,p3,p4):
+        return self.Weight3(pa,pb,p1,p2,p4,p3)
+
+    def WeightC3(self,pa,pb,p1,p2,p3,p4):
+        return self.Weight3(pa,pb,p2,p1,p3,p4)
+
+    def WeightC4(self,pa,pb,p1,p2,p3,p4):
+        return self.Weight3(pa,pb,p2,p1,p4,p3)
 
     def ChannelIso(self,rans,pa,pb):
 #        s12 = self.prop.GeneratePoint(1e-1,self.ecms**2,rans[:,2])
@@ -167,7 +232,7 @@ class eetojjj:
         p2 = np.concatenate(p2)
 
         wsum = self.WeightIso(pa,pb,p1,p2)
-        lome = np.array(sherpa.process.MatrixElementVec(np.array([pa,pb,p1,p2])))
+        lome = np.array(sherpa.process.CSMatrixElementVec(np.array([pa,pb,p1,p2])))
         dxs = lome*wsum*hbarc2/self.ecms**2/2.0
 
         return np.nan_to_num(dxs)
@@ -213,12 +278,13 @@ class eetojjj:
                          self.Weight1(pa,pb,p2,p1,p3,p4), self.Weight1(pa,pb,p2,p1,p4,p3),
                          self.Weight2(pa,pb,p1,p2,p3,p4), self.Weight2(pa,pb,p1,p2,p4,p3),
                          self.Weight2(pa,pb,p2,p1,p3,p4), self.Weight2(pa,pb,p2,p1,p4,p3),
-                         self.Weight1(pa,pb,p3,p2,p1,p4), self.Weight1(pa,pb,p3,p1,p2,p4),
-                         self.Weight1(pa,pb,p4,p2,p1,p3), self.Weight1(pa,pb,p4,p1,p2,p3)])
+                         self.Weight3(pa,pb,p1,p2,p3,p4), self.Weight3(pa,pb,p1,p2,p4,p3),
+                         self.Weight3(pa,pb,p2,p1,p3,p4), self.Weight3(pa,pb,p2,p1,p4,p3)])
+
 
         wsum = np.reciprocal(np.mean(np.reciprocal(wsum),axis=0))
 
-        lome = np.array(sherpa.process.MatrixElementVec(np.array([pa,pb,p3,p4,p1,p2])))
+        lome = np.array(sherpa.process.CSMatrixElementVec(np.array([pa,pb,p3,p4,p1,p2])))
         dxs = lome*wsum*hbarc2/self.ecms**2/2.0
 
         return np.maximum(np.nan_to_num(dxs),1e-7)
@@ -229,18 +295,43 @@ if __name__ == '__main__':
     from flow import integrator
     import tensorflow as tf
     import matplotlib.pyplot as plt
+    import os
+    import argparse
+
+    import corner
 
     import logging
+
+    parser = argparse.ArgumentParser(
+            description='Sherpa Event Generator with Flow integration.'
+    )
+
+    parser.add_argument('-d','--debug',action='store_true',
+                        help='Turn on debug logging')
+    parser.add_argument('-e','--epochs',default=500,
+                        help='Number of epochs to train for')
+    parser.add_argument('-p','--plot',action='store_true',
+                        help='Flag for plotting distributions')
+    parser.add_argument('-l','--loss',action='store_true',
+                        help='Flag for plotting loss, integral, and variance')
+    parser.add_argument('-n','--nsamples',default=2000,
+                        help='Number of samples to calculate the loss')
+    parser.add_argument('-a','--acceptance',action='store_true',
+                        help='Calculate acceptance')
+
+    options = parser.parse_args()
+    acceptance = options.acceptance
+
     logging.basicConfig()
-    logging.getLogger('eejjj').setLevel(logging.DEBUG)
-#    logging.getLogger('channels').setLevel(logging.DEBUG)
-    
+    if options.debug:
+        logging.getLogger('eejjj').setLevel(logging.DEBUG)
+        logging.getLogger('channels').setLevel(logging.DEBUG)
 
     alphas = AlphaS(91.1876,0.118)
     hardxs = eetojjj(alphas)
     in_part = [11,-11]
-#    out_part = [1,-1,21,21]
-    out_part = [1,-1]
+    out_part = [1,-1,21,21]
+#    out_part = [1,-1]
     npart = len(out_part)
     ndims = 3*npart - 4
     sherpa = Comix(in_part,out_part)
@@ -251,63 +342,79 @@ if __name__ == '__main__':
 #    figure = corner.corner(x, labels=[r'$x_{}$'.format(i) for i in range(ndims)], weights=p, show_titles=True, title_kwargs={"fontsize": 12})
 #    plt.savefig('matrix.pdf')
 
-    def func2(x):
-        return tf.stop_gradient(tf.py_function(hardxs.GeneratePoint2,[x],tf.float32))
-
-    integrator = integrator.Integrator(func2, ndims, mode='linear')
-    integrator.make_optimizer(nsamples=1000, learning_rate=1e-3)
-
-    with tf.Session(config=tf.ConfigProto(device_count={'GPU':0})) as sess:
-        try:
-            integrator.load(sess,"models/eejj.ckpt")
-        except: 
-            sess.run(tf.global_variables_initializer())
-#            profiler = tf.profiler.Profiler(sess.graph)
-#            options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-            profiler = None
-            options = None
-            integrator.optimize(sess,epochs=20,printout=10,profiler=profiler,options=options)
-            integrator.save(sess,"models/eejj.ckpt")
-
-            if profiler is not None:
-                option_builder = tf.profiler.ProfileOptionBuilder
-                opts = (option_builder(option_builder.time_and_memory()).
-                        with_step(-1). # with -1, should compute the average of all registered steps.
-                        with_file_output('test.txt').
-                        select(['micros','bytes','occurrence']).order_by('micros').
-                        build())
-                # Profiling infos about ops are saved in 'test-%s.txt' % FLAGS.out
-                profiler.profile_operations(options=opts)
-        print(integrator.integrate(sess,100000,acceptance=True))
-
-    fig, (ax1, ax2, ax3) = plt.subplots(1,3,figsize=(16,5))
-    ax1 = integrator.plot_loss(ax1)
-    ax2 = integrator.plot_integral(ax2)
-    ax3 = integrator.plot_variance(ax3)
-    plt.savefig('loss.pdf') 
-
-    raise
+#    def func2(x):
+#        return tf.stop_gradient(tf.py_function(hardxs.GeneratePoint2,[x],tf.float32))
+#
+#    integrator = integrator.Integrator(func2, ndims, mode='quadratic')
+#    integrator.make_optimizer(nsamples=1000, learning_rate=1e-3)
+#
+#    with tf.Session(config=tf.ConfigProto(device_count={'GPU':0})) as sess:
+#        try:
+#            integrator.load(sess,"models/eejj.ckpt")
+#        except: 
+#            sess.run(tf.global_variables_initializer())
+##            profiler = tf.profiler.Profiler(sess.graph)
+##            options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+#            profiler = None
+#            options = None
+#            integrator.optimize(sess,epochs=400,printout=10,profiler=profiler,options=options)
+#            integrator.save(sess,"models/eejj.ckpt")
+#
+#            if profiler is not None:
+#                option_builder = tf.profiler.ProfileOptionBuilder
+#                opts = (option_builder(option_builder.time_and_memory()).
+#                        with_step(-1). # with -1, should compute the average of all registered steps.
+#                        with_file_output('test.txt').
+#                        select(['micros','bytes','occurrence']).order_by('micros').
+#                        build())
+#                # Profiling infos about ops are saved in 'test-%s.txt' % FLAGS.out
+#                profiler.profile_operations(options=opts)
+#        print(integrator.integrate(sess,100000,acceptance=True))
+#
+#    fig, (ax1, ax2, ax3) = plt.subplots(1,3,figsize=(16,5))
+#    ax1 = integrator.plot_loss(ax1)
+#    ax2 = integrator.plot_integral(ax2)
+#    ax3 = integrator.plot_variance(ax3)
+#    plt.savefig('loss.pdf') 
+#    plt.close()
+#
+#    raise
 
     def func(x):
         return tf.stop_gradient(tf.py_function(hardxs.GeneratePoint,[x],tf.float32))
 
-    x = np.random.random((100000,ndims))
-    p = hardxs.GeneratePoint(x)
+#    x = np.random.random((100000,ndims))
+#    p = hardxs.GeneratePoint(x)
+#
+#    figure = corner.corner(x, labels=[r'$x_{}$'.format(i) for i in range(ndims)], weights=p, show_titles=True, title_kwargs={"fontsize": 12})
+#    plt.savefig('matrix.pdf')
+#    plt.close()
 
-    figure = corner.corner(x, labels=[r'$x_{}$'.format(i) for i in range(ndims)], weights=p, show_titles=True, title_kwargs={"fontsize": 12})
-    plt.savefig('matrix.pdf')
-
-    integrator = integrator.Integrator(func, ndims, mode='linear')
-    integrator.make_optimizer(nsamples=2000, learning_rate=1e-3)
+    integrator = integrator.Integrator(func, ndims, mode='linear',name='eejjjj',blob=True)
+    integrator.make_optimizer(nsamples=5000, learning_rate=5e-3)
 
     with tf.Session(config=tf.ConfigProto(device_count={'GPU':0})) as sess:
         sess.run(tf.global_variables_initializer())
+#        print(integrator.integrate(sess,100000,
+#                                   acceptance=acceptance,
+#                                   fname='untrained',
+#                                   min=1e-9,
+#                                   max=1e3,
+#                                   nbins=300))
         profiler = None
         options = None
 #        profiler = tf.profiler.Profiler(sess.graph)
 #        options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-        integrator.optimize(sess,epochs=1000,printout=10,profiler=profiler,options=options)
-        print(integrator.integrate(sess,10000))
+        integrator.optimize(sess,epochs=800,printout=10,profiler=profiler,options=options,plot=True)
+        integrator.load(sess)
+        print(integrator.integrate(sess,100000,
+                                   acceptance=acceptance,
+                                   fname='trained',
+                                   plot=True,
+                                   min=1e-9,
+                                   max=1e3,
+                                   nbins=300
+                                  ))
 
         if profiler is not None:
             option_builder = tf.profiler.ProfileOptionBuilder
