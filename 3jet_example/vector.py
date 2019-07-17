@@ -8,10 +8,10 @@ def Dot(pi,pj):
     return  pi[:,0]*pj[:,0]-pi[:,1]*pj[:,1]-pi[:,2]*pj[:,2]-pi[:,3]*pj[:,3] 
 
 def Mass2(p):
-    return Dot(p,p)
+    return np.maximum(Dot(p,p),1e-7)
 
 def Mass(p):
-    return np.nan_to_num(np.sqrt(Dot(p,p)))
+    return np.nan_to_num(np.sqrt(np.maximum(Dot(p,p),1e-7)))
 
 def Momentum2(p):
     return p[:,1]*p[:,1]+p[:,2]*p[:,2]+p[:,3]*p[:,3]
