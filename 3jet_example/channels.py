@@ -109,7 +109,7 @@ class Propagator:
         return s
 
     def GenerateWeight(self,smin,smax,p):
-        s = Mass2(p)
+        s = np.maximum(Mass2(p),1e-7)
         #I = np.log(smax/smin)
         #I = smax-smin
         I = (1./(1-self.alpha) )* (smax**(1-self.alpha)-smin**(1-self.alpha))

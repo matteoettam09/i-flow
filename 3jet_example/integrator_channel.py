@@ -1,6 +1,5 @@
 import numpy as np
-import piecewise
-import piecewiseUnet_one_blob
+import piecewiseUnet_channel
 import tensorflow_probability as tfp
 tfd = tfp.distributions
 tfb = tfp.bijectors
@@ -22,23 +21,16 @@ class BijectorFactory:
         return bijector(**kwargs)
 
 factory = BijectorFactory()
-factory.register_bijector('linear', piecewise.PiecewiseLinear)
-factory.register_bijector('quadratic', piecewise.PiecewiseQuadratic)
-factory.register_bijector('quadratic_const', piecewise.PiecewiseQuadraticConst)
-#factory.register_bijector('linear_unet', piecewiseUnet_one_hot.PiecewiseLinearUNet)
-#factory.register_bijector('quadratic_unet', piecewiseUnet_one_hot.PiecewiseQuadraticUNet)
-#factory.register_bijector('quadratic_const_unet', piecewiseUnet_one_hot.PiecewiseQuadraticConstUNet)
-factory.register_bijector('linear_blob', piecewiseUnet_one_blob.PiecewiseLinear)
-factory.register_bijector('quadratic_blob', piecewiseUnet_one_blob.PiecewiseQuadratic)
-factory.register_bijector('quadraticConst_blob', piecewiseUnet_one_blob.PiecewiseQuadraticConst)
+factory.register_bijector('linear_channel', piecewiseUnet_channel.PiecewiseLinear)
 class Integrator():
-    def __init__(self, func, ndims, layers=4, mode='quadratic_blob', nbins=25):
+    def __init__(self, func, ndims, nchannels, layers=4, mode='linear_channel', nbins=32):
         self.func = func
         self.ndims = ndims
         self.mode = mode
         self.nbins = nbins
+        self.nchannels = nchannels
         self.layers = layers
-
+        
         self.losses = []
         self.integrals = []
         self.vars = []
@@ -52,53 +44,15 @@ class Integrator():
             self.bijectors.append(factory.create(
                     mode,**{
                         'D': ndims,
-                        'd': ndims//2,
+                        'd': ndims-1, #ndims//2,
                         'nbins': nbins,
+                        'nchannels': nchannels,
                         'layer_id': i,
-                        'name':"PwQ"
+                        'name':"PwL"
                         }
                     ))
-            self.bijectors.append(tfb.Permute(permutation=permute,name="Prm"))
-#        if ndims % 2 != 0:
-#            permute_odd = np.hstack([arange[ndims//2+1:],arange[:ndims//2+1]])
-#            odd = True
-#        else:
-#            odd = False
-#
-#        for i in range(layers):
-#            if not odd:
-#                self.bijectors.append(factory.create(
-#                    mode,**{
-#                        'D': ndims,
-#                        'd': ndims//2,
-#                        'nbins': nbins,
-#                        'layer_id': i,
-#                        }
-#                    ))
-#                self.bijectors.append(tfb.Permute(permutation=permute))
-#            else:
-#                if i % 2 == 0:
-#                    self.bijectors.append(factory.create(
-#                        mode,**{
-#                            'D': ndims,
-#                            'd': ndims//2+1,
-#                            'nbins': nbins,
-#                            'layer_id': i,
-#                            }
-#                        ))
-#                    self.bijectors.append(tfb.Permute(permutation=permute))
-#                else:
-#                    self.bijectors.append(factory.create(
-#                        mode,**{
-#                            'D': ndims,
-#                            'd': ndims//2,
-#                            'nbins': nbins,
-#                            'layer_id': i,
-#                            }
-#                        ))
-#                    self.bijectors.append(tfb.Permute(permutation=permute_odd))
+            self.bijectors.append(piecewiseUnet_channel.Permute(permutation=permute,name="Prm"))
 
-        # Remove the last permute layer
         self.bijectors = tfb.Chain(list(reversed(self.bijectors))) 
 
         self.base_dist = tfd.Uniform(low=ndims*[0.],high=ndims*[1.],name="UnF")
@@ -110,12 +64,30 @@ class Integrator():
                 distribution=self.base_dist,
                 bijector=self.bijectors,
                 )
+        self.saver = tf.train.Saver()
+        
 
-    def _loss_fn(self,nsamples):
-        x = self.dist.sample(nsamples)
-        logq = self.dist.log_prob(x)
-        p = self.func(x)
-        q = self.dist.prob(x)
+    def save(self,sess,name):
+        save_path = self.saver.save(sess, name)
+        print("Model saved at: {}".format(save_path))
+
+    def load(self,sess,name):
+        self.saver.restore(sess, name)
+        print("Model restored")
+
+
+    def _loss_fn(self,nsamples,sess):
+        ran = tf.cast(tf.floor(tf.random.uniform((nsamples,),minval=0., maxval=self.nchannels,dtype=tf.dtypes.float32)),tf.dtypes.int32)
+        ran_np=ran.eval(session=sess)
+
+        randic = {"channel": ran_np.tolist()}
+        layerdic = {"PwL":randic}
+        kwargs={"bijector_kwargs":layerdic}
+        x = self.dist.sample(nsamples,**kwargs)
+        logq = self.dist.log_prob(x,**kwargs)
+        p = self.func(x,randic)
+        q = self.dist.prob(x,**kwargs)
+
         xsec = p/q
         p = p/tf.reduce_mean(xsec)
         mean, var = tf.nn.moments(xsec,axes=[0])
@@ -124,8 +96,8 @@ class Integrator():
         # chi^2 divergence:
         #return tf.reduce_mean(((p-q)/q)**2), mean, var/nsamples, x, p, q
 
-    def make_optimizer(self,learning_rate=1e-4,nsamples=500):
-        self.loss, self.integral, self.var, self.x, self.p, self.q = self._loss_fn(nsamples) 
+    def make_optimizer(self,session,learning_rate=1e-4,nsamples=500):
+        self.loss, self.integral, self.var, self.x, self.p, self.q = self._loss_fn(nsamples,session) 
         optimizer = tf.train.AdamOptimizer(learning_rate)
         grads = optimizer.compute_gradients(self.loss)
         self.opt_op = optimizer.apply_gradients(grads)
@@ -133,8 +105,10 @@ class Integrator():
         
     def optimize(self,sess,epochs=1000,learning_rate=1e-4,
                  nsamples=500,stopping=1e-4,printout=100):
+        self.sess = sess
         floating_av = np.array([])
         floating_int = np.array([])
+        min_loss = 1e3
         for epoch in range(epochs):
             _, np_loss, np_integral, np_var, xpts, ppts, qpts = sess.run([self.opt_op, self.loss, self.integral, self.var, self.x, self.p, self.q])
             self.global_step += 1
@@ -147,6 +121,10 @@ class Integrator():
             else:
                 floating_int[epoch % 10] = np_integral
                 floating_av[epoch % 10] = np_var
+            if np_loss < min_loss:
+                self.save(sess,"models/eejjj.ckpt")
+                min_loss = np_loss
+                print("Loss = %e" %(np_loss))
             if epoch % printout == 0:
                 print("Epoch %4d: loss = %e, average integral = %e, average variance = %e, average stddev = %e"   
                         %(epoch, np_loss, np.mean(self.integrals), np.mean(self.vars),np.sqrt(np.mean(self.vars))))
@@ -165,7 +143,14 @@ class Integrator():
         figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
         plt.savefig('fig_{:04d}.pdf'.format(epoch))
         plt.close()
-
+        self.load(sess,"models/eejjj.ckpt")
+        np_loss, np_integral, np_var, xpts, ppts, qpts = sess.run([self.loss, self.integral, self.var, self.x, self.p, self.q])
+        print("Loaded configuration: loss = %e, integral = %e, variance = %e, stddev %e" %(np_loss,np_integral,np_var,np.sqrt(np_var)))
+        figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
+        plt.savefig('fig_final.pdf')
+        plt.close()
+        
+        
     def _plot(self,axis,labelsize=17,titlesize=20):
         axis.set_xlabel('epoch',fontsize=titlesize)
         axis.tick_params(axis='both',reset=True,which='both',direction='in',size=labelsize)
@@ -192,9 +177,16 @@ class Integrator():
         return axis
 
     def integrate(self,sess,nsamples=10000):
-        x = self.dist.sample(nsamples)
-        q = self.dist.prob(x)
-        p = self.func(x)
+        ran = tf.cast(tf.floor(tf.random.uniform((nsamples,),minval=0., maxval=self.nchannels,dtype=tf.dtypes.float32)),tf.dtypes.int32)
+        ran_np=ran.eval()
+
+        randic = {"channel": ran_np.tolist()}
+        layerdic = {"PwL":randic}
+        kwargs={"bijector_kwargs":layerdic}
+        x = self.dist.sample(nsamples,**kwargs)
+        p = self.func(x,randic)
+        q = self.dist.prob(x,**kwargs)
+
         integral, var = tf.nn.moments(p/q,axes=[0])
         error = tf.sqrt(var/nsamples)
 
@@ -202,16 +194,33 @@ class Integrator():
         #figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], weights = 1./qpts, show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
         #plt.savefig('xsec_final_invq.pdf')
         #plt.close()
+
         figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
         plt.savefig('xsec_final_x.pdf')
         plt.close()
-        wgt = ppts/qpts
+        
+        figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], weights=1./qpts,show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
+        plt.savefig('xsec_final_xdivq.pdf')
+        plt.close()
+        """
+        figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], weights=ppts/qpts,show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
+        plt.savefig('xsec_final_xPdivq.pdf')
+        plt.close()
+        """
+        wgt = ppts/(qpts*np_int)
         print("Unweighting in Integrate: "+str(np.mean(wgt)/np.max(wgt)))
-        plt.hist(wgt,bins=np.logspace(np.log10(np.min(wgt)),np.log10(np.max(wgt)),50),log=True,density=True)
+        plt.hist(wgt,bins=np.logspace(np.log10(np.min(wgt)),np.log10(np.max(wgt)),100),log=True)
         plt.xscale("log")
         plt.savefig('unweighting_eff.pdf')
         plt.close()
 
+        f = open("weights.dat","w")
+        f.write("Integral: {:0.2f} +/- {:0.2f}\n\
+mean / max : {:0.2f} % \n\
+for {:d} points\n".format(np_int,np_error,100*np.mean(wgt)/np.max(wgt),nsamples))
+        for i in wgt:
+            f.write(str(i)+"\n")
+        f.close()
         return np_int, np_error
         
 
