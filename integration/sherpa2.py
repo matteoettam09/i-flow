@@ -1,4 +1,5 @@
 import numpy as np
+from numba import jit, njit
 
 from vector import *
 from channels import SChannelDecay, Propagator
@@ -19,17 +20,17 @@ class eetojjj:
         self.channels = {}
 #        self.channels[0] = self.ChannelIso
         self.channels[0] = self.ChannelA1
-#        self.channels[1] = self.ChannelA2
-#        self.channels[2] = self.ChannelA3
-#        self.channels[3] = self.ChannelA4
-#        self.channels[4] = self.ChannelC1
-#        self.channels[5] = self.ChannelC2
-#        self.channels[6] = self.ChannelC3
-#        self.channels[7] = self.ChannelC4
-#        self.channels[8] = self.ChannelB1
-#        self.channels[9] = self.ChannelB2
-#        self.channels[10] = self.ChannelB3
-#        self.channels[11] = self.ChannelB4
+        self.channels[1] = self.ChannelA2
+        self.channels[2] = self.ChannelA3
+        self.channels[3] = self.ChannelA4
+        self.channels[4] = self.ChannelC1
+        self.channels[5] = self.ChannelC2
+        self.channels[6] = self.ChannelC3
+        self.channels[7] = self.ChannelC4
+        self.channels[8] = self.ChannelB1
+        self.channels[9] = self.ChannelB2
+        self.channels[10] = self.ChannelB3
+        self.channels[11] = self.ChannelB4
 
         self.weights = {}
         self.weights[0] = self.WeightA1
@@ -45,8 +46,61 @@ class eetojjj:
         self.weights[10] = self.WeightB3
         self.weights[11] = self.WeightB4
 
-    def GenerateMomenta(self,channel,rans,pa,pb):
-        return self.channels[channel](rans,pa,pb)
+    
+    def PhaseSpace(self,channels,rans,pa,pb):
+        logger.debug('channels = {}'.format(channels))
+        s1min = self.cutoff
+        s1max = np.where(channels < 4, (self.ecms-self.cutoff)**2, self.ecms**2)
+        s1 = self.prop.GeneratePoint(s1min,s1max,rans[:,0])
+    
+        s2min = self.cutoff
+        s2max = np.where(channels < 4, (self.ecms-np.sqrt(s1))**2, s1)
+        s2 = self.prop.GeneratePoint(s2min,s2max,rans[:,1])
+    
+        q1, q2 = self.decayIso.GeneratePoint(pa+pb, s1,
+                                        np.where(channels < 4, s2, 0),
+                                        np.array([rans[:,2], rans[:,3]]).T)
+    
+        q3, q4 = self.decayGluon.GeneratePoint(q1,
+                                          np.where(np.logical_or(channels < 4,channels > 7), 0, s2),
+                                          np.where(channels < 8, 0, s2),
+                                          np.array([rans[:,4], rans[:,5]]).T)
+    
+        q5, q6 = self.decayGluon.GeneratePoint(np.where(channels[:,np.newaxis] < 4, q2,
+                                                   np.where(channels[:,np.newaxis] < 8, q3, q4)),
+                                                    0.0, 0.0, np.array([rans[:,6],rans[:,7]]).T)
+
+        condlist = [channels[:,np.newaxis] < 4, channels[:,np.newaxis] < 8, channels[:,np.newaxis] < 12]
+    
+        p1choice = [q3,q5,q3]
+        p2choice = [q5,q2,q2]
+        p3choice = [q4,q6,q5]
+        p4choice = [q6,q4,q6]
+    
+        k1 = np.select(condlist, p1choice)
+        k2 = np.select(condlist, p2choice)
+        k3 = np.select(condlist, p3choice)
+        k4 = np.select(condlist, p4choice)
+    
+        condlist_perm = [np.mod(channels[:,np.newaxis], 4) == 0, 
+                         np.mod(channels[:,np.newaxis], 4) == 1,
+                         np.mod(channels[:,np.newaxis], 4) == 2,
+                         np.mod(channels[:,np.newaxis], 4) == 3]
+    
+        p1perm = [k1,k1,k2,k2]
+        p2perm = [k2,k2,k1,k1]
+        p3perm = [k3,k4,k3,k4]
+        p4perm = [k4,k3,k4,k3]
+    
+        p1 = np.select(condlist_perm, p1perm)
+        p2 = np.select(condlist_perm, p2perm)
+        p3 = np.select(condlist_perm, p3perm)
+        p4 = np.select(condlist_perm, p4perm)
+    
+        return p1, p2, p3, p4
+
+    def GenerateMomenta(self,channels,rans,pa,pb):
+        return self.ChannelA1(rans,pa,pb)
 
     def ChannelA(self,rans,pa,pb):
         s134 = self.prop.GeneratePoint(self.cutoff,self.ecms**2,rans[:,0])
@@ -132,7 +186,7 @@ class eetojjj:
         wp13_4 = self.decayGluon.GenerateWeight(p13+p4,Mass2(p13),0.0,p13,p4)
         wp1_3 = self.decayGluon.GenerateWeight(p1+p3,0.0,0.0,p1,p3)
 
-        return ws134*ws13*wp134_2*wp13_4*wp1_3
+        return np.maximum(ws134*ws13*wp134_2*wp13_4*wp1_3,1e-7)
 
     def Weight2(self,pa,pb,p1,p2,p3,p4):
         p13 = p1+p3
@@ -143,7 +197,7 @@ class eetojjj:
         wp1_3 = self.decayGluon.GenerateWeight(p1+p3,0.0,0.0,p1,p3)
         wp2_4 = self.decayGluon.GenerateWeight(p2+p4,0.0,0.0,p2,p4)
 
-        return ws24*ws13*wp13_24*wp2_4*wp1_3
+        return np.maximum(ws24*ws13*wp13_24*wp2_4*wp1_3,1e-7)
 
     def Weight3(self,pa,pb,p1,p2,p3,p4):
         p34 = p3+p4
@@ -154,7 +208,7 @@ class eetojjj:
         wp1_34 = self.decayGluon.GenerateWeight(p34+p1,0.0,Mass2(p34),p1,p34)
         wp3_4 = self.decayGluon.GenerateWeight(p3+p4,0.0,0.0,p3,p4)
 
-        return ws134*ws34*wp134_2*wp1_34*wp3_4
+        return np.maximum(ws134*ws34*wp134_2*wp1_34*wp3_4,1e-7)
 
     def WeightA1(self,pa,pb,p1,p2,p3,p4):
         return self.Weight1(pa,pb,p1,p2,p3,p4)
@@ -237,7 +291,7 @@ class eetojjj:
 
         return np.nan_to_num(dxs)
 
-    def GeneratePoint(self,rans):
+    def GeneratePoint(self,rans,channel):
         pa = Vector4(self.ecms/2*np.ones(np.shape(rans)[0]),
                      np.zeros(np.shape(rans)[0]),
                      np.zeros(np.shape(rans)[0]),
@@ -247,32 +301,56 @@ class eetojjj:
                      np.zeros(np.shape(rans)[0]),
                      -self.ecms/2*np.ones(np.shape(rans)[0]))
 
-        channels = np.random.randint(0,len(self.channels),(rans.shape[0]))
-        unique, counts = np.unique(channels, return_counts = True)
-        counts = np.cumsum(counts)
-        channels = dict(zip(unique, counts))
+        p1, p2, p3, p4 = self.PhaseSpace(channel,rans,pa,pb)
+        logger.debug(p1)
 
-#        p1, p2 = self.ChannelIso(rans,pa,pb)
-        p1 = []
-        p2 = []
-        p3 = []
-        p4 = []
-        position_old = 0
-        for channel, position in channels.items():
-            p1tmp, p2tmp, p3tmp, p4tmp = self.GenerateMomenta(
-                                                channel,rans[position_old:position],
-                                                pa[position_old:position],
-                                                pb[position_old:position])
-            p1.append(p1tmp)
-            p2.append(p2tmp)
-            p3.append(p3tmp)
-            p4.append(p4tmp)
-            position_old = position
-
-        p1 = np.concatenate(p1)
-        p2 = np.concatenate(p2)
-        p3 = np.concatenate(p3)
-        p4 = np.concatenate(p4)
+#        # Sort find args to sort the channels and count unique values for each channel
+#        indices = tf.argsort(channel)
+#        unique, counts = np.unique(channel, return_counts = True)
+#        counts = np.cumsum(counts)
+#        channels = dict(zip(unique,counts))
+#
+#        # Sort the input rans according to how you would sort the channels
+#        logger.debug(channel)
+#        logger.debug(indices)
+#        logger.debug(rans)
+#        rans = tf.gather(rans,indices)
+#        logger.debug(rans)
+#
+##        channels = np.random.randint(0,len(self.channels),(rans.shape[0]))
+##        unique, counts = np.unique(channels, return_counts = True)
+##        counts = np.cumsum(counts)
+##        channels = dict(zip(unique, counts))
+##
+###        p1, p2 = self.ChannelIso(rans,pa,pb)
+#        
+#        # Pass the points through the generation
+#        p1 = []
+#        p2 = []
+#        p3 = []
+#        p4 = []
+#        position_old = 0
+#        for channel, position in channels.items():
+#            p1tmp, p2tmp, p3tmp, p4tmp = self.GenerateMomenta(
+#                                                channel,rans[position_old:position],
+#                                                pa[position_old:position],
+#                                                pb[position_old:position])
+#            p1.append(p1tmp)
+#            p2.append(p2tmp)
+#            p3.append(p3tmp)
+#            p4.append(p4tmp)
+#            position_old = position
+#
+#        p1 = np.concatenate(p1)
+#        p2 = np.concatenate(p2)
+#        p3 = np.concatenate(p3)
+#        p4 = np.concatenate(p4)
+#
+#        # Sort the momenta back to the original
+#        p1 = p1[np.argsort(indices)]
+#        p2 = p2[np.argsort(indices)]
+#        p3 = p3[np.argsort(indices)]
+#        p4 = p4[np.argsort(indices)]
 
         wsum = np.array([self.Weight1(pa,pb,p1,p2,p3,p4), self.Weight1(pa,pb,p1,p2,p4,p3),
                          self.Weight1(pa,pb,p2,p1,p3,p4), self.Weight1(pa,pb,p2,p1,p4,p3),
@@ -321,11 +399,12 @@ if __name__ == '__main__':
 
     options = parser.parse_args()
     acceptance = options.acceptance
+    plot = options.plot
 
     logging.basicConfig()
     if options.debug:
         logging.getLogger('eejjj').setLevel(logging.DEBUG)
-        logging.getLogger('channels').setLevel(logging.DEBUG)
+#        logging.getLogger('channels').setLevel(logging.DEBUG)
 
     alphas = AlphaS(91.1876,0.118)
     hardxs = eetojjj(alphas)
@@ -380,36 +459,40 @@ if __name__ == '__main__':
 #
 #    raise
 
-    def func(x):
-        return tf.stop_gradient(tf.py_function(hardxs.GeneratePoint,[x],tf.float32))
+    def func(x, channel):
+        return tf.stop_gradient(tf.py_function(hardxs.GeneratePoint,[x,channel],tf.float32))
 
-#    x = np.random.random((100000,ndims))
-#    p = hardxs.GeneratePoint(x)
+#    nevents = 1000000
+#    x = np.random.random((nevents,ndims))
+#    p = hardxs.GeneratePoint(x,np.random.randint(0,12,(nevents,)))
 #
 #    figure = corner.corner(x, labels=[r'$x_{}$'.format(i) for i in range(ndims)], weights=p, show_titles=True, title_kwargs={"fontsize": 12})
 #    plt.savefig('matrix.pdf')
 #    plt.close()
 
-    integrator = integrator.Integrator(func, ndims, mode='linear',name='eejjjj',blob=True)
-    integrator.make_optimizer(nsamples=5000, learning_rate=5e-3)
+    integrator = integrator.Integrator(func, ndims, nchannels=12, mode='linear',name='eejjjj',blob=False,unet=False)
+    integrator.make_optimizer(nsamples=10000, learning_rate=5e-3)
 
-    with tf.Session(config=tf.ConfigProto(device_count={'GPU':0})) as sess:
+    config = tf.ConfigProto(device_count={'GPU':0})
+#    config.graph_options.optimizer_options.global_jit_level = tf.OptimizerOptions.ON_1
+
+    with tf.Session(config=config) as sess:
         sess.run(tf.global_variables_initializer())
-#        print(integrator.integrate(sess,100000,
-#                                   acceptance=acceptance,
-#                                   fname='untrained',
-#                                   min=1e-9,
-#                                   max=1e3,
-#                                   nbins=300))
+        print(integrator.integrate(sess,100000,
+                                   acceptance=acceptance,
+                                   fname='untrained',
+                                   min=1e-9,
+                                   max=1e3,
+                                   nbins=300))
         profiler = None
         options = None
 #        profiler = tf.profiler.Profiler(sess.graph)
 #        options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-        integrator.optimize(sess,epochs=800,printout=10,profiler=profiler,options=options,plot=True)
+        integrator.optimize(sess,epochs=1000,printout=10,profiler=profiler,options=options,plot=plot)
         integrator.load(sess)
         print(integrator.integrate(sess,100000,
                                    acceptance=acceptance,
-                                   fname='trained',
+                                  fname='trained',
                                    plot=True,
                                    min=1e-9,
                                    max=1e3,

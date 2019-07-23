@@ -4,7 +4,7 @@ import math as m
 import logging
 
 from vector import *
-from particle import Particle
+#from particle import Particle
 
 logger = logging.getLogger('channels')
 
@@ -15,10 +15,7 @@ class SChannelDecay:
         self.eps = 1e-4
 
     def Lambda(self,a,b,c):
-        result = (a-b-c)**2-4*b*c
-        if np.any(result) < 0 or np.any(result) is np.inf:
-            print(a,b,c,result)
-        return (a-b-c)**2-4*b*c
+        return np.maximum((a-b-c)**2-4*b*c,1e-7)
 
     def _find_axes(self,p):
         pl = np.where(np.logical_and(p[:,1]==0,np.logical_and(p[:,2]==0,p[:,3] == 0))[:,np.newaxis],
