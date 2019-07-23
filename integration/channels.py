@@ -113,6 +113,10 @@ class Propagator:
         s = Mass2(p)
         #I = np.log(smax/smin)
         #I = smax-smin
+        if np.any(smax < 0):
+            print('smax = {}'.format(smax))
+        if np.any(smin < 0):
+            print('smin = {}'.format(smin))
         I = (1./(1-self.alpha) )* (smax**(1-self.alpha)-smin**(1-self.alpha))
         ran = np.log(s/smin)/I
         #wgt = s*I/(2.*m.pi)

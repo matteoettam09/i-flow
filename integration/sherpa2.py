@@ -469,33 +469,33 @@ if __name__ == '__main__':
 #    plt.savefig('matrix.pdf')
 #    plt.close()
 
-    integrator = integrator.Integrator(func, ndims, nchannels=12, mode='linear',name='eejjjj',blob=False,unet=False,learning_rate=5e-4)
+    nint = 100000
 
-#    print(integrator.integrate(100000,
-#          acceptance=acceptance,
-#          fname='untrained',
-#          min=1e-9,
-#          max=1e3,
-#          nbins=300))
+    integrator = integrator.Integrator(func, ndims, nbins=10, nchannels=12, mode='linear',name='eejjjj', blob=False, unet=False, learning_rate=5e-4)
 
-    nsamples = [1000]*30
-    nsamples.extend([2000]*30)
-    nsamples.extend([4000]*20)
-    nsamples.extend([8000]*20)
-    nsamples.extend([16000]*10)
-    nsamples.extend([32000]*10)
-    nsamples.extend([64000]*10)
-    print(nsamples)
+    print(integrator.integrate(nint,
+          acceptance=acceptance,
+          fname='untrained',
+          plot=True,
+          min=1e-9,
+          max=1e3,
+          nbins=300))
+
+    nsamples = [1000]*100
+    nsamples.extend([2000]*100)
+    nsamples.extend([4000]*100)
+    nsamples.extend([8000]*100)
+    nsamples.extend([16000]*500)
     integrator.optimize(nsamples=nsamples,printout=10,plot=plot)
 #    integrator.load(sess)
-#    print(integrator.integrate(100000,
-#          acceptance=acceptance,
-#          fname='trained',
-#          plot=True,
-#          min=1e-9,
-#          max=1e3,
-#          nbins=300
-#         ))
+    print(integrator.integrate(nint,
+          acceptance=acceptance,
+          fname='trained',
+          plot=True,
+          min=1e-9,
+          max=1e3,
+          nbins=300
+         ))
 
     fig, (ax1, ax2, ax3) = plt.subplots(1,3,figsize=(16,5))
     ax1 = integrator.plot_loss(ax1)
