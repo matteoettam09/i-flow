@@ -1,5 +1,4 @@
 import numpy as np
-from numba import jit, njit
 
 from vector import *
 from channels import SChannelDecay, Propagator
@@ -46,57 +45,57 @@ class eetojjj:
         self.weights[10] = self.WeightB3
         self.weights[11] = self.WeightB4
 
-    
+
     def PhaseSpace(self,channels,rans,pa,pb):
         logger.debug('channels = {}'.format(channels))
         s1min = self.cutoff
         s1max = np.where(channels < 4, (self.ecms-self.cutoff)**2, self.ecms**2)
         s1 = self.prop.GeneratePoint(s1min,s1max,rans[:,0])
-    
+
         s2min = self.cutoff
         s2max = np.where(channels < 4, (self.ecms-np.sqrt(s1))**2, s1)
         s2 = self.prop.GeneratePoint(s2min,s2max,rans[:,1])
-    
+
         q1, q2 = self.decayIso.GeneratePoint(pa+pb, s1,
-                                        np.where(channels < 4, s2, 0),
-                                        np.array([rans[:,2], rans[:,3]]).T)
-    
+                np.where(channels < 4, s2, 0),
+                np.array([rans[:,2], rans[:,3]]).T)
+
         q3, q4 = self.decayGluon.GeneratePoint(q1,
-                                          np.where(np.logical_or(channels < 4,channels > 7), 0, s2),
-                                          np.where(channels < 8, 0, s2),
-                                          np.array([rans[:,4], rans[:,5]]).T)
-    
+                np.where(np.logical_or(channels < 4,channels > 7), 0, s2),
+                np.where(channels < 8, 0, s2),
+                np.array([rans[:,4], rans[:,5]]).T)
+
         q5, q6 = self.decayGluon.GeneratePoint(np.where(channels[:,np.newaxis] < 4, q2,
-                                                   np.where(channels[:,np.newaxis] < 8, q3, q4)),
-                                                    0.0, 0.0, np.array([rans[:,6],rans[:,7]]).T)
+            np.where(channels[:,np.newaxis] < 8, q3, q4)),
+            0.0, 0.0, np.array([rans[:,6],rans[:,7]]).T)
 
         condlist = [channels[:,np.newaxis] < 4, channels[:,np.newaxis] < 8, channels[:,np.newaxis] < 12]
-    
+
         p1choice = [q3,q5,q3]
         p2choice = [q5,q2,q2]
         p3choice = [q4,q6,q5]
         p4choice = [q6,q4,q6]
-    
+
         k1 = np.select(condlist, p1choice)
         k2 = np.select(condlist, p2choice)
         k3 = np.select(condlist, p3choice)
         k4 = np.select(condlist, p4choice)
-    
+
         condlist_perm = [np.mod(channels[:,np.newaxis], 4) == 0, 
-                         np.mod(channels[:,np.newaxis], 4) == 1,
-                         np.mod(channels[:,np.newaxis], 4) == 2,
-                         np.mod(channels[:,np.newaxis], 4) == 3]
-    
+                np.mod(channels[:,np.newaxis], 4) == 1,
+                np.mod(channels[:,np.newaxis], 4) == 2,
+                np.mod(channels[:,np.newaxis], 4) == 3]
+
         p1perm = [k1,k1,k2,k2]
         p2perm = [k2,k2,k1,k1]
         p3perm = [k3,k4,k3,k4]
         p4perm = [k4,k3,k4,k3]
-    
+
         p1 = np.select(condlist_perm, p1perm)
         p2 = np.select(condlist_perm, p2perm)
         p3 = np.select(condlist_perm, p3perm)
         p4 = np.select(condlist_perm, p4perm)
-    
+
         return p1, p2, p3, p4
 
     def GenerateMomenta(self,channels,rans,pa,pb):
@@ -247,7 +246,7 @@ class eetojjj:
         return self.Weight3(pa,pb,p2,p1,p4,p3)
 
     def ChannelIso(self,rans,pa,pb):
-#        s12 = self.prop.GeneratePoint(1e-1,self.ecms**2,rans[:,2])
+        #        s12 = self.prop.GeneratePoint(1e-1,self.ecms**2,rans[:,2])
         p1, p2 = self.decay.GeneratePoint(pa+pb,0.0,0.0,np.array([rans[:,0], rans[:,1]]).T)
 
         return p1, p2
@@ -257,14 +256,14 @@ class eetojjj:
 
     def GeneratePoint2(self,rans):
         pa = Vector4(self.ecms/2*np.ones(np.shape(rans)[0]),
-                     np.zeros(np.shape(rans)[0]),
-                     np.zeros(np.shape(rans)[0]),
-                     self.ecms/2*np.ones(np.shape(rans)[0]))
+                np.zeros(np.shape(rans)[0]),
+                np.zeros(np.shape(rans)[0]),
+                self.ecms/2*np.ones(np.shape(rans)[0]))
         pb = Vector4(self.ecms/2*np.ones(np.shape(rans)[0]),
-                     np.zeros(np.shape(rans)[0]),
-                     np.zeros(np.shape(rans)[0]),
-                     -self.ecms/2*np.ones(np.shape(rans)[0]))
-    
+                np.zeros(np.shape(rans)[0]),
+                np.zeros(np.shape(rans)[0]),
+                -self.ecms/2*np.ones(np.shape(rans)[0]))
+
         channels = np.random.randint(0,len(self.channels),(rans.shape[0]))
         unique, counts = np.unique(channels, return_counts = True)
         counts = np.cumsum(counts)
@@ -276,8 +275,8 @@ class eetojjj:
         position_old = 0
         for channel, position in channels.items():
             p1tmp, p2tmp = self.GenerateMomenta(channel,rans[position_old:position],
-                                                pa[position_old:position],
-                                                pb[position_old:position])
+                    pa[position_old:position],
+                    pb[position_old:position])
             p1.append(p1tmp)
             p2.append(p2tmp)
             position_old = position
@@ -293,13 +292,13 @@ class eetojjj:
 
     def GeneratePoint(self,rans,channel):
         pa = Vector4(self.ecms/2*np.ones(np.shape(rans)[0]),
-                     np.zeros(np.shape(rans)[0]),
-                     np.zeros(np.shape(rans)[0]),
-                     self.ecms/2*np.ones(np.shape(rans)[0]))
+                np.zeros(np.shape(rans)[0]),
+                np.zeros(np.shape(rans)[0]),
+                self.ecms/2*np.ones(np.shape(rans)[0]))
         pb = Vector4(self.ecms/2*np.ones(np.shape(rans)[0]),
-                     np.zeros(np.shape(rans)[0]),
-                     np.zeros(np.shape(rans)[0]),
-                     -self.ecms/2*np.ones(np.shape(rans)[0]))
+                np.zeros(np.shape(rans)[0]),
+                np.zeros(np.shape(rans)[0]),
+                -self.ecms/2*np.ones(np.shape(rans)[0]))
 
         p1, p2, p3, p4 = self.PhaseSpace(channel,rans,pa,pb)
         logger.debug(p1)
@@ -353,11 +352,11 @@ class eetojjj:
 #        p4 = p4[np.argsort(indices)]
 
         wsum = np.array([self.Weight1(pa,pb,p1,p2,p3,p4), self.Weight1(pa,pb,p1,p2,p4,p3),
-                         self.Weight1(pa,pb,p2,p1,p3,p4), self.Weight1(pa,pb,p2,p1,p4,p3),
-                         self.Weight2(pa,pb,p1,p2,p3,p4), self.Weight2(pa,pb,p1,p2,p4,p3),
-                         self.Weight2(pa,pb,p2,p1,p3,p4), self.Weight2(pa,pb,p2,p1,p4,p3),
-                         self.Weight3(pa,pb,p1,p2,p3,p4), self.Weight3(pa,pb,p1,p2,p4,p3),
-                         self.Weight3(pa,pb,p2,p1,p3,p4), self.Weight3(pa,pb,p2,p1,p4,p3)])
+            self.Weight1(pa,pb,p2,p1,p3,p4), self.Weight1(pa,pb,p2,p1,p4,p3),
+            self.Weight2(pa,pb,p1,p2,p3,p4), self.Weight2(pa,pb,p1,p2,p4,p3),
+            self.Weight2(pa,pb,p2,p1,p3,p4), self.Weight2(pa,pb,p2,p1,p4,p3),
+            self.Weight3(pa,pb,p1,p2,p3,p4), self.Weight3(pa,pb,p1,p2,p4,p3),
+            self.Weight3(pa,pb,p2,p1,p3,p4), self.Weight3(pa,pb,p2,p1,p4,p3)])
 
 
         wsum = np.reciprocal(np.mean(np.reciprocal(wsum),axis=0))
@@ -370,7 +369,7 @@ class eetojjj:
 if __name__ == '__main__':
     from qcd import AlphaS
     from comix import Comix
-    from flow import integrator
+    from flow import integrator_tf20 as integrator
     import tensorflow as tf
     import matplotlib.pyplot as plt
     import os
@@ -382,20 +381,20 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
             description='Sherpa Event Generator with Flow integration.'
-    )
+            )
 
     parser.add_argument('-d','--debug',action='store_true',
-                        help='Turn on debug logging')
+            help='Turn on debug logging')
     parser.add_argument('-e','--epochs',default=500,
-                        help='Number of epochs to train for')
+            help='Number of epochs to train for')
     parser.add_argument('-p','--plot',action='store_true',
-                        help='Flag for plotting distributions')
+            help='Flag for plotting distributions')
     parser.add_argument('-l','--loss',action='store_true',
-                        help='Flag for plotting loss, integral, and variance')
+            help='Flag for plotting loss, integral, and variance')
     parser.add_argument('-n','--nsamples',default=2000,
-                        help='Number of samples to calculate the loss')
+            help='Number of samples to calculate the loss')
     parser.add_argument('-a','--acceptance',action='store_true',
-                        help='Calculate acceptance')
+            help='Calculate acceptance')
 
     options = parser.parse_args()
     acceptance = options.acceptance
@@ -470,44 +469,33 @@ if __name__ == '__main__':
 #    plt.savefig('matrix.pdf')
 #    plt.close()
 
-    integrator = integrator.Integrator(func, ndims, nchannels=12, mode='linear',name='eejjjj',blob=False,unet=False)
-    integrator.make_optimizer(nsamples=10000, learning_rate=5e-3)
+    integrator = integrator.Integrator(func, ndims, nchannels=12, mode='linear',name='eejjjj',blob=False,unet=False,learning_rate=5e-4)
 
-    config = tf.ConfigProto(device_count={'GPU':0})
-#    config.graph_options.optimizer_options.global_jit_level = tf.OptimizerOptions.ON_1
+#    print(integrator.integrate(100000,
+#          acceptance=acceptance,
+#          fname='untrained',
+#          min=1e-9,
+#          max=1e3,
+#          nbins=300))
 
-    with tf.Session(config=config) as sess:
-        sess.run(tf.global_variables_initializer())
-        print(integrator.integrate(sess,100000,
-                                   acceptance=acceptance,
-                                   fname='untrained',
-                                   min=1e-9,
-                                   max=1e3,
-                                   nbins=300))
-        profiler = None
-        options = None
-#        profiler = tf.profiler.Profiler(sess.graph)
-#        options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-        integrator.optimize(sess,epochs=1000,printout=10,profiler=profiler,options=options,plot=plot)
-        integrator.load(sess)
-        print(integrator.integrate(sess,100000,
-                                   acceptance=acceptance,
-                                  fname='trained',
-                                   plot=True,
-                                   min=1e-9,
-                                   max=1e3,
-                                   nbins=300
-                                  ))
-
-        if profiler is not None:
-            option_builder = tf.profiler.ProfileOptionBuilder
-            opts = (option_builder(option_builder.time_and_memory()).
-                    with_step(-1). # with -1, should compute the average of all registered steps.
-                    with_file_output('test.txt').
-                    select(['micros','bytes','occurrence']).order_by('micros').
-                    build())
-            # Profiling infos about ops are saved in 'test-%s.txt' % FLAGS.out
-            profiler.profile_operations(options=opts)
+    nsamples = [1000]*30
+    nsamples.extend([2000]*30)
+    nsamples.extend([4000]*20)
+    nsamples.extend([8000]*20)
+    nsamples.extend([16000]*10)
+    nsamples.extend([32000]*10)
+    nsamples.extend([64000]*10)
+    print(nsamples)
+    integrator.optimize(nsamples=nsamples,printout=10,plot=plot)
+#    integrator.load(sess)
+#    print(integrator.integrate(100000,
+#          acceptance=acceptance,
+#          fname='trained',
+#          plot=True,
+#          min=1e-9,
+#          max=1e3,
+#          nbins=300
+#         ))
 
     fig, (ax1, ax2, ax3) = plt.subplots(1,3,figsize=(16,5))
     ax1 = integrator.plot_loss(ax1)

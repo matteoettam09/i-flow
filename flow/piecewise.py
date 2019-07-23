@@ -45,14 +45,14 @@ class Piecewise(tfb.Bijector):
 
     def _one_blob(self, xd):
         y = tf.tile(((0.5*self.width) + tf.range(0., 1.,
-                                                 delta=1./self.nbins)), [tf.size(xd)])
+                                                 delta=1./self.nbins)), [tf.size(input=xd)])
         y = tf.reshape(y, (-1, self.d, self.nbins))
         res = tf.exp(((-self.nbins*self.nbins)/2.)*(y-xd[..., tf.newaxis])**2)
         return res
 
     def _one_hot(self, xd):
         ibins = tf.cast(tf.floor(xd*self.nbins), dtype=tf.int32)
-        ibins = tf.where(tf.equal(ibins, self.nbins *
+        ibins = tf.compat.v1.where(tf.equal(ibins, self.nbins *
                                   tf.ones_like(ibins)), ibins-1, ibins)
         one_hot = tf.one_hot(ibins, depth=self.nbins, axis=-1)
         one_hot = tf.reshape(one_hot, [-1, self.d*self.nbins])
@@ -164,22 +164,22 @@ class PiecewiseLinear(Piecewise):
         xd, xD = x[..., :self.d], x[..., self.d:]
         Q = self._q(xd, channel)
         ibins = tf.cast(tf.floor(xD*self.nbins), dtype=tf.int32)
-        ibins = tf.where(tf.equal(ibins, self.nbins *
+        ibins = tf.compat.v1.where(tf.equal(ibins, self.nbins *
                                   tf.ones_like(ibins)), ibins-1, ibins)
         one_hot = tf.one_hot(ibins, depth=self.nbins)
-        return tf.concat([tf.ones_like(xd), tf.reduce_sum(Q*one_hot, axis=-1)/self.width], axis=-1)
+        return tf.concat([tf.ones_like(xd), tf.reduce_sum(input_tensor=Q*one_hot, axis=-1)/self.width], axis=-1)
 
     def _inverse(self, x, channel = 1):
         xd, xD = x[..., :self.d], x[..., self.d:]
         Q = self._q(xd, channel)
         ibins = tf.cast(tf.floor(xD*self.nbins), dtype=tf.int32)
-        ibins = tf.where(tf.equal(ibins, self.nbins *
+        ibins = tf.compat.v1.where(tf.equal(ibins, self.nbins *
                                   tf.ones_like(ibins)), ibins-1, ibins)
         one_hot = tf.one_hot(ibins, depth=self.nbins)
         one_hot2 = tf.one_hot(ibins-1, depth=self.nbins)
         yD = ((xD*self.nbins-tf.cast(ibins, dtype=tf.float32))
-              * tf.reduce_sum(Q*one_hot, axis=-1)) \
-            + tf.reduce_sum(tf.cumsum(Q, axis=-1)*one_hot2, axis=-1)
+              * tf.reduce_sum(input_tensor=Q*one_hot, axis=-1)) \
+            + tf.reduce_sum(input_tensor=tf.cumsum(Q, axis=-1)*one_hot2, axis=-1)
         return tf.concat([xd, yD], axis=-1)
 
     def _forward(self, y, channel = 1):
@@ -187,29 +187,29 @@ class PiecewiseLinear(Piecewise):
         Q = self._q(yd, channel)
         ibins = tf.cast(tf.searchsorted(tf.cumsum(Q, axis=-1),
                                         yD[..., tf.newaxis], side='right'), dtype=tf.int32)
-        ibins = tf.where(tf.equal(ibins, self.nbins *
+        ibins = tf.compat.v1.where(tf.equal(ibins, self.nbins *
                                   tf.ones_like(ibins)), ibins-1, ibins)
-        ibins = tf.reshape(ibins, [tf.shape(yD)[0], self.D-self.d])
+        ibins = tf.reshape(ibins, [tf.shape(input=yD)[0], self.D-self.d])
         one_hot = tf.one_hot(ibins, depth=self.nbins)
         one_hot2 = tf.one_hot(ibins-1, depth=self.nbins)
-        xD = ((yD-tf.reduce_sum(tf.cumsum(Q, axis=-1)*one_hot2, axis=-1))
-              * tf.reciprocal(tf.reduce_sum(Q*one_hot, axis=-1))
+        xD = ((yD-tf.reduce_sum(input_tensor=tf.cumsum(Q, axis=-1)*one_hot2, axis=-1))
+              * tf.math.reciprocal(tf.reduce_sum(input_tensor=Q*one_hot, axis=-1))
               + tf.cast(ibins, dtype=tf.float32))*self.width
         return tf.concat([yd, xD], axis=-1)
 
     def _inverse_log_det_jacobian(self, x, channel = 1):
-        return tf.reduce_sum(tf.log(self._pdf(x, channel)[..., self.d:]), axis=-1)
+        return tf.reduce_sum(input_tensor=tf.math.log(self._pdf(x, channel)[..., self.d:]), axis=-1)
 
     def _forward_log_det_jacobian(self, y, channel = 1):
         yd, yD = y[..., :self.d], y[..., self.d:]
         Q = self._q(yd, channel)
         ibins = tf.cast(tf.searchsorted(tf.cumsum(Q, axis=-1),
                                         yD[..., tf.newaxis], side='right'), dtype=tf.int32)
-        ibins = tf.where(tf.equal(ibins, self.nbins *
+        ibins = tf.compat.v1.where(tf.equal(ibins, self.nbins *
                                   tf.ones_like(ibins)), ibins-1, ibins)
-        ibins = tf.reshape(ibins, [tf.shape(yD)[0], self.D-self.d])
+        ibins = tf.reshape(ibins, [tf.shape(input=yD)[0], self.D-self.d])
         one_hot = tf.one_hot(ibins, depth=self.nbins)
-        return -tf.reduce_sum(tf.log(tf.reduce_sum(Q*one_hot, axis=-1)/self.width), axis=-1)
+        return -tf.reduce_sum(input_tensor=tf.math.log(tf.reduce_sum(input_tensor=Q*one_hot, axis=-1)/self.width), axis=-1)
 
 
 class PiecewiseQuadratic(Piecewise):
@@ -254,20 +254,20 @@ class PiecewiseQuadratic(Piecewise):
 
         NNMat = self.NNMat(xd)
         W = tf.nn.softmax(NNMat[..., :self.nbins], axis=-1)
-        W = tf.where(tf.less(W, 1e-6*tf.ones_like(W)), 1e-6*tf.ones_like(W), W)
+        W = tf.compat.v1.where(tf.less(W, 1e-6*tf.ones_like(W)), 1e-6*tf.ones_like(W), W)
         V = NNMat[..., self.nbins:]
         VExp = tf.exp(V)
         VSum = tf.reduce_sum(
-            (VExp[..., :self.nbins]+VExp[..., 1:])*W/2, axis=-1, keepdims=True)
+            input_tensor=(VExp[..., :self.nbins]+VExp[..., 1:])*W/2, axis=-1, keepdims=True)
         V = tf.truediv(VExp, VSum)
         return W, V
 
     def _find_bins(self, x, y):
         ibins = tf.cast(tf.searchsorted(
             y, x[..., tf.newaxis], side='right'), dtype=tf.int32)
-        ibins = tf.where(tf.equal(ibins, self.nbins *
+        ibins = tf.compat.v1.where(tf.equal(ibins, self.nbins *
                                   tf.ones_like(ibins)), ibins-1, ibins)
-        ibins = tf.reshape(ibins, [tf.shape(x)[0], self.D-self.d])
+        ibins = tf.reshape(ibins, [tf.shape(input=x)[0], self.D-self.d])
         one_hot = tf.one_hot(ibins, depth=self.nbins)
         one_hot_sum = tf.one_hot(ibins-1, depth=self.nbins)
         one_hot_V = tf.one_hot(ibins, depth=self.nbins+1)
@@ -279,10 +279,10 @@ class PiecewiseQuadratic(Piecewise):
         W, V = self._get_wv(xd, channel)
         WSum = tf.cumsum(W, axis=-1)
         one_hot, one_hot_sum, one_hot_V = self._find_bins(xD, WSum)
-        alpha = (xD-tf.reduce_sum(WSum*one_hot_sum, axis=-1)) \
-            * tf.reciprocal(tf.reduce_sum(W*one_hot, axis=-1))
-        result = tf.reduce_sum((V[..., 1:]-V[..., :-1])*one_hot, axis=-1)*alpha \
-            + tf.reduce_sum(V*one_hot_V, axis=-1)
+        alpha = (xD-tf.reduce_sum(input_tensor=WSum*one_hot_sum, axis=-1)) \
+            * tf.math.reciprocal(tf.reduce_sum(input_tensor=W*one_hot, axis=-1))
+        result = tf.reduce_sum(input_tensor=(V[..., 1:]-V[..., :-1])*one_hot, axis=-1)*alpha \
+            + tf.reduce_sum(input_tensor=V*one_hot_V, axis=-1)
         return tf.concat([xd, result], axis=-1)
 
     def _inverse(self, x, channel = 1):
@@ -291,12 +291,12 @@ class PiecewiseQuadratic(Piecewise):
         WSum = tf.cumsum(W, axis=-1)
         VSum = tf.cumsum((V[..., 1:]+V[..., :-1])*W/2.0, axis=-1)
         one_hot, one_hot_sum, one_hot_V = self._find_bins(xD, WSum)
-        alpha = (xD-tf.reduce_sum(WSum*one_hot_sum, axis=-1)) \
-            * tf.reciprocal(tf.reduce_sum(W*one_hot, axis=-1))
-        yD = alpha**2/2*tf.reduce_sum((V[..., 1:]-V[..., 0:-1])*one_hot, axis=-1) \
-            * tf.reduce_sum(W*one_hot, axis=-1) \
-            + alpha*tf.reduce_sum(V*one_hot_V, axis=-1)*tf.reduce_sum(W*one_hot, axis=-1) \
-            + tf.reduce_sum(VSum*one_hot_sum, axis=-1)
+        alpha = (xD-tf.reduce_sum(input_tensor=WSum*one_hot_sum, axis=-1)) \
+            * tf.math.reciprocal(tf.reduce_sum(input_tensor=W*one_hot, axis=-1))
+        yD = alpha**2/2*tf.reduce_sum(input_tensor=(V[..., 1:]-V[..., 0:-1])*one_hot, axis=-1) \
+            * tf.reduce_sum(input_tensor=W*one_hot, axis=-1) \
+            + alpha*tf.reduce_sum(input_tensor=V*one_hot_V, axis=-1)*tf.reduce_sum(input_tensor=W*one_hot, axis=-1) \
+            + tf.reduce_sum(input_tensor=VSum*one_hot_sum, axis=-1)
         return tf.concat([xd, yD], axis=-1)
 
     def _forward(self, y, channel = 1):
@@ -305,21 +305,21 @@ class PiecewiseQuadratic(Piecewise):
         WSum = tf.cumsum(W, axis=-1)
         VSum = tf.cumsum((V[..., 1:]+V[..., 0:-1])*W/2.0, axis=-1)
         one_hot, one_hot_sum, one_hot_V = self._find_bins(yD, VSum)
-        denom = tf.reduce_sum((V[..., 1:]-V[..., 0:-1])*one_hot, axis=-1)
-        beta = (yD - tf.reduce_sum(VSum*one_hot_sum, axis=-1)) \
-            * tf.reciprocal(tf.reduce_sum(W*one_hot, axis=-1))
-        Vbins = tf.reduce_sum(V*one_hot_V, axis=-1)
-        xD = tf.where(tf.equal(tf.zeros_like(denom), denom),
+        denom = tf.reduce_sum(input_tensor=(V[..., 1:]-V[..., 0:-1])*one_hot, axis=-1)
+        beta = (yD - tf.reduce_sum(input_tensor=VSum*one_hot_sum, axis=-1)) \
+            * tf.math.reciprocal(tf.reduce_sum(input_tensor=W*one_hot, axis=-1))
+        Vbins = tf.reduce_sum(input_tensor=V*one_hot_V, axis=-1)
+        xD = tf.compat.v1.where(tf.equal(tf.zeros_like(denom), denom),
                       beta/Vbins,
-                      tf.div_no_nan(
+                      tf.math.divide_no_nan(
                           (-Vbins+tf.sqrt(Vbins**2+2*beta*denom)), denom)
                       )
-        xD = tf.reduce_sum(W*one_hot, axis=-1)*xD + \
-            tf.reduce_sum(WSum*one_hot_sum, axis=-1)
+        xD = tf.reduce_sum(input_tensor=W*one_hot, axis=-1)*xD + \
+            tf.reduce_sum(input_tensor=WSum*one_hot_sum, axis=-1)
         return tf.concat([yd, xD], axis=-1)
 
     def _inverse_log_det_jacobian(self, x, channel = 1):
-        return tf.reduce_sum(tf.log(self._pdf(x, channel)[..., self.d:]), axis=-1)
+        return tf.reduce_sum(input_tensor=tf.math.log(self._pdf(x, channel)[..., self.d:]), axis=-1)
 
     def _forward_log_det_jacobian(self, y, channel = 1):
         yd, yD = y[..., :self.d], y[..., self.d:]
@@ -327,18 +327,18 @@ class PiecewiseQuadratic(Piecewise):
         WSum = tf.cumsum(W, axis=1)
         VSum = tf.cumsum((V[..., 1:]+V[..., 0:-1])*W/2.0, axis=-1)
         one_hot, one_hot_sum, one_hot_V = self._find_bins(yD, VSum)
-        denom = tf.reduce_sum((V[..., 1:]-V[..., 0:-1])*one_hot, axis=-1)
-        beta = (yD - tf.reduce_sum(VSum*one_hot_sum, axis=-1)) \
-            * tf.reciprocal(tf.reduce_sum(W*one_hot, axis=-1))
-        Vbins = tf.reduce_sum(V*one_hot_V, axis=-1)
-        alpha = tf.where(tf.equal(tf.zeros_like(denom), denom),
+        denom = tf.reduce_sum(input_tensor=(V[..., 1:]-V[..., 0:-1])*one_hot, axis=-1)
+        beta = (yD - tf.reduce_sum(input_tensor=VSum*one_hot_sum, axis=-1)) \
+            * tf.math.reciprocal(tf.reduce_sum(input_tensor=W*one_hot, axis=-1))
+        Vbins = tf.reduce_sum(input_tensor=V*one_hot_V, axis=-1)
+        alpha = tf.compat.v1.where(tf.equal(tf.zeros_like(denom), denom),
                          beta/Vbins,
-                         tf.div_no_nan(
+                         tf.math.divide_no_nan(
                              (-Vbins+tf.sqrt(Vbins**2+2*beta*denom)), denom)
                          )
         result = tf.reduce_sum(
-            (V[..., 1:]-V[..., 0:-1])*one_hot, axis=-1)*alpha+Vbins
-        return -tf.reduce_sum(tf.log(result), axis=-1)
+            input_tensor=(V[..., 1:]-V[..., 0:-1])*one_hot, axis=-1)*alpha+Vbins
+        return -tf.reduce_sum(input_tensor=tf.math.log(result), axis=-1)
 
 
 class PiecewiseQuadraticConst(PiecewiseQuadratic):
@@ -387,7 +387,7 @@ class PiecewiseQuadraticConst(PiecewiseQuadratic):
 
         VMat = self.VMat(xd)
         VExp = tf.exp(VMat)
-        VSum = tf.reduce_sum((VExp[..., 0:self.nbins]+VExp[..., 1:self.nbins+1])
+        VSum = tf.reduce_sum(input_tensor=(VExp[..., 0:self.nbins]+VExp[..., 1:self.nbins+1])
                              * W[..., :self.nbins]/2, axis=-1, keepdims=True)
         VMat = tf.truediv(VExp, VSum)
         return VMat

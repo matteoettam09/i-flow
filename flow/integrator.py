@@ -172,27 +172,27 @@ class Integrator():
         )
 
         self.name = name
-        self.saver = tf.train.Saver()
+        self.saver = tf.compat.v1.train.Saver()
 
     def _loss_fn(self, nsamples, alpha):
         self.nsamples = nsamples
-        self.channel = tf.placeholder(tf.float32, shape=(nsamples,),name='channels')
+        channel = np.random.randint(4,self.nchannels,(self.nsamples,))
 
-        bijector = {'bijector_kwargs' : {'PwL' : {'channel' : self.channel}}}
+        bijector = {'bijector_kwargs' : {'PwL' : {'channel' : channel}}}
 
         x = self.dist.sample(nsamples, **bijector)
         logq = self.dist.log_prob(x, **bijector)
         p = self.func(x, self.channel)
         q = self.dist.prob(x, **bijector)
         xsec = p/q
-        p = p/tf.reduce_mean(xsec)
-        mean, var = tf.nn.moments(xsec, axes=[0])
-        acceptance = tf.reduce_mean(xsec)/tf.reduce_max(xsec)
+        p = tf.stop_gradient(p/tf.reduce_mean(input_tensor=xsec))
+        mean, var = tf.nn.moments(x=xsec, axes=[0])
+        acceptance = tf.reduce_mean(input_tensor=xsec)/tf.reduce_max(input_tensor=xsec)
 #        return (1.0/acceptance**2, mean,
 #                var/nsamples, x, p, q)
 #        return (tf.reduce_mean(p/q*(tf.log(p)-logq))/acceptance**2, mean,
 #                var/nsamples, x, p, q)
-        return ((1-alpha)*tf.reduce_mean(p/q*(tf.log(p)-logq))-alpha*acceptance, mean,
+        return ((1-alpha)*tf.reduce_mean(input_tensor=p/q*(tf.math.log(p)-logq))-alpha*acceptance, mean,
                 var/nsamples, x, p, q)
 #        return (tf.reduce_mean(p/q*(tf.log(p)-logq)), mean,
 #                var/nsamples, x, p, q)
@@ -206,11 +206,11 @@ class Integrator():
         """
         (self.loss, self.integral, self.var,
             self.x, self.p, self.q) = self._loss_fn(nsamples,alpha)
-        optimizer = tf.train.AdamOptimizer(learning_rate)
+        optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate)
         grads = optimizer.compute_gradients(self.loss)
         self.opt_op = optimizer.apply_gradients(grads)
 
-    def optimize(self, sess, **kwargs):
+    def optimize(self, **kwargs):
         """Optimize the integrator for the give function.
 
         Preform the training of the neural network for a given number of epochs.
@@ -221,7 +221,6 @@ class Integrator():
         <ctrl>-c.
 
         Args:
-            sess (tf.Session): Tensorflow session that contains the neural network.
             **kwargs: Additional options to set for optimizing. Options are:
                 epochs (int): Number of epochs to train for (default is 1000).
                 printout (int): How often to print results (default is 100).
@@ -241,7 +240,7 @@ class Integrator():
         min_loss = 1e99
         if self.name is not None:
             try:
-                self.load(sess,'models/'.format(self.name))
+                self.load('models/'.format(self.name))
             except:
                 pass
 
@@ -249,10 +248,9 @@ class Integrator():
         try:
             for epoch in range(epochs):
                 if profiler is not None:
-                    run_metadata = tf.RunMetadata()
+                    run_metadata = tf.compat.v1.RunMetadata()
                 else:
                     run_metadata = None
-                channel = np.random.randint(4,self.nchannels,(self.nsamples,))
                 (_, np_loss, np_integral,
                  np_var, xpts, ppts, qpts) = sess.run([self.opt_op, self.loss,
                                                        self.integral, self.var,
@@ -359,14 +357,14 @@ class Integrator():
             acceptance (float): Optional return of the average acceptance rate
 
         """
-        channels = tf.convert_to_tensor(np.random.randint(4,self.nchannels,(nsamples,)))
+        channels = tf.convert_to_tensor(value=np.random.randint(4,self.nchannels,(nsamples,)))
 
         bijector = {'bijector_kwargs' : {'PwL' : {'channel' : channels}}}
 
         x = self.dist.sample(nsamples, **bijector)
         p = self.func(x, channels)
         q = self.dist.prob(x, **bijector)
-        integral, var = tf.nn.moments(p/q, axes=[0])
+        integral, var = tf.nn.moments(x=p/q, axes=[0])
         error = tf.sqrt(var/nsamples)
 
         tf_results = [integral, error]
@@ -432,8 +430,8 @@ if __name__ == '__main__':
             normalChristina, 3, mode='linear', unet=True, blob=True, name=name)
 
         integrator.make_optimizer(nsamples=5000,alpha=alpha)
-        with tf.Session() as sess:
-            sess.run(tf.global_variables_initializer())
+        with tf.compat.v1.Session() as sess:
+            sess.run(tf.compat.v1.global_variables_initializer())
             try:
                 integrator.load(sess)
             except:
