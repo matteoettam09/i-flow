@@ -19,7 +19,7 @@ class Piecewise(tfb.Bijector):
 
     """Implement base class for piecewise coupling layers."""
 
-    def __init__(self, D, d, nbins, blob=False, hot=False, model=None, unet=False, **kwargs):
+    def __init__(self, D, d, nbins, nchannels=1, blob=False, hot=False, model=None, unet=False, **kwargs):
         """Initialize the global piecewise variables.
 
         Args:
@@ -35,6 +35,7 @@ class Piecewise(tfb.Bijector):
         super(Piecewise, self).__init__(**kwargs)
         self.D, self.d = D, d
         self.nbins = nbins
+        self.nchannels = nchannels
         self.range = tf.cast(tf.range(self.d), dtype=tf.int32)
         self.blob = blob
         self.hot = hot
@@ -58,12 +59,15 @@ class Piecewise(tfb.Bijector):
         return one_hot
 
     def _build_input(self):
-        if self.blob or self.hot:
-            inval = layers.Input(shape=(self.d*self.nbins,))
-        else:
-            inval = layers.Input(shape=(self.d,))
+        shape = self.d
 
-        return inval
+        if self.blob or self.hot:
+            shape *= self.nbins
+
+        if self.nchannels != 1:
+            shape += self.nchannels
+
+        return layers.Input(shape=(shape,))
 
     def _build_unet(self, inval):
         h1 = layers.Dense(256, activation='relu')(inval)
@@ -111,6 +115,10 @@ class Piecewise(tfb.Bijector):
         model.summary()
         return model
 
+    def _channel_encode(self,xd,channel):
+        channel_hot = tf.one_hot(tf.cast(channel,dtype=tf.int32),depth=self.nchannels, axis=-1)
+        return tf.concat([xd,channel_hot],axis=-1)
+
 
 class PiecewiseLinear(Piecewise):
 
@@ -141,26 +149,29 @@ class PiecewiseLinear(Piecewise):
         self.QMat = self._build_model(self.nbins)
         self.trainable_variables = self.QMat.trainable_variables
 
-    def _q(self, xd):
+    def _q(self, xd, channel):
         if self.hot:
             xd = self._one_hot(xd)
         elif self.blob:
             xd = tf.reshape(self._one_blob(xd), [-1, self.d*self.nbins])
 
+        if self.nchannels != 1:
+            xd = self._channel_encode(xd, channel)
+
         return tf.nn.softmax(self.QMat(xd), axis=-1)
 
-    def _pdf(self, x):
+    def _pdf(self, x, channel):
         xd, xD = x[..., :self.d], x[..., self.d:]
-        Q = self._q(xd)
+        Q = self._q(xd, channel)
         ibins = tf.cast(tf.floor(xD*self.nbins), dtype=tf.int32)
         ibins = tf.where(tf.equal(ibins, self.nbins *
                                   tf.ones_like(ibins)), ibins-1, ibins)
         one_hot = tf.one_hot(ibins, depth=self.nbins)
         return tf.concat([tf.ones_like(xd), tf.reduce_sum(Q*one_hot, axis=-1)/self.width], axis=-1)
 
-    def _inverse(self, x):
+    def _inverse(self, x, channel = 1):
         xd, xD = x[..., :self.d], x[..., self.d:]
-        Q = self._q(xd)
+        Q = self._q(xd, channel)
         ibins = tf.cast(tf.floor(xD*self.nbins), dtype=tf.int32)
         ibins = tf.where(tf.equal(ibins, self.nbins *
                                   tf.ones_like(ibins)), ibins-1, ibins)
@@ -171,9 +182,9 @@ class PiecewiseLinear(Piecewise):
             + tf.reduce_sum(tf.cumsum(Q, axis=-1)*one_hot2, axis=-1)
         return tf.concat([xd, yD], axis=-1)
 
-    def _forward(self, y):
+    def _forward(self, y, channel = 1):
         yd, yD = y[..., :self.d], y[..., self.d:]
-        Q = self._q(yd)
+        Q = self._q(yd, channel)
         ibins = tf.cast(tf.searchsorted(tf.cumsum(Q, axis=-1),
                                         yD[..., tf.newaxis], side='right'), dtype=tf.int32)
         ibins = tf.where(tf.equal(ibins, self.nbins *
@@ -186,12 +197,12 @@ class PiecewiseLinear(Piecewise):
               + tf.cast(ibins, dtype=tf.float32))*self.width
         return tf.concat([yd, xD], axis=-1)
 
-    def _inverse_log_det_jacobian(self, x):
-        return tf.reduce_sum(tf.log(self._pdf(x)[..., self.d:]), axis=-1)
+    def _inverse_log_det_jacobian(self, x, channel = 1):
+        return tf.reduce_sum(tf.log(self._pdf(x, channel)[..., self.d:]), axis=-1)
 
-    def _forward_log_det_jacobian(self, y):
+    def _forward_log_det_jacobian(self, y, channel = 1):
         yd, yD = y[..., :self.d], y[..., self.d:]
-        Q = self._q(yd)
+        Q = self._q(yd, channel)
         ibins = tf.cast(tf.searchsorted(tf.cumsum(Q, axis=-1),
                                         yD[..., tf.newaxis], side='right'), dtype=tf.int32)
         ibins = tf.where(tf.equal(ibins, self.nbins *
@@ -232,11 +243,14 @@ class PiecewiseQuadratic(Piecewise):
         self.NNMat = self._build_model(2*self.nbins+1)
         self.trainable_variables = self.NNMat.trainable_variables
 
-    def _get_wv(self, xd):
+    def _get_wv(self, xd, channel):
         if self.hot:
             xd = self._one_hot(xd)
         elif self.blob:
             xd = tf.reshape(self._one_blob(xd), [-1, self.d*self.nbins])
+
+        if self.nchannels != 1:
+            xd = self._channel_encode(xd, channel)
 
         NNMat = self.NNMat(xd)
         W = tf.nn.softmax(NNMat[..., :self.nbins], axis=-1)
@@ -260,9 +274,9 @@ class PiecewiseQuadratic(Piecewise):
 
         return one_hot, one_hot_sum, one_hot_V
 
-    def _pdf(self, x):
+    def _pdf(self, x, channel):
         xd, xD = x[..., :self.d], x[..., self.d:]
-        W, V = self._get_wv(xd)
+        W, V = self._get_wv(xd, channel)
         WSum = tf.cumsum(W, axis=-1)
         one_hot, one_hot_sum, one_hot_V = self._find_bins(xD, WSum)
         alpha = (xD-tf.reduce_sum(WSum*one_hot_sum, axis=-1)) \
@@ -271,9 +285,9 @@ class PiecewiseQuadratic(Piecewise):
             + tf.reduce_sum(V*one_hot_V, axis=-1)
         return tf.concat([xd, result], axis=-1)
 
-    def _inverse(self, x):
+    def _inverse(self, x, channel = 1):
         xd, xD = x[..., :self.d], x[..., self.d:]
-        W, V = self._get_wv(xd)
+        W, V = self._get_wv(xd, channel)
         WSum = tf.cumsum(W, axis=-1)
         VSum = tf.cumsum((V[..., 1:]+V[..., :-1])*W/2.0, axis=-1)
         one_hot, one_hot_sum, one_hot_V = self._find_bins(xD, WSum)
@@ -285,9 +299,9 @@ class PiecewiseQuadratic(Piecewise):
             + tf.reduce_sum(VSum*one_hot_sum, axis=-1)
         return tf.concat([xd, yD], axis=-1)
 
-    def _forward(self, y):
+    def _forward(self, y, channel = 1):
         yd, yD = y[..., :self.d], y[..., self.d:]
-        W, V = self._get_wv(yd)
+        W, V = self._get_wv(yd, channel)
         WSum = tf.cumsum(W, axis=-1)
         VSum = tf.cumsum((V[..., 1:]+V[..., 0:-1])*W/2.0, axis=-1)
         one_hot, one_hot_sum, one_hot_V = self._find_bins(yD, VSum)
@@ -304,12 +318,12 @@ class PiecewiseQuadratic(Piecewise):
             tf.reduce_sum(WSum*one_hot_sum, axis=-1)
         return tf.concat([yd, xD], axis=-1)
 
-    def _inverse_log_det_jacobian(self, x):
-        return tf.reduce_sum(tf.log(self._pdf(x)[..., self.d:]), axis=-1)
+    def _inverse_log_det_jacobian(self, x, channel = 1):
+        return tf.reduce_sum(tf.log(self._pdf(x, channel)[..., self.d:]), axis=-1)
 
-    def _forward_log_det_jacobian(self, y):
+    def _forward_log_det_jacobian(self, y, channel = 1):
         yd, yD = y[..., :self.d], y[..., self.d:]
-        W, V = self._get_wv(yd)
+        W, V = self._get_wv(yd, channel)
         WSum = tf.cumsum(W, axis=1)
         VSum = tf.cumsum((V[..., 1:]+V[..., 0:-1])*W/2.0, axis=-1)
         one_hot, one_hot_sum, one_hot_V = self._find_bins(yD, VSum)
@@ -362,11 +376,14 @@ class PiecewiseQuadraticConst(PiecewiseQuadratic):
     def _w(self, xd):
         return tf.constant(1./self.nbins, shape=(xd.shape[0], self.D-self.d, self.nbins))
 
-    def _v(self, xd, W):
+    def _v(self, xd, W, channel):
         if self.hot:
             xd = self._one_hot(xd)
         elif self.blob:
             xd = tf.reshape(self._one_blob(xd), [-1, self.d*self.nbins])
+
+        if self.nchannels != 1:
+            xd = self._channel_encode(xd, channel)
 
         VMat = self.VMat(xd)
         VExp = tf.exp(VMat)
@@ -375,6 +392,6 @@ class PiecewiseQuadraticConst(PiecewiseQuadratic):
         VMat = tf.truediv(VExp, VSum)
         return VMat
 
-    def _get_wv(self, xd):
+    def _get_wv(self, xd, channel):
         W = self.W(xd)
-        return W, self.V(xd, W)
+        return W, self.V(xd, W, channel)

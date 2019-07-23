@@ -45,7 +45,7 @@ def ewma(data, window):
     Returns:
         int64: The EWMA for the last point in the data array
     """
-    if len(data) < window:
+    if len(data) <= window:
         return data[-1]
 
     weights = np.exp(np.linspace(-1., 0., window))
@@ -134,6 +134,7 @@ class Integrator():
         """
         self.func = func
         self.ndims = ndims
+        self.nchannels = kwargs.get('nchannels',1)
         self.mode = mode
         self.layers = layers
 
@@ -150,6 +151,7 @@ class Integrator():
         permute = np.hstack([arange[1:], arange[0]])
         kwargs['D'] = ndims
         kwargs['d'] = ndims//2
+        kwargs['name'] = 'PwL'
         if 'nbins' not in kwargs:
             kwargs['nbins'] = 25
         for i in range(ndims):
@@ -173,10 +175,15 @@ class Integrator():
         self.saver = tf.train.Saver()
 
     def _loss_fn(self, nsamples, alpha):
-        x = self.dist.sample(nsamples)
-        logq = self.dist.log_prob(x)
-        p = self.func(x)
-        q = self.dist.prob(x)
+        self.nsamples = nsamples
+        self.channel = tf.placeholder(tf.float32, shape=(nsamples,),name='channels')
+
+        bijector = {'bijector_kwargs' : {'PwL' : {'channel' : self.channel}}}
+
+        x = self.dist.sample(nsamples, **bijector)
+        logq = self.dist.log_prob(x, **bijector)
+        p = self.func(x, self.channel)
+        q = self.dist.prob(x, **bijector)
         xsec = p/q
         p = p/tf.reduce_mean(xsec)
         mean, var = tf.nn.moments(xsec, axes=[0])
@@ -245,12 +252,14 @@ class Integrator():
                     run_metadata = tf.RunMetadata()
                 else:
                     run_metadata = None
+                channel = np.random.randint(4,self.nchannels,(self.nsamples,))
                 (_, np_loss, np_integral,
                  np_var, xpts, ppts, qpts) = sess.run([self.opt_op, self.loss,
                                                        self.integral, self.var,
                                                        self.x, self.p, self.q],
                                                       options=options,
-                                                      run_metadata=run_metadata)
+                                                      run_metadata=run_metadata,
+                                                      feed_dict={self.channel : channel})
                 if profiler is not None:
                     profiler.add_step(epoch, run_metadata)
                 self.global_step += 1
@@ -350,9 +359,13 @@ class Integrator():
             acceptance (float): Optional return of the average acceptance rate
 
         """
-        x = self.dist.sample(nsamples)
-        q = self.dist.prob(x)
-        p = self.func(x)
+        channels = tf.convert_to_tensor(np.random.randint(4,self.nchannels,(nsamples,)))
+
+        bijector = {'bijector_kwargs' : {'PwL' : {'channel' : channels}}}
+
+        x = self.dist.sample(nsamples, **bijector)
+        p = self.func(x, channels)
+        q = self.dist.prob(x, **bijector)
         integral, var = tf.nn.moments(p/q, axes=[0])
         error = tf.sqrt(var/nsamples)
 
