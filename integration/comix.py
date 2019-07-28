@@ -14,17 +14,20 @@ class Comix:
     def __init__(self,flin,flout):
         f = open("Run.dat","w")
         f.write("(run){{\n SHERPA_LDADD ModelMain ToolsOrg ToolsPhys ToolsMath PDF Zfunctions\n\
-#  OUTPUT 15;\n\
-#  ME_SIGNAL_GENERATOR Comix;\n\
+  OUTPUT 15;\n\
+  ME_SIGNAL_GENERATOR Comix;\n\
   EVENTS 0; GENERATE_RESULT_DIRECTORY -1;\n\
-  BEAM_1 11 45.6; BEAM_2 -11 45.6;\n\
+  BEAM_1 11 250; BEAM_2 -11 250;\n\
   SCALES VAR{{Abs2(p[0]+p[1])}};\n\
   PDF_SET None;\n\
-  KFACTOR FASTJET[A:kt]{{min(MU_{3}2,1)}};\n\
+  WIDTH[24] = 0;\n\
+#  KFACTOR FASTJET[A:kt]{{min(MU_{3}2,1)}};\n\
 }}(run);\n(processes){{\n\
-  Process {0} -> {1};\n\
-  ME_Generator Amegic; \n\
-  Order (*,2);\n\
+#  Process {0} -> {1};\n\
+  Process 11 -11 -> 6[a] -6[b];\n\
+  Decay 6[a] -> 24 5; Decay -6[b] -> -24 -5;\n\
+#  ME_Generator Amegic; \n\
+#  Order (*,2);\n\
   End process;\n\
 }}(processes);\n\
 (selector){{\n\

@@ -102,25 +102,50 @@ class Propagator:
     def __init__(self,alpha = 0.5):
         self.alpha = alpha
 
-    def GeneratePoint(self,smin,smax,ran):
+    def GeneratePoint(self,smin,smax,ran,mass=0,width=0):
         #s = smin*(smax/smin)**ran
         #s = ran*(smax-smin) + smin
-        s = ((1-ran)*smin**(1-self.alpha) + ran*(smax**(1-self.alpha))) ** (1./(1-self.alpha))
-        logger.debug("MasslessPoint: ran = {0}, s_min = {1}, s_max = {2}, s = {3}".format(ran,smin,smax,s))
+        if mass == 0:
+            s = ((1-ran)*smin**(1-self.alpha) + ran*(smax**(1-self.alpha))) ** (1./(1-self.alpha))
+            logger.debug("MasslessPoint: ran = {0}, s_min = {1}, s_max = {2}, s = {3}".format(ran,smin,smax,s))
+        else:
+            mass2 = mass**2
+            mw = mass*width
+            ymax = np.arctan((smin-mass2)/mw)
+            ymin = np.arctan((smax-mass2)/mw)
+            s = mass2+mw*np.tan(ymin + ran*(ymax-ymin))
+            logger.debug("MassivePoint: ran = {0}, s_min = {1}, s_max = {2}, s = {3}".format(ran,smin,smax,s))
+
         return s
 
-    def GenerateWeight(self,smin,smax,p):
+    def GenerateWeight(self,smin,smax,p,mass=0,width=0):
         s = Mass2(p)
-        #I = np.log(smax/smin)
-        #I = smax-smin
-        if np.any(smax < 0):
-            print('smax = {}'.format(smax))
-        if np.any(smin < 0):
-            print('smin = {}'.format(smin))
-        I = (1./(1-self.alpha) )* (smax**(1-self.alpha)-smin**(1-self.alpha))
-        ran = np.log(s/smin)/I
-        #wgt = s*I/(2.*m.pi)
-        #wgt = I/(2*m.pi)
-        wgt = (s**self.alpha)*I/(2.*m.pi)
-        logger.debug("MasslessWeight: s_min = {0}, s_max = {1}, s = {2}, ran = {3}".format(smin,smax,s,ran))
+
+        if mass == 0:
+            #I = np.log(smax/smin)
+            #I = smax-smin
+            if np.any(smax < 0):
+                print('smax = {}'.format(smax))
+            if np.any(smin < 0):
+                print('smin = {}'.format(smin))
+            I = (1./(1-self.alpha) )* (smax**(1-self.alpha)-smin**(1-self.alpha))
+            ran = np.log(s/smin)/I
+            #wgt = s*I/(2.*m.pi)
+            #wgt = I/(2*m.pi)
+            wgt = (s**self.alpha)*I/(2.*m.pi)
+            logger.debug("MasslessWeight: s_min = {0}, s_max = {1}, s = {2}, ran = {3}".format(smin,smax,s,ran))
+
+        else:
+            mass2 = mass**2
+            mw = mass*width
+            ymax = np.arctan((smin-mass2)/mw)
+            ymin = np.arctan((smax-mass2)/mw)
+            y = np.arctan((s-mass2)/mw)
+            I = ymin - ymax
+            wgt = I/(2.*m.pi)
+            wgt /= (mw/((s-mass2)**2+mw**2))
+            ran = -(y-ymin)/I
+            logger.debug("MassiveWeight: s_min = {0}, s_max = {1}, s = {2}, ran = {3}".format(smin,smax,s,ran))
+
+
         return wgt

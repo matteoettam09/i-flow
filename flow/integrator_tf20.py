@@ -182,18 +182,26 @@ class Integrator():
 
     def _loss_fn(self, nsamples, alpha):
         self.nsamples = nsamples
-        channel = tf.convert_to_tensor(value=np.random.randint(4,self.nchannels,(nsamples,)))
 
-        bijector = {'bijector_kwargs' : {'PwL' : {'channel' : channel}}}
+        bijector = {}
+        channel = None
+        if self.nchannels != 1:
+            channel = tf.convert_to_tensor(value=np.random.randint(4,self.nchannels,(nsamples,)))
+
+            bijector = {'bijector_kwargs' : {'PwL' : {'channel' : channel}}}
 
         x = self.dist.sample(nsamples, **bijector)
         logq = self.dist.log_prob(x, **bijector)
-        p = self.func(x, channel)
+        p = self.func(x)
         q = self.dist.prob(x, **bijector)
         xsec = p/q
         p = tf.stop_gradient(p/tf.reduce_mean(input_tensor=xsec))
         mean, var = tf.nn.moments(x=xsec, axes=[0])
         acceptance = tf.reduce_mean(input_tensor=xsec)/tf.reduce_max(input_tensor=xsec)
+#        return (tf.reduce_mean(input_tensor=-tf.math.log(p)+logq), mean,
+#                var/nsamples, x, p, q)
+#        return (tf.reduce_mean(input_tensor=tf.abs(-tf.math.log(p)+logq)), mean,
+#                var/nsamples, x, p, q)
 #        return (1.0/acceptance**2, mean,
 #                var/nsamples, x, p, q)
 #        return (tf.reduce_mean(p/q*(tf.log(p)-logq))/acceptance**2, mean,
@@ -275,7 +283,7 @@ class Integrator():
                         np.sqrt(ewma(self.vars, 10)))
                     )
                     if plot:
-                        figure = corner.corner(xpts, labels=self.labels,
+                        figure = corner.corner(x, labels=self.labels,
                                                show_titles=True, title_kwargs={"fontsize": 12},
                                                range=self.ndims*[[0, 1]]
                                                )
@@ -359,12 +367,17 @@ class Integrator():
             acceptance (float): Optional return of the average acceptance rate
 
         """
-        channels = tf.convert_to_tensor(value=np.random.randint(4,self.nchannels,(nsamples,)))
+        bijector = {}
+        channels = None
 
-        bijector = {'bijector_kwargs' : {'PwL' : {'channel' : channels}}}
+        if self.nchannels != 1:
+            channels = tf.convert_to_tensor(value=np.random.randint(4,self.nchannels,(nsamples,)))
+
+            bijector = {'bijector_kwargs' : {'PwL' : {'channel' : channels}}}
+
 
         x = self.dist.sample(nsamples, **bijector)
-        p = self.func(x, channels)
+        p = self.func(x)
         q = self.dist.prob(x, **bijector)
         integral, var = tf.nn.moments(x=p/q, axes=[0])
         error = tf.sqrt(var/nsamples)

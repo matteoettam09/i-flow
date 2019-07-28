@@ -7,13 +7,16 @@ import logging
 logger = logging.getLogger('eejjj')
 
 hbarc2 = 0.3893e9
+mt = 173.21
+gt = 2
+mw = 80.385
 
 class eetojjj:
 
     def __init__(self,alphas,ecms=91.2):
         self.cutoff = 1e-2
         self.ecms = ecms
-        self.prop = Propagator()
+        self.prop = Propagator(0.01)
         self.decayIso = SChannelDecay()
         self.decayGluon = SChannelDecay(0.99)
         self.channels = {}
@@ -45,6 +48,7 @@ class eetojjj:
         self.weights[10] = self.WeightB3
         self.weights[11] = self.WeightB4
 
+        self.index = 0
 
     def PhaseSpace(self,channels,rans,pa,pb):
         logger.debug('channels = {}'.format(channels))
@@ -247,14 +251,14 @@ class eetojjj:
 
     def ChannelIso(self,rans,pa,pb):
         #        s12 = self.prop.GeneratePoint(1e-1,self.ecms**2,rans[:,2])
-        p1, p2 = self.decay.GeneratePoint(pa+pb,0.0,0.0,np.array([rans[:,0], rans[:,1]]).T)
+        p1, p2 = self.decayIso.GeneratePoint(pa+pb,mt**2,mt**2,np.array([rans[:,0], rans[:,1]]).T)
 
         return p1, p2
 
     def WeightIso(self,pa,pb,p1,p2):
-        return self.decay.GenerateWeight(pa+pb,0.0,0.0,p1,p2)
+        return self.decayIso.GenerateWeight(pa+pb,mt**2,mt**2,p1,p2)
 
-    def GeneratePoint2(self,rans):
+    def GeneratePointIso(self,rans):
         pa = Vector4(self.ecms/2*np.ones(np.shape(rans)[0]),
                 np.zeros(np.shape(rans)[0]),
                 np.zeros(np.shape(rans)[0]),
@@ -264,31 +268,106 @@ class eetojjj:
                 np.zeros(np.shape(rans)[0]),
                 -self.ecms/2*np.ones(np.shape(rans)[0]))
 
-        channels = np.random.randint(0,len(self.channels),(rans.shape[0]))
-        unique, counts = np.unique(channels, return_counts = True)
-        counts = np.cumsum(counts)
-        channels = dict(zip(unique, counts))
-
-#        p1, p2 = self.ChannelIso(rans,pa,pb)
-        p1 = []
-        p2 = []
-        position_old = 0
-        for channel, position in channels.items():
-            p1tmp, p2tmp = self.GenerateMomenta(channel,rans[position_old:position],
-                    pa[position_old:position],
-                    pb[position_old:position])
-            p1.append(p1tmp)
-            p2.append(p2tmp)
-            position_old = position
-
-        p1 = np.concatenate(p1)
-        p2 = np.concatenate(p2)
+        p1, p2 = self.ChannelIso(rans,pa,pb)
 
         wsum = self.WeightIso(pa,pb,p1,p2)
         lome = np.array(sherpa.process.CSMatrixElementVec(np.array([pa,pb,p1,p2])))
         dxs = lome*wsum*hbarc2/self.ecms**2/2.0
 
         return np.nan_to_num(dxs)
+
+
+    def ChannelTT(self, rans, pa, pb):
+        s13 = self.prop.GeneratePoint(self.cutoff,(self.ecms-self.cutoff)**2,rans[:,0],mass=mt,width=gt)
+        s24 = self.prop.GeneratePoint(self.cutoff,(self.ecms-np.sqrt(s13))**2,rans[:,1],mass=mt,width=gt)
+
+        plt.hist(np.sqrt(s13),color='red',bins=np.linspace(0,500,500),label='s13')
+        plt.hist(np.sqrt(s24),color='blue',bins=np.linspace(0,500,500),label='s24')
+        plt.yscale('log')
+        plt.legend()
+        plt.savefig('figs/invariant_{:04d}.pdf'.format(self.index))
+        plt.close()
+
+        p13, p24 = self.decayIso.GeneratePoint(pa+pb,s13,s24,np.array([rans[:,2], rans[:,3]]).T)
+        p1, p3 = self.decayIso.GeneratePoint(p13,mw**2,0.0,np.array([rans[:,4], rans[:,5]]).T)
+        p2, p4 = self.decayIso.GeneratePoint(p24,mw**2,0.0,np.array([rans[:,6], rans[:,7]]).T)
+
+        logger.debug('s13_mean = {}'.format(np.mean(s13)))
+        logger.debug('s24_mean = {}'.format(np.mean(s13)))
+
+        return p1, p2, p3, p4
+
+    def WeightTT(self, pa, pb, p1, p2, p3, p4):
+        p13 = p1+p3
+        p24 = p2+p4
+        ws13 = self.prop.GenerateWeight(self.cutoff,self.ecms**2,p13,mass=mt,width=gt)
+        ws24 = self.prop.GenerateWeight(self.cutoff,(self.ecms-Mass(p13))**2,p24,mass=mt,width=gt)
+        wp13_24 = self.decayIso.GenerateWeight(pa+pb,Mass2(p13),Mass2(p24),p13,p24)
+        wp1_3 = self.decayIso.GenerateWeight(p1+p3,mw**2,0.0,p1,p3)
+        wp2_4 = self.decayIso.GenerateWeight(p2+p4,mw**2,0.0,p2,p4)
+        logger.debug('p1W = {}, m1W = {}'.format(p1,Mass2(p1)))
+        logger.debug('p2W = {}, m2W = {}'.format(p2,Mass2(p2)))
+
+        plt.hist(ws13,color='red',label='ws13',bins=np.logspace(0,7,500))
+        plt.hist(ws24,color='blue',label='ws24',bins=np.logspace(0,7,500))
+        plt.yscale('log')
+        plt.xscale('log')
+        plt.legend()
+        plt.savefig('figs/prop_weights_{:04d}.pdf'.format(self.index))
+        plt.close()
+
+        plt.hist(ws24*ws13*wp13_24*wp2_4*wp1_3,bins=np.logspace(-1,7,500))
+        plt.yscale('log')
+        plt.xscale('log')
+        plt.savefig('figs/weights_{:04d}.pdf'.format(self.index))
+        plt.close()
+
+        return np.maximum(ws24*ws13*wp13_24*wp2_4*wp1_3,1e-7)
+        
+
+    def GeneratePointTT(self, rans):
+        pa = Vector4(self.ecms/2*np.ones(np.shape(rans)[0]),
+                np.zeros(np.shape(rans)[0]),
+                np.zeros(np.shape(rans)[0]),
+                self.ecms/2*np.ones(np.shape(rans)[0]))
+        pb = Vector4(self.ecms/2*np.ones(np.shape(rans)[0]),
+                np.zeros(np.shape(rans)[0]),
+                np.zeros(np.shape(rans)[0]),
+                -self.ecms/2*np.ones(np.shape(rans)[0]))
+
+        p1,p2,p3,p4 = self.ChannelTT(rans,pa,pb)
+
+        logger.debug('p1 = {}, m1 = {}'.format(p1,Mass2(p1)))
+        logger.debug('p2 = {}, m2 = {}'.format(p2,Mass2(p2)))
+        logger.debug('p3 = {}, m3 = {}'.format(p3,Mass2(p3)))
+        logger.debug('p4 = {}, m4 = {}'.format(p4,Mass2(p4)))
+
+        wsum = self.WeightTT(pa, pb, p1, p2, p3, p4)
+
+        lome = np.array(sherpa.process.CSMatrixElementVec(np.array([pa,pb,p1,p2,p3,p4])))
+
+        logger.debug('wsum = {}'.format(wsum))
+        logger.debug('lome = {}'.format(lome))
+        logger.debug('ecm = {}'.format(self.ecms))
+        dxs = lome*wsum*hbarc2/self.ecms**2/2.0
+
+        plt.hist(lome,bins=np.logspace(-10,5,500))
+        plt.yscale('log')
+        plt.xscale('log')
+        plt.savefig('figs/ME_{:04d}.pdf'.format(self.index))
+        plt.close()
+
+        plt.hist(dxs,bins=np.logspace(-6,10,500))
+        plt.yscale('log')
+        plt.xscale('log')
+        plt.savefig('figs/dsig_{:04d}.pdf'.format(self.index))
+        plt.close()
+
+        self.index += 1
+
+        print(np.mean(dxs))
+
+        return np.maximum(np.nan_to_num(dxs),1e-7)
 
     def GeneratePoint(self,rans,channel):
         pa = Vector4(self.ecms/2*np.ones(np.shape(rans)[0]),
@@ -406,22 +485,23 @@ if __name__ == '__main__':
 #        logging.getLogger('channels').setLevel(logging.DEBUG)
 
     alphas = AlphaS(91.1876,0.118)
-    hardxs = eetojjj(alphas)
+    hardxs = eetojjj(alphas,500)
     in_part = [11,-11]
-    out_part = [1,-1,21,21]
+#    out_part = [1,-1,21,21]
+    out_part = [5,-5,24,-24]
 #    out_part = [1,-1]
     npart = len(out_part)
     ndims = 3*npart - 4
     sherpa = Comix(in_part,out_part)
 
 #    x = np.random.random((100000,ndims))
-#    p = hardxs.GeneratePoint2(x)
+#    p = hardxs.GeneratePointIso(x)
 #
 #    figure = corner.corner(x, labels=[r'$x_{}$'.format(i) for i in range(ndims)], weights=p, show_titles=True, title_kwargs={"fontsize": 12})
 #    plt.savefig('matrix.pdf')
 
 #    def func2(x):
-#        return tf.stop_gradient(tf.py_function(hardxs.GeneratePoint2,[x],tf.float32))
+#        return tf.stop_gradient(tf.py_function(hardxs.GeneratePointIso,[x],tf.float32))
 #
 #    integrator = integrator.Integrator(func2, ndims, mode='quadratic')
 #    integrator.make_optimizer(nsamples=1000, learning_rate=1e-3)
@@ -458,34 +538,34 @@ if __name__ == '__main__':
 #
 #    raise
 
-    def func(x, channel):
-        return tf.stop_gradient(tf.py_function(hardxs.GeneratePoint,[x,channel],tf.float32))
+    def func(x):
+        return tf.stop_gradient(tf.py_function(hardxs.GeneratePointTT,[x],tf.float32))
 
 #    nevents = 1000000
 #    x = np.random.random((nevents,ndims))
-#    p = hardxs.GeneratePoint(x,np.random.randint(0,12,(nevents,)))
+#    p = hardxs.GeneratePointTT(x)
 #
 #    figure = corner.corner(x, labels=[r'$x_{}$'.format(i) for i in range(ndims)], weights=p, show_titles=True, title_kwargs={"fontsize": 12})
 #    plt.savefig('matrix.pdf')
 #    plt.close()
 
-    nint = 100000
+    nint = 10000
 
-    integrator = integrator.Integrator(func, ndims, nbins=10, nchannels=12, mode='linear',name='eejjjj', blob=False, unet=False, learning_rate=5e-4)
+    integrator = integrator.Integrator(func, ndims, nbins=10, nchannels=1, mode='linear',name='eejjjj', blob=True, unet=False, learning_rate=5e-4)
 
-    print(integrator.integrate(nint,
-          acceptance=acceptance,
-          fname='untrained',
-          plot=True,
-          min=1e-9,
-          max=1e3,
-          nbins=300))
+#    print(integrator.integrate(nint,
+#          acceptance=acceptance,
+#          fname='untrained',
+#          plot=True,
+#          min=1e-9,
+#          max=1e3,
+#          nbins=300))
 
-    nsamples = [1000]*100
-    nsamples.extend([2000]*100)
-    nsamples.extend([4000]*100)
-    nsamples.extend([8000]*100)
-    nsamples.extend([16000]*500)
+    nsamples = [10]
+#    nsamples.extend([2000]*100)
+#    nsamples.extend([4000]*100)
+#    nsamples.extend([8000]*100)
+#    nsamples.extend([16000]*500)
     integrator.optimize(nsamples=nsamples,printout=10,plot=plot)
 #    integrator.load(sess)
     print(integrator.integrate(nint,
