@@ -1,7 +1,7 @@
 import numpy as np
 import piecewise
+import piecewiseUnet_one_hot
 import tensorflow_probability as tfp
-import time
 tfd = tfp.distributions
 tfb = tfp.bijectors
 import matplotlib.pyplot as plt
@@ -25,6 +25,9 @@ factory = BijectorFactory()
 factory.register_bijector('linear', piecewise.PiecewiseLinear)
 factory.register_bijector('quadratic', piecewise.PiecewiseQuadratic)
 factory.register_bijector('quadratic_const', piecewise.PiecewiseQuadraticConst)
+factory.register_bijector('linear_unet', piecewiseUnet_one_hot.PiecewiseLinearUNet)
+factory.register_bijector('quadratic_unet', piecewiseUnet_one_hot.PiecewiseQuadraticUNet)
+factory.register_bijector('quadratic_const_unet', piecewiseUnet_one_hot.PiecewiseQuadraticConstUNet)
 
 class Integrator():
     def __init__(self, func, ndims, layers=4, mode='quadratic', nbins=25):
@@ -42,16 +45,9 @@ class Integrator():
         self.bijectors = []
 
         arange = np.arange(ndims)
-        permute = np.hstack([arange[ndims//2:],arange[:ndims//2]])
-        if ndims % 2 != 0:
-            permute_odd = np.hstack([arange[ndims//2+1:],arange[:ndims//2+1]])
-            odd = True
-        else:
-            odd = False
-
-        for i in range(layers):
-            if not odd:
-                self.bijectors.append(factory.create(
+        permute = np.hstack([arange[1:],arange[0]])
+        for i in range(ndims):
+            self.bijectors.append(factory.create(
                     mode,**{
                         'D': ndims,
                         'd': ndims//2,
@@ -59,31 +55,48 @@ class Integrator():
                         'layer_id': i,
                         }
                     ))
-                self.bijectors.append(tfb.Permute(permutation=permute))
-            else:
-                if i % 2 == 0:
-                    self.bijectors.append(factory.create(
-                        mode,**{
-                            'D': ndims,
-                            'd': ndims//2+1,
-                            'nbins': nbins,
-                            'layer_id': i,
-                            }
-                        ))
-                    self.bijectors.append(tfb.Permute(permutation=permute))
-                else:
-                    self.bijectors.append(factory.create(
-                        mode,**{
-                            'D': ndims,
-                            'd': ndims//2,
-                            'nbins': nbins,
-                            'layer_id': i,
-                            }
-                        ))
-                    self.bijectors.append(tfb.Permute(permutation=permute_odd))
+            self.bijectors.append(tfb.Permute(permutation=permute))
+#        if ndims % 2 != 0:
+#            permute_odd = np.hstack([arange[ndims//2+1:],arange[:ndims//2+1]])
+#            odd = True
+#        else:
+#            odd = False
+#
+#        for i in range(layers):
+#            if not odd:
+#                self.bijectors.append(factory.create(
+#                    mode,**{
+#                        'D': ndims,
+#                        'd': ndims//2,
+#                        'nbins': nbins,
+#                        'layer_id': i,
+#                        }
+#                    ))
+#                self.bijectors.append(tfb.Permute(permutation=permute))
+#            else:
+#                if i % 2 == 0:
+#                    self.bijectors.append(factory.create(
+#                        mode,**{
+#                            'D': ndims,
+#                            'd': ndims//2+1,
+#                            'nbins': nbins,
+#                            'layer_id': i,
+#                            }
+#                        ))
+#                    self.bijectors.append(tfb.Permute(permutation=permute))
+#                else:
+#                    self.bijectors.append(factory.create(
+#                        mode,**{
+#                            'D': ndims,
+#                            'd': ndims//2,
+#                            'nbins': nbins,
+#                            'layer_id': i,
+#                            }
+#                        ))
+#                    self.bijectors.append(tfb.Permute(permutation=permute_odd))
 
         # Remove the last permute layer
-        self.bijectors = tfb.Chain(list(reversed(self.bijectors[:-1]))) 
+        self.bijectors = tfb.Chain(list(reversed(self.bijectors))) 
 
         self.base_dist = tfd.Uniform(low=ndims*[0.],high=ndims*[1.])
         self.base_dist = tfd.Independent(distribution=self.base_dist,
@@ -98,41 +111,41 @@ class Integrator():
     def _loss_fn(self,nsamples):
         x = self.dist.sample(nsamples)
         logq = self.dist.log_prob(x)
-        p = tf.stop_gradient(tf.py_function(self.func,[x],tf.float32))
+        p = self.func(x)
         q = self.dist.prob(x)
         xsec = p/q
         p = p/tf.reduce_mean(xsec)
         mean, var = tf.nn.moments(xsec,axes=[0])
-        return tf.reduce_mean(p/q*(tf.log(p)-logq)), mean, var/nsamples, x, q
+        return tf.reduce_mean(p/q*(tf.log(p)-logq)), mean, var/nsamples, x, p, q
 
     def make_optimizer(self,learning_rate=1e-4,nsamples=500):
-        self.loss, self.integral, self.var, self.x, self.q = self._loss_fn(nsamples) 
+        self.loss, self.integral, self.var, self.x, self.p, self.q = self._loss_fn(nsamples) 
         optimizer = tf.train.AdamOptimizer(learning_rate)
         grads = optimizer.compute_gradients(self.loss)
         self.opt_op = optimizer.apply_gradients(grads)
 
     def optimize(self,sess,epochs=1000,learning_rate=1e-4,
                  nsamples=500,stopping=1e-4,printout=100):
-        current = time.time()
         for epoch in range(epochs):
-            _, np_loss, np_integral, np_var, xpts, qpts = sess.run([self.opt_op, self.loss, self.integral, self.var,self.x,self.q])
+            _, np_loss, np_integral, np_var, xpts, ppts, qpts = sess.run([self.opt_op, self.loss, self.integral, self.var, self.x, self.p, self.q])
             self.global_step += 1
             self.losses.append(np_loss)
             self.integrals.append(np_integral)
             self.vars.append(np_var)
             if epoch % printout == 0:
-                last = current
-                current = time.time()
-                print("Epoch %4d: loss = %e, average integral = %e, average variance = %e, time = %e"   
-                        %(epoch, np_loss, np.mean(self.integrals), np.mean(self.vars),current-last)) 
-                figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], weights = qpts, show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
+                print("Epoch %4d: loss = %e, average integral = %e, average variance = %e"   
+                        %(epoch, np_loss, np.mean(self.integrals), np.mean(self.vars))) 
+                figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
                 plt.savefig('fig_{:04d}.pdf'.format(epoch))
                 plt.close()
-            if np.sqrt(np_var)/np_integral < stopping:
-                break
+#            if np.sqrt(np_var)/np_integral < stopping:
+#                break
 
         print("Epoch %4d: loss = %e, average integral = %e, average variance = %e"   
                 %(epoch, np_loss, np.mean(self.integrals), np.mean(self.vars))) 
+        figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
+        plt.savefig('fig_{:04d}.pdf'.format(epoch))
+        plt.close()
 
     def _plot(self,axis,labelsize=17,titlesize=20):
         axis.set_xlabel('epoch',fontsize=titlesize)
@@ -166,22 +179,20 @@ class Integrator():
         integral, var = tf.nn.moments(p/q,axes=[0])
         error = tf.sqrt(var/nsamples)
 
-        return sess.run([integral, error])
+        np_int, np_error, xpts, qpts = sess.run([integral,error,x,q])
+        figure = corner.corner(xpts, labels=[r'$x_1$',r'$x_2$',r'$x_3$',r'$x_4$',r'$x_5$'], weights = qpts, show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
+        plt.savefig('xsec_final.pdf')
+        plt.close()
+
+        return np_int, np_error
         
 
 if __name__ == '__main__':
     import tensorflow as tf
-    from tensorflow.python.client import timeline
     def normalChristina(x):
         return 0.8* tf.exp((-0.5*((x[:,0]-0.5)* (50 *(x[:,0]-0.5) -  15* (x[:,1]-0.5)) + (-15*(x[:,0]-0.5) + 5*(x[:,1]-0.5))* (x[:,1]-0.5)))) + x[:,2]
 
-    def step(x,x0,k=50):
-        return 0.5*(1+tf.tanh(k*(x0-x)))
-
-    def dsigmaTrain(x):
-        return (x[:,0]**2+x[:,1]**2)/((1-x[:,0])*(1-x[:,1]))*step(x[:,0],0.9)*step(x[:,1],0.9)   
-
-    integrator = Integrator(normalChristina, 3, mode='linear')
+    integrator = Integrator(normalChristina, 3, mode='quadratic_const')
     integrator.make_optimizer(nsamples=1000)
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())

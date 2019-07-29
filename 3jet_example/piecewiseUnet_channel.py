@@ -5,11 +5,21 @@ tfd = tfp.distributions
 tfb = tfp.bijectors
 from tensorflow.keras import layers, models
 
+class Permute(tfb.Permute):
+	def __init__(self,*args,**kwargs):
+		super(Permute,self).__init__(*args,**kwargs)
+		
+	def _forward(self,x,**kwargs):
+		return super(Permute,self)._forward(x)
+		
+	def _inverse(self,x,**kwargs):
+		return super(Permute,self)._inverse(x)
+
 class PiecewiseLinear(tfb.Bijector):
     """
     Piecewise Linear: based on 1808.03856
     """
-    def __init__(self, D, d, nbins, layer_id=0, validate_args=False, name="PiecewiseLinear"):
+    def __init__(self, D, d, nbins, nchannels=0, layer_id=0, validate_args=False, name="PiecewiseLinear"):
         """
         Args:
             D: number of dimensions
@@ -21,37 +31,88 @@ class PiecewiseLinear(tfb.Bijector):
         self.D, self.d = D, d
         self.id = layer_id
         self.nbins = nbins
+        self.nchannels = nchannels
         self.width = 1.0/self.nbins
         self.range = tf.cast(tf.range(self.d),dtype=tf.int32)
-        self.QMat = self.buildQ(self.d, self.nbins)
+        self.QMat = self.buildQ(self.d, self.nbins, self.nchannels)
         self.trainable_variables = self.QMat.trainable_variables
 
-    def buildQ(self, d, nbins):
-        inval = layers.Input(shape=(d,))
-        h1 = layers.Dense(16,activation='relu')(inval)
-        h2 = layers.Dense(16,activation='relu')(h1)
-        out = layers.Dense((self.D-d)*nbins)(h2)
+    def buildQ(self, d, nbins, nchannels=0):
+#        inval = layers.Input(shape=((d*nbins)+nchannels,))
+        inval = layers.Input(shape=(d*nbins*nchannels,))
+        
+        h1 = layers.Dense(256,activation='relu')(inval)
+        h2 = layers.Dense(128,activation='relu')(h1)
+        h3 = layers.Dense(64,activation='relu')(h2)
+        h4 = layers.Dense(32,activation='relu')(h3)
+        h5 = layers.Dense(32,activation='relu')(h4)
+        h5 = layers.concatenate([h5,h3], axis=-1)
+        h6 = layers.Dense(64,activation='relu')(h5)
+        h6 = layers.concatenate([h6,h2], axis=-1)
+        h7 = layers.Dense(128,activation='relu')(h6)
+        h7 = layers.concatenate([h7,h1], axis=-1)
+        h8 = layers.Dense(256,activation='relu')(h7)        
+        out = layers.Dense((self.D-d)*nbins)(h8)
+        
+        #h1 = layers.Dense(256,activation='relu')(inval)
+        #h2 = layers.Dense(256,activation='relu')(h1)
+        #h3 = layers.Dense(256,activation='relu')(h2)
+        #h4 = layers.Dense(256,activation='relu')(h3)
+        #h5 = layers.Dense(256,activation='relu')(h4)
+        #h6 = layers.Dense(256,activation='relu')(h5)
+        #h7 = layers.Dense(256,activation='relu')(h6)
+        #h8 = layers.Dense(256,activation='relu')(h7)
+        #out = layers.Dense((self.D-d)*nbins)(h8)
+        
         out = layers.Reshape(((self.D-d),nbins))(out)
         model = models.Model(inval,out)
         model.summary()
         return model
+    
+    def one_blob(self, xd):
+        y = tf.tile(((0.5*self.width) + tf.range(0.,1.,delta = self.width)),[tf.size(xd)]) 
+        y = tf.reshape(y,(-1,self.d,self.nbins))
+        res = tf.exp(((-self.nbins*self.nbins)/2.)*(y-xd[...,tf.newaxis])**2)
+        return res
+        
+    def Q(self, xd, channel):
+        ## one hot encoding:
+        #ibins = tf.cast(tf.floor(xd*self.nbins),dtype=tf.int32)
+        #ibins = tf.where(tf.equal(ibins,self.nbins*tf.ones_like(ibins)),ibins-1,ibins)
+        #one_hot = tf.one_hot(ibins,depth=self.nbins, axis=-1)
+        #one_hot = tf.reshape(one_hot,[-1,self.d*self.nbins])
+        #QMat = tf.nn.softmax(self.QMat(one_hot),axis=-1)
+        #channel=channel*tf.ones((len(xd)))
+        channel_hot = tf.one_hot(tf.cast(channel,dtype=tf.int32),depth=self.nchannels, axis=-1)
+        ## one blob encoding:
+        One_blob = tf.reshape(self.one_blob(xd),[-1,self.d*self.nbins])
+        #QMat = tf.nn.softmax(self.QMat(One_blob),axis=-1)
 
-    def Q(self, xd):
-        QMat = tf.nn.softmax(self.QMat(xd),axis=-1)
+        # one-hot of channel:
+        #QMat = tf.nn.softmax(self.QMat(tf.concat([One_blob,channel_hot],axis=-1)),axis=-1)
+        # one-channel encoding (TM)
+        channel_blob = channel_hot[...,None] * One_blob[:,None]
+        channel_blob = tf.reshape(channel_blob,(-1,self.d*self.nbins*self.nchannels))
+        QMat = tf.nn.softmax(self.QMat(channel_blob),axis=-1)
+        
+        #QMat = tf.nn.softmax(self.QMat(xd),axis=-1)
+        
         return QMat
 
-    def pdf(self,x):
+    def pdf(self,x,channel):
+#        xd, xD, channel = x[..., :self.d], x[..., self.d:-1], x[...,-1]
         xd, xD = x[..., :self.d], x[..., self.d:]
-        Q = self.Q(xd)
+        Q = self.Q(xd,channel)
         ibins = tf.cast(tf.floor(xD*self.nbins),dtype=tf.int32)
         ibins = tf.where(tf.equal(ibins,self.nbins*tf.ones_like(ibins)),ibins-1,ibins)
         one_hot = tf.one_hot(ibins,depth=self.nbins)
         return tf.concat([tf.ones_like(xd), tf.reduce_sum(Q*one_hot,axis=-1)/self.width], axis=-1)
-
-    def _inverse(self, x): #forward
+        
+        
+    def _inverse(self, x, channel=None): #forward
         "Calculate forward coupling layer"
         xd, xD = x[..., :self.d], x[..., self.d:]
-        Q = self.Q(xd)
+        Q = self.Q(xd,channel)
         ibins = tf.cast(tf.floor(xD*self.nbins),dtype=tf.int32)
         ibins = tf.where(tf.equal(ibins,self.nbins*tf.ones_like(ibins)),ibins-1,ibins)
         one_hot = tf.one_hot(ibins,depth=self.nbins)
@@ -61,10 +122,10 @@ class PiecewiseLinear(tfb.Bijector):
            + tf.reduce_sum(tf.cumsum(Q,axis=-1)*one_hot2,axis=-1)
         return tf.concat([xd, yD], axis=-1)
 
-    def _forward(self, y): #inverse
+    def _forward(self, y, channel=None): #inverse
         "Calculate inverse coupling layer"
         yd, yD = y[..., :self.d], y[..., self.d:]
-        Q = self.Q(yd)
+        Q = self.Q(yd,channel)
         ibins = tf.cast(tf.searchsorted(tf.cumsum(Q,axis=-1),yD[...,tf.newaxis],side='right'),dtype=tf.int32)
         ibins = tf.where(tf.equal(ibins,self.nbins*tf.ones_like(ibins)),ibins-1,ibins)
         ibins = tf.reshape(ibins,[tf.shape(yD)[0],self.D-self.d])
@@ -74,16 +135,17 @@ class PiecewiseLinear(tfb.Bijector):
                 *tf.reciprocal(tf.reduce_sum(Q*one_hot,axis=-1)) \
                 +tf.cast(ibins,dtype=tf.float32))*self.width
         return tf.concat([yd, xD], axis=-1)
+#        return tf.concat([yd, xD, channel[...,tf.newaxis]], axis=-1)
 
-    def _inverse_log_det_jacobian(self, x): # forward
+    def _inverse_log_det_jacobian(self, x, channel): #forward
         "Calculate log determinant of Coupling Layer"
         #return -self._inverse_log_det_jacobian(self._forward(x))
-        return tf.reduce_sum(tf.log(self.pdf(x)[...,self.d:]),axis=-1)
+        return tf.reduce_sum(tf.log(self.pdf(x,channel)[...,self.d:]),axis=-1)
 
-    def _forward_log_det_jacobian(self, y): # inverse
+    def _forward_log_det_jacobian(self, y,channel): #inverse
         "Calculate log determinant of Coupling Layer"
         yd, yD = y[..., :self.d], y[..., self.d:]
-        Q = self.Q(yd)
+        Q = self.Q(yd, channel)
         ibins = tf.cast(tf.searchsorted(tf.cumsum(Q,axis=-1),yD[...,tf.newaxis],side='right'),dtype=tf.int32)
         ibins = tf.where(tf.equal(ibins,self.nbins*tf.ones_like(ibins)),ibins-1,ibins)
         ibins = tf.reshape(ibins,[tf.shape(yD)[0],self.D-self.d])
@@ -146,17 +208,65 @@ class PiecewiseQuadratic(tfb.Bijector):
 #        return VMat
 
     def buildNN(self):
-        inval = layers.Input(shape=(self.d,))
-        h1 = layers.Dense(64,activation='relu')(inval)
+        inval = layers.Input(shape=(self.d*self.nbins,))
+        #
+        #h1 = layers.Dense(256,activation='relu')(inval)
+        #h2 = layers.Dense(128,activation='relu')(h1)
+        #h3 = layers.Dense(64,activation='relu')(h2)
+        #h4 = layers.Dense(32,activation='relu')(h3)
+        #h5 = layers.Dense(32,activation='relu')(h4)
+        #h5 = layers.concatenate([h5,h3], axis=-1)
+        #h6 = layers.Dense(64,activation='relu')(h5)
+        #h6 = layers.concatenate([h6,h2], axis=-1)
+        #h7 = layers.Dense(128,activation='relu')(h6)
+        #h7 = layers.concatenate([h7,h1], axis=-1)
+        #h8 = layers.Dense(256,activation='relu')(h7)        
+        #out = layers.Dense((self.D-self.d)*(2*self.nbins+1),activation='relu')(h8)
+        
+        h1 = layers.Dense(128,activation='relu')(inval)
         h2 = layers.Dense(64,activation='relu')(h1)
-        out = layers.Dense((self.D-self.d)*(2*self.nbins+1),activation='relu')(h2)
+        h3 = layers.Dense(32,activation='relu')(h2)
+        h4 = layers.Dense(32,activation='relu')(h3)
+        h4 = layers.concatenate([h4,h2], axis=-1)
+        h5 = layers.Dense(64,activation='relu')(h4)
+        h5 = layers.concatenate([h5,h1], axis=-1)
+        h6 = layers.Dense(128,activation='relu')(h5)
+        out = layers.Dense((self.D-self.d)*(2*self.nbins+1),activation='relu')(h6)
+        #
+        # flat:
+        #h1 = layers.Dense(128,activation='relu')(inval)
+        #h2 = layers.Dense(128,activation='relu')(h1)
+        #h3 = layers.Dense(128,activation='relu')(h2)
+        #h4 = layers.Dense(128,activation='relu')(h3)
+        #h5 = layers.Dense(128,activation='relu')(h4)
+        #h6 = layers.Dense(128,activation='relu')(h5)
+        #out = layers.Dense((self.D-self.d)*(2*self.nbins+1),activation='relu')(h6)
+        
         out = layers.Reshape(((self.D-self.d),2*self.nbins+1))(out)
         model = models.Model(inval,out)
         model.summary()
         return model
 
+    def one_blob(self, xd):
+        y = tf.tile(((0.5/self.nbins) + tf.range(0.,1.,delta = 1./self.nbins)),[tf.size(xd)]) 
+        y = tf.reshape(y,(-1,self.d,self.nbins))
+        res = tf.exp(((-self.nbins*self.nbins)/2.)*(y-xd[...,tf.newaxis])**2)
+        return res    
+    
     def GetWV(self, xd):
-        NNMat = self.NNMat(xd)
+        ## one hot encoding:
+        #ibins = tf.cast(tf.floor(xd*self.nbins),dtype=tf.int32)
+        #ibins = tf.where(tf.equal(ibins,self.nbins*tf.ones_like(ibins)),ibins-1,ibins)
+        #one_hot = tf.one_hot(ibins,depth=self.nbins, axis=-1)
+        #one_hot = tf.reshape(one_hot,[-1,self.d*self.nbins])
+        #NNMat = self.NNMat(one_hot)
+        
+        ## one blob encoding:
+        One_blob = tf.reshape(self.one_blob(xd),[-1,self.d*self.nbins])
+        NNMat = self.NNMat(One_blob)
+
+        #NNMat = self.NNMat(xd)
+        
         W = tf.nn.softmax(NNMat[...,:self.nbins],axis=-1)
         W = tf.where(tf.less(W,1e-6*tf.ones_like(W)),1e-6*tf.ones_like(W),W)
         V = NNMat[...,self.nbins:]
@@ -186,7 +296,7 @@ class PiecewiseQuadratic(tfb.Bijector):
                 +tf.reduce_sum(V*one_hot_V,axis=-1)
         return tf.concat([xd, result], axis=-1) 
 
-    def _forward(self, x): # forward
+    def _inverse(self, x): #forward
         "Calculate forward coupling layer"
         xd, xD = x[..., :self.d], x[..., self.d:]
         W, V = self.GetWV(xd)
@@ -201,7 +311,7 @@ class PiecewiseQuadratic(tfb.Bijector):
                 + tf.reduce_sum(VSum*one_hot_sum,axis=-1)
         return tf.concat([xd, yD], axis=-1)
 
-    def _inverse(self, y): # inverse
+    def _forward(self, y): #inverse
         "Calculate inverse coupling layer"
         yd, yD = y[..., :self.d], y[..., self.d:]
         W, V = self.GetWV(yd)
@@ -220,11 +330,11 @@ class PiecewiseQuadratic(tfb.Bijector):
 #        xD = tf.where(tf.is_nan(xD), tf.ones_like(xD), xD)
         return tf.concat([yd, xD], axis=-1)
 
-    def _forward_log_det_jacobian(self, x): # forward
+    def _inverse_log_det_jacobian(self, x): #forward
         "Calculate log determinant of Coupling Layer"
         return tf.reduce_sum(tf.log(self.pdf(x)[...,self.d:]),axis=-1)
 
-    def _inverse_log_det_jacobian(self, y): # inverse
+    def _forward_log_det_jacobian(self, y): #inverse
         "Calculate log determinant of Coupling Layer"
         yd, yD = y[..., :self.d], y[..., self.d:]
         W, V = self.GetWV(yd)
@@ -284,22 +394,46 @@ class PiecewiseQuadraticConst(tfb.Bijector):
         return model
 
     def buildV(self, d, nbins):
-        inval = layers.Input(shape=(d,))
-        h1 = layers.Dense(16,activation='relu')(inval)
-        h2 = layers.Dense(16,activation='relu')(h1)
-        out = layers.Dense((self.D-d)*(nbins+1),activation='relu')(h2)
+        inval = layers.Input(shape=(d*self.nbins*10,))
+        h1 = layers.Dense(128,activation='relu')(inval)
+        h2 = layers.Dense(64,activation='relu')(h1)
+        h3 = layers.Dense(32,activation='relu')(h2)
+        h4 = layers.Dense(32,activation='relu')(h3)
+        h4 = layers.concatenate([h4,h2], axis=-1)
+        h5 = layers.Dense(64,activation='relu')(h4)
+        h5 = layers.concatenate([h5,h1], axis=-1)
+        h6 = layers.Dense(128,activation='relu')(h5)
+        out = layers.Dense((self.D-d)*(nbins+1),activation='relu')(h6)
         out = layers.Reshape(((self.D-d),nbins+1))(out)
         model = models.Model(inval,out)
         model.summary()
         return model
-
+    
+    def one_blob(self, xd):
+        y = tf.tile(((0.05/self.nbins) + tf.range(0.,1.,delta = .1/self.nbins)),[tf.size(xd)]) 
+        y = tf.reshape(y,(-1,self.d,self.nbins*10))
+        res = tf.exp(((-self.nbins*self.nbins*100)/2.)*(y-xd[...,tf.newaxis])**2)
+        return res    
+      
     def W(self, xd):
         #WMat = tf.nn.softmax(self.WMat(xd),axis=-1)
         #return WMat
         return tf.constant(1./self.nbins,shape=(np.shape(xd)[0],self.D-self.d,self.nbins))
 
     def V(self, xd, W):
-        VMat = self.VMat(xd)
+        ## one hot encoding:
+        #ibins = tf.cast(tf.floor(xd*self.nbins),dtype=tf.int32)
+        #ibins = tf.where(tf.equal(ibins,self.nbins*tf.ones_like(ibins)),ibins-1,ibins)
+        #one_hot = tf.one_hot(ibins,depth=self.nbins, axis=-1)
+        #one_hot = tf.reshape(one_hot,[-1,self.d*self.nbins])
+        #VMat = self.VMat(one_hot)
+        
+        ## one blob encoding:
+        One_blob = tf.reshape(self.one_blob(xd),[-1,self.d*self.nbins*10])
+        VMat = self.VMat(One_blob)
+
+        #VMat = self.VMat(xd)
+
         VExp = tf.exp(VMat)
         VSum = tf.reduce_sum((VExp[...,0:self.nbins]+VExp[...,1:self.nbins+1])*W[...,:self.nbins]/2,axis=-1,keepdims=True)
         VMat = tf.truediv(VExp,VSum)
@@ -347,7 +481,7 @@ class PiecewiseQuadraticConst(tfb.Bijector):
                 +tf.reduce_sum(V*one_hot_V,axis=-1)
         return tf.concat([xd, result], axis=-1) 
 
-    def _forward(self, x): # forward
+    def _inverse(self, x): #forward
         "Calculate forward coupling layer"
         xd, xD = x[..., :self.d], x[..., self.d:]
 #        W, V = self.GetWV(xd)
@@ -365,7 +499,7 @@ class PiecewiseQuadraticConst(tfb.Bijector):
                 + tf.reduce_sum(VSum*one_hot_sum,axis=-1)
         return tf.concat([xd, yD], axis=-1)
 
-    def _inverse(self, y): # inverse
+    def _forward(self, y): #inverse
         "Calculate inverse coupling layer"
         yd, yD = y[..., :self.d], y[..., self.d:]
 #        W, V = self.GetWV(yd)
@@ -387,11 +521,11 @@ class PiecewiseQuadraticConst(tfb.Bijector):
 #        xD = tf.where(tf.is_nan(xD), tf.ones_like(xD), xD)
         return tf.concat([yd, xD], axis=-1)
 
-    def _forward_log_det_jacobian(self, x): # forward
+    def _inverse_log_det_jacobian(self, x): #forward
         "Calculate log determinant of Coupling Layer"
         return tf.reduce_sum(tf.log(self.pdf(x)[...,self.d:]),axis=-1)
 
-    def _inverse_log_det_jacobian(self, y): # inverse
+    def _forward_log_det_jacobian(self, y): #inverse
         "Calculate log determinant of Coupling Layer"
         yd, yD = y[..., :self.d], y[..., self.d:]
 #        W, V = self.GetWV(yd)

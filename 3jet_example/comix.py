@@ -1,7 +1,7 @@
 
 from mpi4py import MPI
 import sys, os
-sys.path.append('/home/isaacson/Programs/lib/python3.7/site-packages')
+sys.path.append('/home/claudius/Dropbox/Projects/MachineLearning/sherpa/lib/python2.7/site-packages')
 argv=[]#,'SHERPA_LDADD=ModelMain ToolsOrg ToolsPhys ToolsMath PDF']
 import Sherpa
 import numpy as np
@@ -10,17 +10,20 @@ class Comix:
 
     def __init__(self,flin,flout):
         f = open("Run.dat","w")
-        f.write("(run){{\n SHERPA_LDADD ModelMain ToolsOrg ToolsPhys ToolsMath PDF \n\
+        f.write("(run){{\n SHERPA_LDADD ModelMain ToolsOrg ToolsPhys ToolsMath PDF Zfunctions\n\
   EVENTS 0; GENERATE_RESULT_DIRECTORY -1;\n\
   BEAM_1 11 45.6; BEAM_2 -11 45.6;\n\
   SCALES VAR{{Abs2(p[0]+p[1])}};\n\
+  KFACTOR FASTJET[A:kt]{{min(MU_22,1)}};\n\
+  PDF_SET None;\n\
 }}(run);\n(processes){{\n\
   Process {0} -> {1};\n\
   Order (*,2);\n\
+  ME_Generator Amegic;\n\
   End process;\n\
 }}(processes);\n\
 (selector){{\n\
-  FastjetFinder kt {2} 5 0 0;\n\
+#  FastjetFinder kt {2} 5 0 0;\n\
 }}(selector);\n".format(" ".join([str(fl) for fl in flin]),\
                         " ".join([str(fl) for fl in flout]),\
                         len(flout)))
