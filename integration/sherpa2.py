@@ -278,8 +278,10 @@ class eetojjj:
 
 
     def ChannelTT(self, rans, pa, pb):
-        s13 = self.prop.GeneratePoint(self.cutoff,(self.ecms-self.cutoff)**2,rans[:,0],mass=mt,width=gt)
-        s24 = self.prop.GeneratePoint(self.cutoff,(self.ecms-np.sqrt(s13))**2,rans[:,1],mass=mt,width=gt)
+        #s13 = self.prop.GeneratePoint(self.cutoff,(self.ecms-self.cutoff)**2,rans[:,0],mass=mt,width=gt)
+        #s24 = self.prop.GeneratePoint(self.cutoff,(self.ecms-np.sqrt(s13))**2,rans[:,1],mass=mt,width=gt)
+        s13 = self.prop.GeneratePoint((mw+self.cutoff)**2,(self.ecms-mw-self.cutoff)**2,rans[:,0],mass=mt,width=gt)
+        s24 = self.prop.GeneratePoint((mw+self.cutoff)**2,(self.ecms-np.sqrt(s13))**2,rans[:,1],mass=mt,width=gt)
 
         plt.hist(np.sqrt(s13),color='red',bins=np.linspace(0,500,500),label='s13')
         plt.hist(np.sqrt(s24),color='blue',bins=np.linspace(0,500,500),label='s24')
@@ -288,9 +290,10 @@ class eetojjj:
         plt.savefig('figs/invariant_{:04d}.pdf'.format(self.index))
         plt.close()
 
-        p13, p24 = self.decayIso.GeneratePoint(pa+pb,s13,s24,np.array([rans[:,2], rans[:,3]]).T)
+        p13, p24 = self.decayIso.GeneratePoint(pa+pb,s13,s24,np.array([rans[:,2], rans[:,3]]).T) 
         p1, p3 = self.decayIso.GeneratePoint(p13,mw**2,0.0,np.array([rans[:,4], rans[:,5]]).T)
         p2, p4 = self.decayIso.GeneratePoint(p24,mw**2,0.0,np.array([rans[:,6], rans[:,7]]).T)
+
 
         logger.debug('s13_mean = {}'.format(np.mean(s13)))
         logger.debug('s24_mean = {}'.format(np.mean(s13)))
@@ -300,8 +303,10 @@ class eetojjj:
     def WeightTT(self, pa, pb, p1, p2, p3, p4):
         p13 = p1+p3
         p24 = p2+p4
-        ws13 = self.prop.GenerateWeight(self.cutoff,self.ecms**2,p13,mass=mt,width=gt)
-        ws24 = self.prop.GenerateWeight(self.cutoff,(self.ecms-Mass(p13))**2,p24,mass=mt,width=gt)
+        #ws13 = self.prop.GenerateWeight(self.cutoff,self.ecms**2,p13,mass=mt,width=gt)
+        #ws24 = self.prop.GenerateWeight(self.cutoff,(self.ecms-Mass(p13))**2,p24,mass=mt,width=gt)
+        ws13 = self.prop.GenerateWeight((mw+self.cutoff)**2,(self.ecms-mw-self.cutoff)**2,p13,mass=mt,width=gt)
+        ws24 = self.prop.GenerateWeight((mw+self.cutoff)**2,(self.ecms-Mass(p13))**2,p24,mass=mt,width=gt)
         wp13_24 = self.decayIso.GenerateWeight(pa+pb,Mass2(p13),Mass2(p24),p13,p24)
         wp1_3 = self.decayIso.GenerateWeight(p1+p3,mw**2,0.0,p1,p3)
         wp2_4 = self.decayIso.GenerateWeight(p2+p4,mw**2,0.0,p2,p4)
@@ -337,6 +342,11 @@ class eetojjj:
 
         p1,p2,p3,p4 = self.ChannelTT(rans,pa,pb)
 
+        print(p1)
+        print(p2)
+        print(p3)
+        print(p4)
+        
         logger.debug('p1 = {}, m1 = {}'.format(p1,Mass2(p1)))
         logger.debug('p2 = {}, m2 = {}'.format(p2,Mass2(p2)))
         logger.debug('p3 = {}, m3 = {}'.format(p3,Mass2(p3)))
@@ -344,7 +354,8 @@ class eetojjj:
 
         wsum = self.WeightTT(pa, pb, p1, p2, p3, p4)
 
-        lome = np.array(sherpa.process.CSMatrixElementVec(np.array([pa,pb,p1,p2,p3,p4])))
+        #lome = np.array(sherpa.process.CSMatrixElementVec(np.array([pa,pb,p1,p2,p3,p4])))
+        lome = np.array(sherpa.process.CSMatrixElementVec(np.array([pa,pb,p1,p3,p2,p4])))
 
         logger.debug('wsum = {}'.format(wsum))
         logger.debug('lome = {}'.format(lome))
@@ -538,20 +549,26 @@ if __name__ == '__main__':
 #
 #    raise
 
+
     def func(x):
         return tf.stop_gradient(tf.py_function(hardxs.GeneratePointTT,[x],tf.float32))
+    #np.random.seed(1234)
+    nevents = 2500000
+    x = np.random.random((nevents,ndims))
+    p = hardxs.GeneratePointTT(x)
+    #print(np.max(p))
+    #print(np.mean(p))
+    #x_bad = x[np.where(p==np.max(p))]
+    #print(x_bad)
+    #print(hardxs.GeneratePointTT(x_bad))
 
-#    nevents = 1000000
-#    x = np.random.random((nevents,ndims))
-#    p = hardxs.GeneratePointTT(x)
-#
-#    figure = corner.corner(x, labels=[r'$x_{}$'.format(i) for i in range(ndims)], weights=p, show_titles=True, title_kwargs={"fontsize": 12})
-#    plt.savefig('matrix.pdf')
-#    plt.close()
+    figure = corner.corner(x, labels=[r'$x_{}$'.format(i) for i in range(ndims)], weights=p, show_titles=True, title_kwargs={"fontsize": 12})
+    plt.savefig('matrix.pdf')
+    plt.close()
 
     nint = 10000
 
-    integrator = integrator.Integrator(func, ndims, nbins=10, nchannels=1, mode='linear',name='eejjjj', blob=True, unet=False, learning_rate=5e-4)
+    integrator = integrator.Integrator(func, ndims, nbins=10, nchannels=1, mode='linear',name='eejjjj', blob=True, unet=True, learning_rate=5e-4)
 
 #    print(integrator.integrate(nint,
 #          acceptance=acceptance,
@@ -561,9 +578,9 @@ if __name__ == '__main__':
 #          max=1e3,
 #          nbins=300))
 
-    nsamples = [10]
-#    nsamples.extend([2000]*100)
-#    nsamples.extend([4000]*100)
+    nsamples = [100]
+    nsamples.extend([2000]*10)
+    nsamples.extend([4000]*10)
 #    nsamples.extend([8000]*100)
 #    nsamples.extend([16000]*500)
     integrator.optimize(nsamples=nsamples,printout=10,plot=plot)
