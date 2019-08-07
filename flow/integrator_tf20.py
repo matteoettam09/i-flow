@@ -151,7 +151,7 @@ class Integrator():
         arange = np.arange(ndims)
         permute = np.hstack([arange[1:], arange[0]])
         kwargs['D'] = ndims
-        kwargs['d'] = ndims//2
+        kwargs['d'] = ndims//2 
         kwargs['name'] = 'PwL'
         if 'nbins' not in kwargs:
             kwargs['nbins'] = 25
@@ -190,7 +190,7 @@ class Integrator():
 
             bijector = {'bijector_kwargs' : {'PwL' : {'channel' : channel}}}
 
-        x = self.dist.sample(nsamples, **bijector)
+        x = tf.stop_gradient(self.dist.sample(nsamples, **bijector))
         logq = self.dist.log_prob(x, **bijector)
         p = self.func(x)
         q = self.dist.prob(x, **bijector)
@@ -206,7 +206,7 @@ class Integrator():
 #                var/nsamples, x, p, q)
 #        return (tf.reduce_mean(p/q*(tf.log(p)-logq))/acceptance**2, mean,
 #                var/nsamples, x, p, q)
-        return ((1-alpha)*tf.reduce_mean(input_tensor=p/q*(tf.math.log(p)-logq))-alpha*acceptance, mean,
+        return ((1-alpha)*tf.reduce_mean(input_tensor=tf.stop_gradient(p/q)*(tf.math.log(p)-logq))-alpha*acceptance, mean,
                 var/nsamples, x, p, q)
 #        return (tf.reduce_mean(p/q*(tf.log(p)-logq)), mean,
 #                var/nsamples, x, p, q)
@@ -259,12 +259,12 @@ class Integrator():
         nsamples = kwargs.get('nsamples',5000)
         alpha = kwargs.get('alpha',0)
 
-#        min_loss = 1e99
-#        if self.name is not None:
-#            try:
-#                self.load('models/'.format(self.name))
-#            except:
-#                pass
+        #min_loss = 1e99
+        #if self.name is not None:
+        #    try:
+        #        self.load('models/'.format(self.name))
+        #    except:
+        #        pass
 
         # Preform training
         try:
@@ -273,9 +273,9 @@ class Integrator():
 
             for epoch in range(epochs):
                 loss, x = self.train_one_step(nsamples[epoch],alpha)
-#                if np_loss < min_loss and self.name is not None:
-#                    self.save('models/')
-#                    min_loss = np_loss
+                #if loss < min_loss and self.name is not None:
+                #    self.save('models/')
+                #    min_loss = np_loss
 
                 if epoch % printout == 0:
                     print("Epoch {:4d}: loss = {:e}, integral = {:e} +/- {:e}".format(
@@ -283,22 +283,24 @@ class Integrator():
                         np.sqrt(ewma(self.vars, 10)))
                     )
                     if plot:
+                        hist2d_kwargs={'smooth':2, 'plot_datapoints':False}
                         figure = corner.corner(x, labels=self.labels,
                                                show_titles=True, title_kwargs={"fontsize": 12},
-                                               range=self.ndims*[[0, 1]]
+                                               range=self.ndims*[[0, 1]],**hist2d_kwargs
                                                )
                         plt.savefig('fig_{:04d}.pdf'.format(epoch))
                         plt.close()
         except KeyboardInterrupt:
-            print('Caught Crtl-C. Ending training early.')
+            print('Caught Ctrl-C. Ending training early.')
 
         print("Epoch {:4d}: loss = {:e}, integral = {:e} +/- {:e}".format(
             epoch, loss, ewma(self.integrals, 10),
             np.sqrt(ewma(self.vars, 10)))
         )
         if plot:
+            hist2d_kwargs={'smooth':2, 'plot_datapoints':False}
             figure = corner.corner(x, labels=self.labels, show_titles=True,
-                                   title_kwargs={"fontsize": 12}, range=self.ndims*[[0, 1]]
+                                   title_kwargs={"fontsize": 12}, range=self.ndims*[[0, 1]], **hist2d_kwargs
                                    )
             plt.savefig('fig_{:04d}.pdf'.format(epoch))
             plt.close()
@@ -383,9 +385,10 @@ class Integrator():
         error = tf.sqrt(var/nsamples)
 
         if plot:
+            hist2d_kwargs={'smooth':2, 'plot_datapoints':False}
             figure = corner.corner(x, labels=self.labels,
                                    show_titles=True, title_kwargs={"fontsize": 12},
-                                   range=self.ndims*[[0, 1]]
+                                   range=self.ndims*[[0, 1]], **hist2d_kwargs
                                    )
             plt.savefig('xsec_final.pdf')
             plt.close()

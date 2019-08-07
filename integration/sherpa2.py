@@ -282,14 +282,14 @@ class eetojjj:
         #s24 = self.prop.GeneratePoint(self.cutoff,(self.ecms-np.sqrt(s13))**2,rans[:,1],mass=mt,width=gt)
         s13 = self.prop.GeneratePoint((mw+self.cutoff)**2,(self.ecms-mw-self.cutoff)**2,rans[:,0],mass=mt,width=gt)
         s24 = self.prop.GeneratePoint((mw+self.cutoff)**2,(self.ecms-np.sqrt(s13))**2,rans[:,1],mass=mt,width=gt)
-
+        """
         plt.hist(np.sqrt(s13),color='red',bins=np.linspace(0,500,500),label='s13')
         plt.hist(np.sqrt(s24),color='blue',bins=np.linspace(0,500,500),label='s24')
         plt.yscale('log')
         plt.legend()
         plt.savefig('figs/invariant_{:04d}.pdf'.format(self.index))
         plt.close()
-
+        """
         p13, p24 = self.decayIso.GeneratePoint(pa+pb,s13,s24,np.array([rans[:,2], rans[:,3]]).T) 
         p1, p3 = self.decayIso.GeneratePoint(p13,mw**2,0.0,np.array([rans[:,4], rans[:,5]]).T)
         p2, p4 = self.decayIso.GeneratePoint(p24,mw**2,0.0,np.array([rans[:,6], rans[:,7]]).T)
@@ -312,7 +312,7 @@ class eetojjj:
         wp2_4 = self.decayIso.GenerateWeight(p2+p4,mw**2,0.0,p2,p4)
         logger.debug('p1W = {}, m1W = {}'.format(p1,Mass2(p1)))
         logger.debug('p2W = {}, m2W = {}'.format(p2,Mass2(p2)))
-
+        """
         plt.hist(ws13,color='red',label='ws13',bins=np.logspace(0,7,500))
         plt.hist(ws24,color='blue',label='ws24',bins=np.logspace(0,7,500))
         plt.yscale('log')
@@ -326,11 +326,13 @@ class eetojjj:
         plt.xscale('log')
         plt.savefig('figs/weights_{:04d}.pdf'.format(self.index))
         plt.close()
-
+        """
         return np.maximum(ws24*ws13*wp13_24*wp2_4*wp1_3,1e-7)
         
 
     def GeneratePointTT(self, rans):
+        #rans = np.maximum(rans,0.)
+        #rans = np.minimum(rans,1.)
         pa = Vector4(self.ecms/2*np.ones(np.shape(rans)[0]),
                 np.zeros(np.shape(rans)[0]),
                 np.zeros(np.shape(rans)[0]),
@@ -341,12 +343,7 @@ class eetojjj:
                 -self.ecms/2*np.ones(np.shape(rans)[0]))
 
         p1,p2,p3,p4 = self.ChannelTT(rans,pa,pb)
-
-        print(p1)
-        print(p2)
-        print(p3)
-        print(p4)
-        
+       
         logger.debug('p1 = {}, m1 = {}'.format(p1,Mass2(p1)))
         logger.debug('p2 = {}, m2 = {}'.format(p2,Mass2(p2)))
         logger.debug('p3 = {}, m3 = {}'.format(p3,Mass2(p3)))
@@ -361,7 +358,7 @@ class eetojjj:
         logger.debug('lome = {}'.format(lome))
         logger.debug('ecm = {}'.format(self.ecms))
         dxs = lome*wsum*hbarc2/self.ecms**2/2.0
-
+        """
         plt.hist(lome,bins=np.logspace(-10,5,500))
         plt.yscale('log')
         plt.xscale('log')
@@ -373,10 +370,10 @@ class eetojjj:
         plt.xscale('log')
         plt.savefig('figs/dsig_{:04d}.pdf'.format(self.index))
         plt.close()
-
+        """
         self.index += 1
 
-        print(np.mean(dxs))
+        #print(np.mean(dxs))
 
         return np.maximum(np.nan_to_num(dxs),1e-7)
 
@@ -552,24 +549,39 @@ if __name__ == '__main__':
 
     def func(x):
         return tf.stop_gradient(tf.py_function(hardxs.GeneratePointTT,[x],tf.float32))
-    #np.random.seed(1234)
-    nevents = 2500000
-    x = np.random.random((nevents,ndims))
-    p = hardxs.GeneratePointTT(x)
-    #print(np.max(p))
-    #print(np.mean(p))
-    #x_bad = x[np.where(p==np.max(p))]
-    #print(x_bad)
-    #print(hardxs.GeneratePointTT(x_bad))
+    #nevents = 250000
+    #hist2d_kwargs={'smooth':2}
+    #x = np.random.random((nevents,ndims))
+    #p = hardxs.GeneratePointTT(x)
 
-    figure = corner.corner(x, labels=[r'$x_{}$'.format(i) for i in range(ndims)], weights=p, show_titles=True, title_kwargs={"fontsize": 12})
-    plt.savefig('matrix.pdf')
-    plt.close()
+    #figure = corner.corner(x, labels=[r'$x_{}$'.format(i) for i in range(ndims)], weights=p, show_titles=True, title_kwargs={"fontsize": 12},**hist2d_kwargs)
+    #plt.savefig('matrix.pdf')
+    #plt.close()
+    
+    #print("done plotting")
+    """
+    import vegas
 
-    nint = 10000
+    def generate_vegas(x):
+        return hardxs.GeneratePointTT(np.array([x]))
+    
+    integ = vegas.Integrator(ndims*[[0.,1.]])
+    integ(generate_vegas, nitn=5, neval=1000)#,max_nhcube=1)
+    print("Vegas training done")
+    result = integ(generate_vegas, nitn=1, neval=20000)#,max_nhcube=1)
+    print(result.summary())
+    print('result = %s    Q = %.2f' % (result, result.Q))
 
-    integrator = integrator.Integrator(func, ndims, nbins=10, nchannels=1, mode='linear',name='eejjjj', blob=True, unet=True, learning_rate=5e-4)
+    raise
+    # vegas sample for corner
+    # vegas sample for acceptance
+    # check vegas wgt with our estimate 1/q
+    """
+    nint = 250000
 
+    integrator = integrator.Integrator(func, ndims, nbins=24, nchannels=1, mode='quadratic',name='eejjjj', hot=True, unet=False, learning_rate=5e-4)
+
+# print / plot untrained:    
 #    print(integrator.integrate(nint,
 #          acceptance=acceptance,
 #          fname='untrained',
@@ -579,10 +591,13 @@ if __name__ == '__main__':
 #          nbins=300))
 
     nsamples = [100]
-    nsamples.extend([2000]*10)
-    nsamples.extend([4000]*10)
-#    nsamples.extend([8000]*100)
-#    nsamples.extend([16000]*500)
+#    nsamples.extend([8192]*50)
+#    nsamples.extend([16384]*50)
+    nsamples.extend([1000]*100)
+    nsamples.extend([2000]*50) 
+#    nsamples.extend([4000]*20)
+#    nsamples.extend([8000]*10) 
+#    nsamples.extend([16000]*10)
     integrator.optimize(nsamples=nsamples,printout=10,plot=plot)
 #    integrator.load(sess)
     print(integrator.integrate(nint,

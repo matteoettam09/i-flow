@@ -15,6 +15,7 @@ import tensorflow_probability as tfp
 tfb = tfp.bijectors
 
 
+
 class Piecewise(tfb.Bijector):
 
     """Implement base class for piecewise coupling layers."""
@@ -230,10 +231,8 @@ class PiecewiseQuadratic(Piecewise):
             name (str): Name of the layer to be passed to the base class.
             **kwargs: Additional arguments to be passed to the base class.
         """
-        super(PiecewiseQuadratic, self).__init__(D, d, nbins,
-                                                 forward_min_event_ndims=1, validate_args=validate_args, name=name, **kwargs
+        super(PiecewiseQuadratic, self).__init__(D, d, nbins,forward_min_event_ndims=1,validate_args=validate_args, name=name, **kwargs
                                                  )
-
         self.id = layer_id
         self.NNMat = self._build_model(2*self.nbins+1)
         self.trainable_variables = self.NNMat.trainable_variables
@@ -248,13 +247,16 @@ class PiecewiseQuadratic(Piecewise):
             xd = self._channel_encode(xd, channel)
 
         NNMat = self.NNMat(xd)
-        W = tf.nn.softmax(NNMat[..., :self.nbins], axis=-1)
-        W = tf.where(tf.less(W, 1e-6), 1e-6, W)
+        W = (tf.nn.softmax(NNMat[..., :self.nbins], axis=-1) * (1.-self.nbins * 1e-4)) + 1e-4
+        #W = tf.where(tf.less(W, 1e-6), 1e-6, W)
         V = NNMat[..., self.nbins:]
         VExp = tf.exp(V)
         VSum = tf.reduce_sum(
             input_tensor=(VExp[..., :self.nbins]+VExp[..., 1:])*W/2, axis=-1, keepdims=True)
         V = tf.truediv(VExp, VSum)
+        
+        V = V* (1.-1e-4) + 1e-4
+        
         return W, V
 
     def _find_bins(self, x, y):
@@ -291,6 +293,7 @@ class PiecewiseQuadratic(Piecewise):
             * tf.reduce_sum(input_tensor=W*one_hot, axis=-1) \
             + alpha*tf.reduce_sum(input_tensor=V*one_hot_V, axis=-1)*tf.reduce_sum(input_tensor=W*one_hot, axis=-1) \
             + tf.reduce_sum(input_tensor=VSum*one_hot_sum, axis=-1)
+        yD = tf.clip_by_value(yD,0.,1.)
         return tf.concat([xd, yD], axis=-1)
 
     def _forward(self, y, channel = 1):
@@ -305,11 +308,12 @@ class PiecewiseQuadratic(Piecewise):
         Vbins = tf.reduce_sum(input_tensor=V*one_hot_V, axis=-1)
         xD = tf.where(tf.equal(denom, 0.),
                       beta/Vbins,
-                      tf.math.divide_no_nan(
-                          (-Vbins+tf.sqrt(Vbins**2+2*beta*denom)), denom)
+                      tf.where(tf.math.less(beta,1e-4*tf.ones_like(beta)),tf.zeros_like(Vbins),tf.math.divide_no_nan(
+                        (-Vbins+tf.sqrt(Vbins**2+2*beta*denom)), denom))
                       )
         xD = tf.reduce_sum(input_tensor=W*one_hot, axis=-1)*xD + \
             tf.reduce_sum(input_tensor=WSum*one_hot_sum, axis=-1)
+        xD = tf.clip_by_value(xD,0.,1.)
         return tf.concat([yd, xD], axis=-1)
 
     def _inverse_log_det_jacobian(self, x, channel = 1):
@@ -327,8 +331,10 @@ class PiecewiseQuadratic(Piecewise):
         Vbins = tf.reduce_sum(input_tensor=V*one_hot_V, axis=-1)
         alpha = tf.where(tf.equal(denom, 0.),
                          beta/Vbins,
-                         tf.math.divide_no_nan(
-                             (-Vbins+tf.sqrt(Vbins**2+2*beta*denom)), denom)
+                         tf.where(tf.math.less(beta,1e-6*tf.ones_like(beta)),tf.zeros_like(Vbins),tf.math.divide_no_nan(
+                        (-Vbins+tf.sqrt(Vbins**2+2*beta*denom)), denom))
+#                         tf.math.divide_no_nan(
+#                             (-Vbins+tf.sqrt(Vbins**2+2*beta*denom)), denom)
                          )
         result = tf.reduce_sum(
             input_tensor=(V[..., 1:]-V[..., 0:-1])*one_hot, axis=-1)*alpha+Vbins
