@@ -368,7 +368,7 @@ class Python_Function: public Foam_Integrand {
 public:
   PyObject *self, *method;
   Python_Function(PyObject *_self):
-    self(_self), method(PyBytes_FromString("call")) {}
+    self(_self), method(PyBytes_FromString("__call__")) {}
   PyObject *vectorToList_Double(const std::vector<double> &data)
   {
     PyObject* listObj = PyList_New( data.size() );

@@ -2,7 +2,7 @@ import Foam as fm
 import math as m
 
 class Function:
-    def call(self,x):
+    def __call__(self,x):
         dx1, dy1, w1=0.25, 0.25, 1./0.004
         dx2, dy2, w2=0.75, 0.75, 1./0.004
         weight=m.exp(-w1*((x[0]-dx1)**2+(x[1]-dy1)**2)) \
