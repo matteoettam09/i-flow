@@ -50,7 +50,9 @@ namespace ATOOLS {
     inline void SetNCells(const size_t &ncells) { m_ncells=ncells; }
     inline void SetError(const double &error) { m_error=error; }
     inline void SetScale(const double &scale) { m_scale=scale; }
-    inline void SetMode(const imc::code mode) { m_mode=mode; }
+    %extend{
+      inline void SetMode(const int mode) { self->SetMode((imc::code)mode); }
+    }
     inline void SetVariableName(const std::string &vname) { m_vname=vname; }
     inline void SetUnitName(const std::string &uname) { m_uname=uname; } 
     inline void SetSplitMode(const size_t split) { m_split=split; }
