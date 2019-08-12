@@ -1,0 +1,12 @@
+import distutils.sysconfig
+
+vars = Variables('.SConstruct')
+vars.Add('CXXFLAGS','The C++ Flags',['-g -O2 -DUSING__PI_only'.split( )])
+env = Environment(variables=vars,SWIGFLAGS=['-c++','-python'],SHLIBPREFIX="",
+                  CPPPATH=[distutils.sysconfig.get_python_inc()])
+vars.Save('.SConstruct',env)
+
+env.SharedLibrary('_Foam.so', ['Random.C','Foam.C','Foam.i'])
+env.Program('Foam', ['Test.C','Random.C','Foam.C'],
+            LIBS=['python'+distutils.sysconfig.get_python_version(),
+	    'pthread','dl','util','m'])
