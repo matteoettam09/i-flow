@@ -25,17 +25,6 @@ def ewma(data, window):
     a[:window] = a[window]
     return a[-1]
 
-def build_dense(in_features, out_features):
-    model = tf.keras.models.Sequential()
-    model.add(tf.keras.layers.Input(in_features))
-    model.add(tf.keras.layers.Dense(128,activation='relu'))
-    model.add(tf.keras.layers.Dense(128,activation='relu'))
-    model.add(tf.keras.layers.Dense(128,activation='relu'))
-    model.add(tf.keras.layers.Dense(out_features))
-    model.summary()
-    model.build()
-    return model
-
 class Integrator():
 
     def __init__(self, func, dist, optimizer, **kwargs):
@@ -74,6 +63,17 @@ class Integrator():
         return loss.numpy()
 
 if __name__ == '__main__':
+
+    def build_dense(in_features, out_features):
+        model = tf.keras.models.Sequential()
+        model.add(tf.keras.layers.Input(in_features))
+        model.add(tf.keras.layers.Dense(128,activation='relu'))
+        model.add(tf.keras.layers.Dense(128,activation='relu'))
+        model.add(tf.keras.layers.Dense(128,activation='relu'))
+        model.add(tf.keras.layers.Dense(out_features))
+        model.summary()
+        model.build()
+        return model
 
     def func(x):
         return tf.reduce_prod(x,axis=-1)
