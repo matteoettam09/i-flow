@@ -73,39 +73,41 @@ class Integrator():
 
         return loss.numpy()
 
-def func(x):
-    return tf.reduce_sum(x,axis=-1)
+if __name__ == '__main__':
 
-ndims = 4
-
-bijectors = []
-masks = [[x % 2 for x in range(1,ndims+1)],[x % 2 for x in range(0,ndims)]]*2
-for mask in masks:
-    layer = couplings.PiecewiseRationalQuadratic(mask,build_dense)
-    bijectors.append(layer)
-
-bijectors = tfb.Chain(list(bijectors))
-
-base_dist = tfd.Uniform(low=ndims*[0.], high=ndims*[1.])
-base_dist = tfd.Independent(distribution=base_dist,
-                            reinterpreted_batch_ndims=1,
-                            )
-dist = tfd.TransformedDistribution(
-        distribution=base_dist,
-        bijector=bijectors,
-)
-
-optimizer = tf.keras.optimizers.Adam(1e-2)
-
-integrator = Integrator(func, dist, optimizer)
-for epoch in range(200):
-    loss = integrator.train_one_step(1000,integral=False)
-    if epoch % 10 == 0:
-        print(epoch, loss)
-print(integrator.train_one_step(1000,integral=True))
-
-import matplotlib.pyplot as plt
-
-plt.plot(integrator.losses)
-plt.yscale('log')
-plt.show()
+    def func(x):
+        return tf.reduce_prod(x,axis=-1)
+    
+    ndims = 4
+    
+    bijectors = []
+    masks = [[x % 2 for x in range(1,ndims+1)],[x % 2 for x in range(0,ndims)],[0 if x < ndims/2 else 1 for x in range(0,ndims)],[1 if x < ndims/2 else 0 for x in range(0,ndims)]]
+    for mask in masks:
+        layer = couplings.PiecewiseRationalQuadratic(mask,build_dense)
+        bijectors.append(layer)
+    
+    bijectors = tfb.Chain(list(bijectors))
+    
+    base_dist = tfd.Uniform(low=ndims*[0.], high=ndims*[1.])
+    base_dist = tfd.Independent(distribution=base_dist,
+                                reinterpreted_batch_ndims=1,
+                                )
+    dist = tfd.TransformedDistribution(
+            distribution=base_dist,
+            bijector=bijectors,
+    )
+    
+    optimizer = tf.keras.optimizers.Adam(1e-2)
+    
+    integrator = Integrator(func, dist, optimizer)
+    for epoch in range(200):
+        loss = integrator.train_one_step(1000,integral=False)
+        if epoch % 10 == 0:
+            print(epoch, loss)
+    print(integrator.train_one_step(1000,integral=True))
+    
+    import matplotlib.pyplot as plt
+    
+    plt.plot(integrator.losses)
+    plt.yscale('log')
+    plt.show()
