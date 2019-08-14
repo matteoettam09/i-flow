@@ -14,6 +14,8 @@ class CouplingBijector(tfb.Bijector):
         self.identity_features = features_vector[mask <= 0]
         self.transform_features = features_vector[mask > 0]
 
+        assert self.num_identity_features + self.num_identity_features == self.features
+
         self.transform_net = transform_net_create_fn(
                 self.num_identity_features,
                 self.num_transform_features * self._transform_dim_multiplier()
@@ -39,7 +41,6 @@ class CouplingBijector(tfb.Bijector):
 
         outputs = tf.concat([identity_split,transform_split],axis=1)
         indices = tf.concat([self.identity_features, self.transform_features], axis=-1)
-        indices = self.features - indices - 1
         outputs = tf.gather(outputs,indices,axis=1)
 
         return outputs
@@ -56,7 +57,6 @@ class CouplingBijector(tfb.Bijector):
 
         outputs = tf.concat([identity_split,transform_split],axis=1)
         indices = tf.concat([self.identity_features, self.transform_features], axis=-1)
-        indices = self.features - indices - 1
         outputs = tf.gather(outputs,indices,axis=1)
 
         return outputs
@@ -93,6 +93,39 @@ class CouplingBijector(tfb.Bijector):
 
     def _coupling_transform_inverse(self, inputs, transform_params):
         raise NotImplementedError()
+
+class AffineBijector(CouplingBijector):
+    def _transform_dim_multiplier(self):
+        return 2
+
+    def _scale_and_shift(self, transform_params):
+        unconstrained_scale = transform_params[:, self.num_transform_features:]
+        shift = transform_params[:, :self.num_transform_features]
+        scale = tf.nn.sigmoid(unconstrained_scale + 2) + 1e-3
+        return scale, shift
+
+    def _coupling_transform_forward(self, inputs, transform_params):
+        scale, shift = self._scale_and_shift(transform_params)
+        log_scale = tf.math.log(scale)
+        outputs = inputs * scale + shift
+        logabsdet = tf.reduce_sum(log_scale, axis=-1)
+        return outputs, logabsdet
+
+    def _coupling_transform_inverse(self, inputs, transform_params):
+        scale, shift = self._scale_and_shift(transform_params)
+        log_scale = tf.math.log(scale)
+        outputs = (inputs - shift) / scale
+        logabsdet = -tf.reduce_sum(log_scale, axis=-1)
+        return outputs, logabsdet
+
+class AdditiveBijector(AffineBijector):
+    def _transform_dim_multiplier(self):
+        return 1
+
+    def _scale_and_shift(self, transform_params):
+        shift = transform_params
+        scale = tf.ones_like(shift)
+        return scale, shift
 
 class PiecewiseBijector(CouplingBijector):
     def _coupling_transform_forward(self, inputs, transform_params):
@@ -200,9 +233,9 @@ if __name__ == '__main__':
         model.summary()
         return model
 
-    layer = PiecewiseRationalQuadratic([1,0,0,1],build_dense)
+    layer = PiecewiseRationalQuadratic([1,1,0,0], build_dense)
 
-    inputs = np.array(np.random.random((100000,4)),dtype=np.float32)
+    inputs = np.array(np.random.random((10,4)),dtype=np.float32)
 
     outputs = layer.forward(inputs)
     inputs_inv = layer.inverse(outputs)
@@ -210,6 +243,16 @@ if __name__ == '__main__':
     print(inputs[np.logical_not(np.isclose(inputs,inputs_inv))])
     print(inputs_inv[np.logical_not(np.isclose(inputs,inputs_inv))])
 
-    print(layer._forward_log_det_jacobian(inputs))
+    jac_f = layer._forward_log_det_jacobian(inputs)
+    jac_b = layer._inverse_log_det_jacobian(outputs)
 
+    print(jac_f[np.logical_not(np.isclose(jac_f,jac_b))])
+    print(jac_b[np.logical_not(np.isclose(jac_f,jac_b))])
 
+    bijectors = [layer]
+    bijectors.append(PiecewiseRationalQuadratic([0,1,1,0], build_dense))
+
+    bijector = tfb.Chain(bijectors)
+
+    print(inputs[np.logical_not(np.isclose(inputs,bijector.inverse(bijector.forward(inputs))))])
+    print(inputs[:10], bijector.forward(inputs[:10]))

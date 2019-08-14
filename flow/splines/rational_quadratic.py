@@ -1,9 +1,9 @@
 import tensorflow as tf
 from splines.spline import _padded, _knot_positions, _gather_squeeze, _search_sorted
 
-DEFAULT_MIN_BIN_WIDTH = 1e-3
-DEFAULT_MIN_BIN_HEIGHT = 1e-3
-DEFAULT_MIN_DERIVATIVE = 1e-3
+DEFAULT_MIN_BIN_WIDTH = 1e-4
+DEFAULT_MIN_BIN_HEIGHT = 1e-4
+DEFAULT_MIN_DERIVATIVE = 1e-4
 
 def rational_quadratic_spline(inputs,
                               unnormalized_widths,
@@ -16,7 +16,6 @@ def rational_quadratic_spline(inputs,
                               min_derivative=DEFAULT_MIN_DERIVATIVE):
 
     if tf.math.reduce_min(inputs) < left or tf.math.reduce_max(inputs) > right:
-        print(tf.math.reduce_min(inputs), tf.math.reduce_max(inputs))
         raise ValueError('Outside domain')
 
     num_bins = unnormalized_widths.shape[-1]
@@ -70,17 +69,16 @@ def rational_quadratic_spline(inputs,
 
         discriminant = b**2 - 4 * a * c
         
-        root = (2 * c) / (-b - tf.sqrt(discriminant))
-        outputs = root * input_bin_widths + input_cumwidths
+        theta = (2 * c) / (-b - tf.sqrt(discriminant))
+        outputs = theta * input_bin_widths + input_cumwidths
 
-        theta_one_minus_theta = root * (1 - root)
+        theta_one_minus_theta = theta * (1 - theta)
         denominator = input_delta + ((input_derivatives + input_derivatives_p1 - 2 * input_delta)
                                      * theta_one_minus_theta)
-        derivative_numerator = input_delta**2 * (input_derivatives_p1 * root**2
+        derivative_numerator = input_delta**2 * (input_derivatives_p1 * theta**2
                                                 + 2 * input_delta * theta_one_minus_theta
-                                                + input_derivatives * (1 - root)**2)
+                                                + input_derivatives * (1 - theta)**2)
         logabsdet = tf.math.log(derivative_numerator) - 2 * tf.math.log(denominator)
-        outputs = tf.clip_by_value(outputs, 0, 1)
 
         return outputs, -logabsdet
     else:
@@ -97,7 +95,6 @@ def rational_quadratic_spline(inputs,
                                                 + 2 * input_delta * theta_one_minus_theta
                                                 + input_derivatives * (1 - theta)**2)
         logabsdet = tf.math.log(derivative_numerator) - 2 * tf.math.log(denominator)
-        outputs = tf.clip_by_value(outputs, 0, 1)
 
         return outputs, logabsdet
 
@@ -105,7 +102,7 @@ if __name__ == '__main__':
     import numpy as np
 
     nbatch = 10000
-    ndims = 10
+    ndims = 20
     num_bins = 32
 
     unnormalized_widths = np.random.random((nbatch,ndims,num_bins))
@@ -126,3 +123,4 @@ if __name__ == '__main__':
     inputs_inv, logabsdet_inv = call_spline_fn(outputs, inverse=True)
 
     print(np.allclose(inputs,inputs_inv))
+    print(np.allclose(logabsdet,-logabsdet_inv))
