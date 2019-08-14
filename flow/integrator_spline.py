@@ -78,14 +78,17 @@ class Integrator():
     def save(self):
         for i, bijector in enumerate(self.dist.bijector.bijectors):
             bijector.transform_net.save_weights('./models/model_layer_{:02d}'.format(i))
+        print("saved successfully")
 
     def load(self):
         for i, bijector in enumerate(self.dist.bijector.bijectors):
             bijector.transform_net.load_weights('./models/model_layer_{:02d}'.format(i))
+        print("loaded successfully")
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-
+    import corner
+    
     class CosineAnnealing(tf.keras.optimizers.schedules.LearningRateSchedule):
         def __init__(self, base_lr, total_epochs, eta_min=0):
             self.base_lr = base_lr
@@ -124,7 +127,7 @@ if __name__ == '__main__':
                +tf.exp(-1./0.004*((x[:,0]-0.75)**2+(x[:,1]-0.75)**2)))
     
     ndims = 2
-    epochs = int(500)
+    epochs = int(250)
     
     bijectors = []
     masks = [[x % 2 for x in range(1,ndims+1)],[x % 2 for x in range(0,ndims)],[1 if x < ndims/2 else 0 for x in range(0,ndims)],[0 if x < ndims/2 else 1 for x in range(0,ndims)]]
@@ -146,10 +149,10 @@ if __name__ == '__main__':
             bijector=bijectors,
     )
 
-    initial_learning_rate = 5e-4
+    initial_learning_rate = 1e-3
     lr_schedule = CosineAnnealing(initial_learning_rate,epochs)
     
-    optimizer = tf.keras.optimizers.Adam(lr_schedule, clipvalue = 5.0)#lr_schedule)
+    optimizer = tf.keras.optimizers.Adam(lr_schedule, clipnorm = 5.0)#lr_schedule)
     
     integrator = Integrator(camel, dist, optimizer)
     losses = []
@@ -158,12 +161,19 @@ if __name__ == '__main__':
     min_loss = 1e99
     try:
         for epoch in range(epochs):
-            #if epoch % 1 == 0:
-            #    samples = integrator.sample(100000)
+            if epoch % 1 == 0:
+                samples = integrator.sample(100000)
+                hist2d_kwargs={'smooth':2}
+                figure = corner.corner(samples, labels=[r'$x_1$',r'$x_2$'], show_titles=True, title_kwargs={"fontsize": 12}, range=ndims*[[0,1]],**hist2d_kwargs)
+                    
             #    plt.scatter(samples[:,0],samples[:,1],s=0.1)
             #    plt.savefig('fig_{:04d}.png'.format(epoch))
             #    plt.close()
             loss, integral, error = integrator.train_one_step(5000,integral=True)
+            if epoch % 1 == 0:
+                figure.suptitle('loss = '+str(loss.numpy()),fontsize=16,x = 0.75)
+                plt.savefig('fig_{:04d}.png'.format(epoch))
+                plt.close()
             losses.append(loss)
             integrals.append(integral)
             errors.append(error)
@@ -186,7 +196,7 @@ if __name__ == '__main__':
     average = np.mean(weights)
     max_wgt = np.max(weights)
 
-    print(average/max_wgt)
+    print("acceptance = "+str(average/max_wgt))
 
     plt.hist(weights,bins=np.logspace(np.log10(np.min(weights)),np.log10(np.max(weights)),
             100),range=[np.min(weights),np.max(weights)])
