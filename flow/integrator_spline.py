@@ -70,8 +70,8 @@ class Integrator():
     def acceptance(self, nsamples):
         x = self.dist.sample(nsamples)
         q = self.dist.prob(x)
-        #p = self._func(x)
-        p = tf.where(self._func(x) > 1e-16, self._func(x), self._func(x)+1e-16)
+        p = self._func(x)
+        #p = tf.where(self._func(x) > 1e-16, self._func(x), self._func(x)+1e-16)
         
         return p/q
 
@@ -122,14 +122,22 @@ if __name__ == '__main__':
     def camel(x):
         return (tf.exp(-1./0.004*((x[:,0]-0.25)**2+(x[:,1]-0.25)**2))
                +tf.exp(-1./0.004*((x[:,0]-0.75)**2+(x[:,1]-0.75)**2)))
+
+    def circle(x):
+        dx1 = 0.4
+        dy1 = 0.6
+        rr = 0.25
+        w1 = 1./0.004
+        ee = 3.0
+        return (x[:,1]**ee*tf.exp(-w1*tf.abs((x[:,1]-dy1)**2+(x[:,0]-dx1)**2-rr**2))
+             + (1-x[:,1])**ee*tf.exp(-w1*tf.abs((x[:,1]-1.0+dy1)**2+(x[:,0]-1.0+dx1)**2-rr**2)))
+
     
     ndims = 2
-    epochs = int(500)
+    epochs = int(1000)
     
     bijectors = []
     masks = [[x % 2 for x in range(1,ndims+1)],[x % 2 for x in range(0,ndims)],[1 if x < ndims/2 else 0 for x in range(0,ndims)],[0 if x < ndims/2 else 1 for x in range(0,ndims)]]
-    bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=64))
-    bijectors.append(couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=64))
     bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=64))
     bijectors.append(couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=64))
     bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=64))
@@ -151,18 +159,18 @@ if __name__ == '__main__':
     
     optimizer = tf.keras.optimizers.Adam(lr_schedule, clipvalue = 5.0)#lr_schedule)
     
-    integrator = Integrator(camel, dist, optimizer)
+    integrator = Integrator(circle, dist, optimizer)
     losses = []
     integrals = []
     errors = []
     min_loss = 1e99
     try:
         for epoch in range(epochs):
-            #if epoch % 1 == 0:
-            #    samples = integrator.sample(100000)
-            #    plt.scatter(samples[:,0],samples[:,1],s=0.1)
-            #    plt.savefig('fig_{:04d}.png'.format(epoch))
-            #    plt.close()
+            if epoch % 5 == 0:
+                samples = integrator.sample(100000)
+                plt.scatter(samples[:,0],samples[:,1],s=0.1)
+                plt.savefig('fig_{:04d}.png'.format(epoch))
+                plt.close()
             loss, integral, error = integrator.train_one_step(5000,integral=True)
             losses.append(loss)
             integrals.append(integral)
@@ -177,20 +185,20 @@ if __name__ == '__main__':
 
     integrator.load()
 
-#    samples = integrator.sample(100000)
-#    plt.scatter(samples[:,0],samples[:,1],s=0.1)
-#    plt.savefig('fig_{:04d}.png'.format(epochs))
-#    plt.close()
+    samples = integrator.sample(100000)
+    plt.scatter(samples[:,0],samples[:,1],s=0.1)
+    plt.savefig('fig_{:04d}.png'.format(epochs))
+    plt.close()
 
-    weights = integrator.acceptance(100000).numpy()
+    weights = integrator.acceptance(10000).numpy()
     average = np.mean(weights)
     max_wgt = np.max(weights)
 
     print(average/max_wgt)
 
-    plt.hist(weights,bins=np.logspace(np.log10(np.min(weights)),np.log10(np.max(weights)),
-            100),range=[np.min(weights),np.max(weights)])
-    plt.axvline(average,linestyle='--')
+    plt.hist(weights,bins=np.logspace(np.log10(np.max([np.min(weights),1e-16])),np.log10(np.max(weights)),
+            100),range=[np.max([np.min(weights),1e-16]),np.max(weights)])
+    plt.axvline(average,linestyle='--',color='red')
     plt.yscale('log')
     plt.xscale('log')
     plt.savefig('efficiency.png')
