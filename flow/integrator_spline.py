@@ -46,7 +46,8 @@ class Integrator():
             xsec = p/q
             mean, var = tf.nn.moments(x=xsec, axes=[0])
             p = p/mean
-            loss = tf.reduce_mean(input_tensor=tf.stop_gradient(p/q)*(tf.stop_gradient(tf.math.log(p))-logq))
+            logp = tf.where(p > 1e-16, tf.math.log(p), tf.math.log(p+1e-16))
+            loss = tf.reduce_mean(input_tensor=tf.stop_gradient(p/q)*(tf.stop_gradient(logp)-logq))
            
         grads = tape.gradient(loss, self.dist.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, dist.trainable_variables))
@@ -73,6 +74,13 @@ class Integrator():
 
         return p/q
 
+    def save(self):
+        for i, bijector in enumerate(self.dist.bijector.bijectors):
+            bijector.transform_net.save_weights('./models/model_layer_{:02d}'.format(i))
+
+    def load(self):
+        for i, bijector in enumerate(self.dist.bijector.bijectors):
+            bijector.transform_net.load_weights('./models/model_layer_{:02d}'.format(i))
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
@@ -98,9 +106,9 @@ if __name__ == '__main__':
 #        h_heights = tf.keras.layers.Dense((out_features-1)/3)(h_heights)
 #        h_derivs = tf.keras.layers.Dense((out_features-1)/3+2)(h_derivs)
 #        outputs = tf.keras.layers.Concatenate()([h_widths, h_heights, h_derivs])
-        h = tf.keras.layers.Dense(16)(invals)
-        h = tf.keras.layers.Dense(32)(h)
-        h = tf.keras.layers.Dense(64)(h)
+        h = tf.keras.layers.Dense(128)(invals)
+        h = tf.keras.layers.Dense(128)(h)
+        h = tf.keras.layers.Dense(128)(h)
         h = tf.keras.layers.Dense(128)(h)
         outputs = tf.keras.layers.Dense(out_features)(h)
         model = tf.keras.models.Model(invals,outputs)
@@ -119,6 +127,8 @@ if __name__ == '__main__':
     
     bijectors = []
     masks = [[x % 2 for x in range(1,ndims+1)],[x % 2 for x in range(0,ndims)],[1 if x < ndims/2 else 0 for x in range(0,ndims)],[0 if x < ndims/2 else 1 for x in range(0,ndims)]]
+    bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=64))
+    bijectors.append(couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=64))
     bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=64))
     bijectors.append(couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=64))
     bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=64))
@@ -144,6 +154,7 @@ if __name__ == '__main__':
     losses = []
     integrals = []
     errors = []
+    min_loss = 1e99
     try:
         for epoch in range(epochs):
             #if epoch % 1 == 0:
@@ -155,10 +166,15 @@ if __name__ == '__main__':
             losses.append(loss)
             integrals.append(integral)
             errors.append(error)
+            if loss < min_loss:
+                min_loss = loss
+                integrator.save()
             if epoch % 10 == 0:
                 print(epoch, loss.numpy(), integral.numpy(), error.numpy())
     except KeyboardInterrupt:
         pass
+
+    integrator.load()
 
 #    samples = integrator.sample(100000)
 #    plt.scatter(samples[:,0],samples[:,1],s=0.1)
