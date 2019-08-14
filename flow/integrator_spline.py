@@ -70,8 +70,9 @@ class Integrator():
     def acceptance(self, nsamples):
         x = self.dist.sample(nsamples)
         q = self.dist.prob(x)
-        p = self._func(x)
-
+        #p = self._func(x)
+        p = tf.where(self._func(x) > 1e-16, self._func(x), self._func(x)+1e-16)
+        
         return p/q
 
     def save(self):
@@ -187,7 +188,8 @@ if __name__ == '__main__':
 
     print(average/max_wgt)
 
-    plt.hist(weights,bins=100,range=[np.min(weights),np.max(weights)])
+    plt.hist(weights,bins=np.logspace(np.log10(np.min(weights)),np.log10(np.max(weights)),
+            100),range=[np.min(weights),np.max(weights)])
     plt.axvline(average,linestyle='--')
     plt.yscale('log')
     plt.xscale('log')
