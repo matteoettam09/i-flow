@@ -4,10 +4,10 @@ import splines
 tfb = tfp.bijectors
 
 class CouplingBijector(tfb.Bijector):
-    def __init__(self, mask, transform_net_create_fn, **kwargs):
+    def __init__(self, mask, transform_net_create_fn, blob=False, **kwargs):
         mask = tf.convert_to_tensor(mask)
 
-        super().__init__(forward_min_event_ndims=1,**kwargs)
+        super(CouplingBijector,self).__init__(forward_min_event_ndims=1,**kwargs)
         self.features = mask.shape[0]
         features_vector = tf.range(self.features)
 
@@ -16,7 +16,16 @@ class CouplingBijector(tfb.Bijector):
 
         assert self.num_identity_features + self.num_identity_features == self.features
 
-        self.transform_net = transform_net_create_fn(
+        self.blob = blob
+        self.nbinsIN = 32
+
+        if self.blob:
+            self.transform_net = transform_net_create_fn(
+                self.num_identity_features*self.nbinsIN,
+                self.num_transform_features * self._transform_dim_multiplier()
+        )
+        else:
+            self.transform_net = transform_net_create_fn(
                 self.num_identity_features,
                 self.num_transform_features * self._transform_dim_multiplier()
         )
@@ -29,11 +38,22 @@ class CouplingBijector(tfb.Bijector):
     def num_transform_features(self):
         return len(self.transform_features)
 
+    def _one_blob(self, xd):
+        y = tf.tile(((0.5/self.nbinsIN) + tf.range(0.,1.,delta = 1./self.nbinsIN)),[tf.size(xd)]) 
+        y = tf.reshape(y,(-1,self.num_identity_features,self.nbinsIN))
+        res = tf.exp(((-self.nbinsIN*self.nbinsIN)/2.)*(y-xd[...,tf.newaxis])**2)
+        return res
+    
     def _forward(self, inputs, context=None):
         identity_split = tf.gather(inputs,self.identity_features,axis=-1)
         transform_split = tf.gather(inputs,self.transform_features,axis=-1)
 
-        transform_params = self.transform_net(identity_split, context)
+        if self.blob:
+            identity_split_blob = self._one_blob(identity_split)
+            transform_params = self.transform_net(identity_split_blob, context)
+        else:
+            transform_params = self.transform_net(identity_split, context)
+
         transform_split, logabsdet = self._coupling_transform_forward(
                 inputs=transform_split,
                 transform_params=transform_params
@@ -46,10 +66,16 @@ class CouplingBijector(tfb.Bijector):
         return outputs
 
     def _inverse(self, inputs, context=None):
+        
         identity_split = tf.gather(inputs,self.identity_features,axis=-1)
         transform_split = tf.gather(inputs,self.transform_features,axis=-1)
 
-        transform_params = self.transform_net(identity_split, context)
+        if self.blob:
+            identity_split_blob = self._one_blob(identity_split)
+            transform_params = self.transform_net(identity_split_blob, context)
+        else:
+            transform_params = self.transform_net(identity_split, context)
+        
         transform_split, logabsdet = self._coupling_transform_inverse(
                 inputs=transform_split,
                 transform_params=transform_params
@@ -65,7 +91,12 @@ class CouplingBijector(tfb.Bijector):
         identity_split = tf.gather(inputs,self.identity_features,axis=-1)
         transform_split = tf.gather(inputs,self.transform_features,axis=-1)
 
-        transform_params = self.transform_net(identity_split, context)
+        if self.blob:
+            identity_split_blob = self._one_blob(identity_split)
+            transform_params = self.transform_net(identity_split_blob, context)
+        else:
+            transform_params = self.transform_net(identity_split, context)
+        
         transform_split, logabsdet = self._coupling_transform_forward(
                 inputs=transform_split,
                 transform_params=transform_params
@@ -77,7 +108,12 @@ class CouplingBijector(tfb.Bijector):
         identity_split = tf.gather(inputs,self.identity_features,axis=-1)
         transform_split = tf.gather(inputs,self.transform_features,axis=-1)
 
-        transform_params = self.transform_net(identity_split, context)
+        if self.blob:
+            identity_split_blob = self._one_blob(identity_split)
+            transform_params = self.transform_net(identity_split_blob, context)
+        else:
+            transform_params = self.transform_net(identity_split, context)
+        
         transform_split, logabsdet = self._coupling_transform_inverse(
                 inputs=transform_split,
                 transform_params=transform_params
@@ -148,7 +184,7 @@ class PiecewiseBijector(CouplingBijector):
 class PiecewiseLinear(PiecewiseBijector):
     def __init__(self, mask, transform_net_create_fn, num_bins=10,**kwargs):
         self.num_bins = num_bins
-        super().__init__(mask, transform_net_create_fn, **kwargs)
+        super(PiecewiseLinear,self).__init__(mask, transform_net_create_fn, **kwargs)
 
     def _transform_dim_multiplier(self):
         return self.num_bins
@@ -171,7 +207,7 @@ class PiecewiseQuadratic(PiecewiseBijector):
         self.min_bin_width = min_bin_width
         self.min_bin_height = min_bin_height
 
-        super().__init__(mask, transform_net_create_fn, **kwargs)
+        super(PiecewiseQuadratic,self).__init__(mask, transform_net_create_fn, **kwargs)
 
     def _transform_dim_multiplier(self):
         return self.num_bins * 2 + 1
@@ -200,7 +236,7 @@ class PiecewiseRationalQuadratic(PiecewiseBijector):
         self.min_bin_height = min_bin_height
         self.min_derivative = min_derivative
 
-        super().__init__(mask, transform_net_create_fn, **kwargs)
+        super(PiecewiseRationalQuadratic,self).__init__(mask, transform_net_create_fn, **kwargs)
 
     def _transform_dim_multiplier(self):
         return self.num_bins * 3 + 1

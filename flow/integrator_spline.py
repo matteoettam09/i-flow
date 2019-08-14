@@ -131,12 +131,12 @@ if __name__ == '__main__':
     
     bijectors = []
     masks = [[x % 2 for x in range(1,ndims+1)],[x % 2 for x in range(0,ndims)],[1 if x < ndims/2 else 0 for x in range(0,ndims)],[0 if x < ndims/2 else 1 for x in range(0,ndims)]]
-    bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=64))
-    bijectors.append(couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=64))
-    bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=64))
-    bijectors.append(couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=64))
-    bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=64))
-    bijectors.append(couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=64))
+    bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=64,blob=True))
+    bijectors.append(couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=64,blob=True))
+    bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=64,blob=True))
+    bijectors.append(couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=64,blob=True))
+    bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=64,blob=True))
+    bijectors.append(couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=64,blob=True))
     
     bijectors = tfb.Chain(list(reversed(bijectors)))
     
