@@ -30,15 +30,13 @@ class Integrator():
     def __init__(self, func, dist, optimizer, **kwargs):
         self._func = func
         
-        self.losses = []
-        self.integrals = []
-        self.vars = []
         self.global_step = 0
 
         self.dist = dist
 
         self.optimizer = optimizer
 
+    @tf.function
     def train_one_step(self, nsamples, integral=False):
         with tf.GradientTape() as tape:
             x = tf.stop_gradient(self.dist.sample(nsamples))
@@ -53,14 +51,10 @@ class Integrator():
         grads = tape.gradient(loss, self.dist.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, dist.trainable_variables))
 
-        self.losses.append(loss.numpy())
-
         if integral:
-            self.integrals.append(mean.numpy())
-            self.vars.append(var.numpy()/nsamples)
-            return loss.numpy(), mean.numpy(), np.sqrt(var.numpy()/nsamples)
+            return loss, mean, tf.sqrt(var/nsamples)
 
-        return loss.numpy()
+        return loss
 
     def sample(self, nsamples):
         return self.dist.sample(nsamples)
@@ -92,7 +86,7 @@ if __name__ == '__main__':
         def __call__(self,step):
             frac_epochs = step / self.total_epochs
             return self.eta_min + (self.base_lr - self.eta_min) \
-                    * (1 + np.cos(np.pi * frac_epochs)) / 2
+                    * (1 + tf.math.cos(np.pi * frac_epochs)) / 2
 
 
     def build_dense(in_features, out_features):
@@ -125,10 +119,10 @@ if __name__ == '__main__':
     
     bijectors = []
     masks = [[x % 2 for x in range(1,ndims+1)],[x % 2 for x in range(0,ndims)],[1 if x < ndims/2 else 0 for x in range(0,ndims)],[0 if x < ndims/2 else 1 for x in range(0,ndims)]]
-    bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=32))
-    bijectors.append(couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=32))
-    bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=32))
-    bijectors.append(couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=32))
+    bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=64))
+    bijectors.append(couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=64))
+    bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=64))
+    bijectors.append(couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=64))
     
     bijectors = tfb.Chain(list(reversed(bijectors)))
     
@@ -141,12 +135,15 @@ if __name__ == '__main__':
             bijector=bijectors,
     )
 
-    initial_learning_rate = 5e-3
+    initial_learning_rate = 5e-4
     lr_schedule = CosineAnnealing(initial_learning_rate,epochs)
     
     optimizer = tf.keras.optimizers.Adam(lr_schedule, clipvalue = 5.0)#lr_schedule)
     
     integrator = Integrator(camel, dist, optimizer)
+    losses = []
+    integrals = []
+    errors = []
     try:
         for epoch in range(epochs):
             #if epoch % 1 == 0:
@@ -154,9 +151,12 @@ if __name__ == '__main__':
             #    plt.scatter(samples[:,0],samples[:,1],s=0.1)
             #    plt.savefig('fig_{:04d}.png'.format(epoch))
             #    plt.close()
-            loss = integrator.train_one_step(5000,integral=True)
+            loss, integral, error = integrator.train_one_step(5000,integral=True)
+            losses.append(loss)
+            integrals.append(integral)
+            errors.append(error)
             if epoch % 10 == 0:
-                print(epoch, loss)
+                print(epoch, loss.numpy(), integral.numpy(), error.numpy())
     except KeyboardInterrupt:
         pass
 
@@ -175,9 +175,10 @@ if __name__ == '__main__':
     plt.axvline(average,linestyle='--')
     plt.yscale('log')
     plt.xscale('log')
+    plt.savefig('efficiency.png')
     plt.show()
 
-    
-    plt.plot(integrator.losses)
+    plt.plot(losses)
     plt.yscale('log')
+    plt.savefig('loss.png')
     plt.show()

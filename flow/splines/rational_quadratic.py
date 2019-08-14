@@ -5,6 +5,7 @@ DEFAULT_MIN_BIN_WIDTH = 1e-4
 DEFAULT_MIN_BIN_HEIGHT = 1e-4
 DEFAULT_MIN_DERIVATIVE = 1e-4
 
+@tf.function
 def rational_quadratic_spline(inputs,
                               unnormalized_widths,
                               unnormalized_heights,
@@ -15,8 +16,8 @@ def rational_quadratic_spline(inputs,
                               min_bin_height=DEFAULT_MIN_BIN_HEIGHT,
                               min_derivative=DEFAULT_MIN_DERIVATIVE):
 
-    if tf.math.reduce_min(inputs) < left or tf.math.reduce_max(inputs) > right:
-        raise ValueError('Outside domain')
+    out_of_bounds = (inputs < left) | (inputs > right)
+    tf.where(out_of_bounds, left, inputs)
 
     num_bins = unnormalized_widths.shape[-1]
 
