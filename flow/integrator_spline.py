@@ -48,8 +48,9 @@ class Integrator():
             p = p/mean
             logp = tf.where(p > 1e-16, tf.math.log(p), tf.math.log(p+1e-16))
             loss = tf.reduce_mean(input_tensor=tf.stop_gradient(p/q)*(tf.stop_gradient(logp)-logq))
+            grad = tf.reduce_mean(input_tensor=-tf.stop_gradient((p/q)**2)*logq)
            
-        grads = tape.gradient(loss, self.dist.trainable_variables)
+        grads = tape.gradient(grad, self.dist.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, dist.trainable_variables))
 
         if integral:
@@ -102,9 +103,9 @@ if __name__ == '__main__':
 
     def build_dense(in_features, out_features):
         invals = tf.keras.layers.Input(in_features)
-#        h_widths = tf.keras.layers.Dense(16)(invals)
-#        h_heights = tf.keras.layers.Dense(16)(invals)
-#        h_derivs = tf.keras.layers.Dense(16)(invals)
+#        h_widths = tf.keras.layers.Dense(128)(invals)
+#        h_heights = tf.keras.layers.Dense(128)(invals)
+#        h_derivs = tf.keras.layers.Dense(128)(invals)
 #        h_widths = tf.keras.layers.Dense((out_features-1)/3)(h_widths)
 #        h_heights = tf.keras.layers.Dense((out_features-1)/3)(h_heights)
 #        h_derivs = tf.keras.layers.Dense((out_features-1)/3+2)(h_derivs)
@@ -136,14 +137,17 @@ if __name__ == '__main__':
         return (x[:,1]**ee*tf.exp(-w1*tf.abs((x[:,1]-dy1)**2+(x[:,0]-dx1)**2-rr**2))
              + (1-x[:,1])**ee*tf.exp(-w1*tf.abs((x[:,1]-1.0+dy1)**2+(x[:,0]-1.0+dx1)**2-rr**2)))
 
-    
+
+    def func2(x):
+        return tf.where((x[:,0] < 0.9) & (x[:,1] < 0.9), (x[:,0]**2 + x[:,1]**2)/((1-x[:,0])*(1-x[:,1])), 0)
+
     ndims = 2
     epochs = int(1000)
     
     bijectors = []
     masks = [[x % 2 for x in range(1,ndims+1)],[x % 2 for x in range(0,ndims)],[1 if x < ndims/2 else 0 for x in range(0,ndims)],[0 if x < ndims/2 else 1 for x in range(0,ndims)]]
-    bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=128,blob=True))
-    bijectors.append(couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=128,blob=True))
+    bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=100,blob=True))
+    bijectors.append(couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=100,blob=True))
     
     bijectors = tfb.Chain(list(reversed(bijectors)))
     
@@ -156,54 +160,57 @@ if __name__ == '__main__':
             bijector=bijectors,
     )
 
-    initial_learning_rate = 5e-4
+    initial_learning_rate = 1e-4
     lr_schedule = CosineAnnealing(initial_learning_rate,epochs)
     
-    optimizer = tf.keras.optimizers.Adam(initial_learning_rate, clipnorm = 2.0)#lr_schedule)
+    optimizer = tf.keras.optimizers.Adam(lr_schedule, clipnorm = 5.0)#lr_schedule)
     
-    integrator = Integrator(camel, dist, optimizer)
+    integrator = Integrator(func2, dist, optimizer)
     losses = []
     integrals = []
     errors = []
     min_loss = 1e99
-    try:
-        for epoch in range(epochs):
-            if epoch % 5 == 0:
-                samples = integrator.sample(10000)
-                hist2d_kwargs={'smooth':2}
-                figure = corner.corner(samples, labels=[r'$x_1$',r'$x_2$'], show_titles=True, title_kwargs={"fontsize": 12}, range=ndims*[[0,1]],**hist2d_kwargs)
+    nsamples = 5000
+    #try:
+    #    for epoch in range(epochs):
+    #        if epoch % 5 == 0:
+    #            samples = integrator.sample(10000)
+    #            hist2d_kwargs={'smooth':2}
+    #            figure = corner.corner(samples, labels=[r'$x_1$',r'$x_2$'], show_titles=True, title_kwargs={"fontsize": 12}, range=ndims*[[0,1]],**hist2d_kwargs)
 
-            loss, integral, error = integrator.train_one_step(5000,integral=True)
-            if epoch % 5 == 0:
-                figure.suptitle('loss = '+str(loss.numpy()),fontsize=16,x = 0.75)
-                plt.savefig('fig_{:04d}.png'.format(epoch))
-                plt.close()
-            losses.append(loss)
-            integrals.append(integral)
-            errors.append(error)
-            if loss < min_loss:
-                min_loss = loss
-                integrator.save()
-            if epoch % 10 == 0:
-                print(epoch, loss.numpy(), integral.numpy(), error.numpy())
-    except KeyboardInterrupt:
-        pass
+    #        loss, integral, error = integrator.train_one_step(nsamples,integral=True)
+    #        if epoch % 5 == 0:
+    #            figure.suptitle('loss = '+str(loss.numpy()),fontsize=16,x = 0.75)
+    #            plt.savefig('fig_{:04d}.png'.format(epoch))
+    #            plt.close()
+    #        losses.append(loss)
+    #        integrals.append(integral)
+    #        errors.append(error)
+    #        if loss < min_loss:
+    #            min_loss = loss
+    #            integrator.save()
+    #        if epoch % 10 == 0:
+    #            print(epoch, loss.numpy(), integral.numpy(), error.numpy())
+    #except KeyboardInterrupt:
+    #    pass
 
     integrator.load()
+    
+    weights = []
+    for i in range(10):
+        weights.append(integrator.acceptance(100000).numpy())
+    weights = np.concatenate(weights)
 
-    samples = integrator.sample(100000)
-    plt.scatter(samples[:,0],samples[:,1],s=0.1)
-    plt.savefig('fig_{:04d}.png'.format(epochs))
-    plt.close()
+    # Remove outliers
+    weights = np.sort(weights)
+    weights = np.where(weights < np.mean(weights)*0.01, 0, weights)
 
-    weights = integrator.acceptance(10000).numpy()
     average = np.mean(weights)
     max_wgt = np.max(weights)
 
     print("acceptance = "+str(average/max_wgt))
 
-    plt.hist(weights,bins=np.logspace(np.log10(np.max([np.min(weights),1e-16])),np.log10(np.max(weights)),
-            100),range=[np.max([np.min(weights),1e-16]),np.max(weights)])
+    plt.hist(weights,bins=np.logspace(-2,2,100))
     plt.axvline(average,linestyle='--',color='red')
     plt.yscale('log')
     plt.xscale('log')
