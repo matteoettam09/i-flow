@@ -13,10 +13,12 @@ def quadratic_spline(inputs,
                      min_bin_width=DEFAULT_MIN_BIN_WIDTH,
                      min_bin_height=DEFAULT_MIN_BIN_HEIGHT):
 
-    if not inverse and (tf.math.reduce_min(inputs) < left or tf.math.reduce_max(inputs) > right):
-        raise ValueError('Outside domain')
-    elif inverse and (tf.math.reduce_min(inputs) < bottom or tf.math.reduce_max(inputs) > top):
-        raise ValueError('Outside domain')
+    if not inverse: 
+        out_of_bounds = (inputs < left) | (inputs > right)
+        tf.where(out_of_bounds, left, inputs)
+    else:
+        out_of_bounds = (inputs < bottom) | (inputs > top)
+        tf.where(out_of_bounds, bottom, inputs)
 
     if inverse:
         inputs = (inputs - bottom) / (top - bottom)
@@ -85,29 +87,6 @@ def quadratic_spline(inputs,
         alpha = (inputs - input_bin_locations) / input_bin_widths
         outputs = a * alpha**2 + b * alpha + c
 
-    if tf.math.is_nan(outputs).numpy().any():
-        print('ouputs is nan. {}'.format(inverse))
-        logval = (alpha * (input_right_heights - input_left_heights) + input_left_heights).numpy()
-        if inverse:
-            det = (b**2 - 4*a*c_).numpy()
-            indices = np.where(det < 0 | np.isnan(logval))
-            print(indices)
-            print(a.numpy()[indices])
-            print(b.numpy()[indices])
-            print(c_.numpy()[indices])
-            print(alpha.numpy()[indices])
-            print((-c_/b).numpy()[indices])
-        indices = np.where(np.isnan(logval))
-        print(indices)
-        print(alpha.numpy()[indices])
-        print(input_right_heights.numpy()[indices])
-        print(input_left_heights.numpy()[indices])
-        print(inputs.numpy()[indices])
-        print(input_bin_locations.numpy()[indices])
-        print(input_bin_widths.numpy()[indices])
-        print(unnormalized_widths.numpy()[indices])
-        raise ValueError
-
     outputs = tf.clip_by_value(outputs, 0, 1)
     logabsdet = tf.math.log((alpha * (input_right_heights - input_left_heights)
             + input_left_heights))
@@ -118,29 +97,6 @@ def quadratic_spline(inputs,
     else:
         outputs = outputs * (top - bottom) + bottom
         logabsdet = logabsdet + tf.math.log(top - bottom) - tf.math.log(right - left)
-
-    if tf.math.is_nan(logabsdet).numpy().any():
-        print('logabsdet is nan. {}'.format(inverse))
-        logval = (alpha * (input_right_heights - input_left_heights) + input_left_heights).numpy()
-        if inverse:
-            det = (b**2 - 4*a*c_).numpy()
-            indices = np.where(det < 0 | np.isnan(logval))
-            print(indices)
-            print(a.numpy()[indices])
-            print(b.numpy()[indices])
-            print(c_.numpy()[indices])
-            print(alpha.numpy()[indices])
-            print((-c_/b).numpy()[indices])
-        indices = np.where(np.isnan(logval))
-        print(indices)
-        print(alpha.numpy()[indices])
-        print(input_right_heights.numpy()[indices])
-        print(input_left_heights.numpy()[indices])
-        print(inputs.numpy()[indices])
-        print(input_bin_locations.numpy()[indices])
-        print(input_bin_widths.numpy()[indices])
-        print(unnormalized_widths.numpy()[indices])
-        raise ValueError
 
     return outputs, logabsdet
         

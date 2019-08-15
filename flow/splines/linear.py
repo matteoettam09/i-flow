@@ -5,10 +5,14 @@ from splines.spline import _padded, _knot_positions, _gather_squeeze, _search_so
 def linear_spline(inputs, unnormalized_pdf,
                   inverse=False,
                   left=0., right=1., bottom=0., top=1.):
-    if not inverse and (tf.math.reduce_min(inputs) < left or tf.math.reduce_max(inputs) > right):
-        raise ValueError
-    elif inverse and (tf.math.reduce_min(inputs) < bottom or tf.math.reduce_max(inputs) > top):
-        raise ValueError
+
+    if not inverse: 
+        out_of_bounds = (inputs < left) | (inputs > right)
+        tf.where(out_of_bounds, left, inputs)
+    else:
+        out_of_bounds = (inputs < bottom) | (inputs > top)
+        tf.where(out_of_bounds, bottom, inputs)
+
 
     if inverse:
         inputs = (inputs - bottom) / (top - bottom)
@@ -21,7 +25,7 @@ def linear_spline(inputs, unnormalized_pdf,
 
     if inverse:
         inv_bin_idx = _search_sorted(cdf, inputs)
-        bin_boundaries = np.linspace(0, 1, num_bins+1)
+        bin_boundaries = tf.linspace(0., 1., num_bins+1)
         slopes = ((cdf[..., 1:] - cdf[..., :-1]) 
                   / (bin_boundaries[..., 1:] - bin_boundaries[..., :-1]))
         offsets = cdf[..., 1:] - slopes * bin_boundaries[..., 1:]
@@ -31,7 +35,7 @@ def linear_spline(inputs, unnormalized_pdf,
 
         outputs = (inputs - input_offsets) / input_slopes
 
-        logabsdet = -np.log(input_slopes)
+        logabsdet = -tf.math.log(input_slopes)
     else:
         bin_pos = inputs * num_bins
         bin_idx_float = tf.floor(bin_pos)
@@ -44,16 +48,16 @@ def linear_spline(inputs, unnormalized_pdf,
         outputs += alpha * input_pdfs
 
         bin_width = 1.0 / num_bins
-        logabsdet = np.log(input_pdfs) - np.log(bin_width)
+        logabsdet = tf.math.log(input_pdfs) - tf.math.log(bin_width)
         
     outputs = tf.clip_by_value(outputs, 0, 1)
 
     if inverse:
         outputs = outputs * (right - left) + left
-        logabsdet = logabsdet - np.log(top - bottom) + np.log(right - left)
+        logabsdet = logabsdet - tf.math.log(top - bottom) + tf.math.log(right - left)
     else:
         outputs = outputs * (top - bottom) + bottom
-        logabsdet = logabsdet + np.log(top - bottom) - np.log(right - left)
+        logabsdet = logabsdet + tf.math.log(top - bottom) - tf.math.log(right - left)
 
     return outputs, logabsdet
 
