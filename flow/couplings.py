@@ -14,7 +14,7 @@ class CouplingBijector(tfb.Bijector):
         self.identity_features = features_vector[mask <= 0]
         self.transform_features = features_vector[mask > 0]
 
-        assert self.num_identity_features + self.num_identity_features == self.features
+        assert self.num_identity_features + self.num_transform_features == self.features
 
         self.blob = blob
         self.nbins_in = 32
