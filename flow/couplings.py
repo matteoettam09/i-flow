@@ -42,6 +42,7 @@ class CouplingBijector(tfb.Bijector):
         y = tf.tile(((0.5/self.nbins_in) + tf.range(0.,1.,delta = 1./self.nbins_in)),[tf.size(xd)]) 
         y = tf.reshape(y,(-1,self.num_identity_features,self.nbins_in))
         res = tf.exp(((-self.nbins_in*self.nbins_in)/2.)*(y-xd[...,tf.newaxis])**2)
+        res = tf.reshape(res,(-1,self.num_identity_features*self.nbins_in))
         return res
     
     def _forward(self, inputs, context=None):
