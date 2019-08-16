@@ -1,6 +1,5 @@
 import tensorflow as tf
-import numpy as np
-from splines.spline import _padded, _knot_positions, _gather_squeeze, _search_sorted
+from .spline import _padded, _knot_positions, _gather_squeeze, _search_sorted
 
 def linear_spline(inputs, unnormalized_pdf,
                   inverse=False,
