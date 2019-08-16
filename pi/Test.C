@@ -59,7 +59,7 @@ void PS_Histogram::Draw(Option_t *option)
 }
 #endif
 
-using namespace ATOOLS;
+using namespace FOAM;
 
 class Camel: public Foam_Integrand {
 public:

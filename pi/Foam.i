@@ -8,10 +8,29 @@
 #include <fstream>
 #include <stddef.h>
 
-using namespace ATOOLS;
+using namespace FOAM;
 %}
 
-namespace ATOOLS {
+%typemap(typecheck) std::vector<double> { $1 = PySequence_Check($input); }
+%typemap(in) std::vector<double> {
+  if (!PySequence_Check($input)) {
+    PyErr_SetString(PyExc_ValueError,"Expected a sequence");
+    return NULL;
+  }
+  else {
+    $1 = std::vector<double>(PySequence_Length($input));
+    for (int i = 0; i < $1.size(); i++) {
+      PyObject *o = PySequence_GetItem($input,i);
+      if (PyNumber_Check(o)) $1[i] = PyFloat_AsDouble(o);
+      else {
+	PyErr_SetString(PyExc_ValueError,"Sequence elements must be numbers");
+	return NULL;
+      }
+    }
+  }
+}
+
+namespace FOAM {
 
   class Foam_Integrand {
   public:
@@ -35,26 +54,28 @@ namespace ATOOLS {
     void   Reset();
     void   Initialize();
     double Integrate(PyObject *const function);
-    void Point();
-    void   Point(std::vector<double> &x);
+    double Point();
+    double Point(std::vector<double> &x);
     double Weight(const std::vector<double> &x) const;
-    bool WriteOut(const std::string &filename) const;
-    bool ReadIn(const std::string &filename);
-    void Reserve(const std::string &key,
-		 const size_t n,const size_t nprev=0);
-    void Split(const std::string &key,const size_t nprev,
-	       const std::vector<double> &pos,const bool nosplit=true);
-    const double *const Reserved(const std::string &key) const;
+    %extend{
+    bool WriteOut(const char *filename) const
+    { return self->WriteOut(std::string(filename)); }
+    bool ReadIn(const const char *filename)
+    { return self->ReadIn(std::string(filename)); }
+    }
+    void Split(const size_t n,std::vector<double> pos,const bool nosplit=true);
     inline void SetNOpt(const long unsigned int &nopt) { m_nopt=nopt; }
     inline void SetNMax(const long unsigned int &nmax) { m_nmax=nmax; }
     inline void SetNCells(const size_t &ncells) { m_ncells=ncells; }
     inline void SetError(const double &error) { m_error=error; }
     inline void SetScale(const double &scale) { m_scale=scale; }
     %extend{
-      inline void SetMode(const int mode) { self->SetMode((imc::code)mode); }
+    inline void SetMode(const int mode) { self->SetMode((imc::code)mode); }
+    inline void SetVariableName(const char *vname)
+    { self->SetVariableName(std::string(vname)); }
+    inline void SetUnitName(const char *uname)
+    { self->SetUnitName(std::string(uname)); } 
     }
-    inline void SetVariableName(const std::string &vname) { m_vname=vname; }
-    inline void SetUnitName(const std::string &uname) { m_uname=uname; } 
     inline void SetSplitMode(const size_t split) { m_split=split; }
     inline void SetShuffleMode(const size_t shuffle) { m_shuffle=shuffle; }
     inline void SetFunction(Foam_Integrand *const function)

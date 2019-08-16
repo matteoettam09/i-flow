@@ -48,7 +48,7 @@ typedef std::stringstream MyStrStream;
 #define METHOD "PI_Demo"
 #endif
 
-namespace ATOOLS {
+namespace FOAM {
   
   template <class Value_Type>
   std::string ToString(const Value_Type value,
@@ -80,6 +80,6 @@ namespace ATOOLS {
     return ctime.tms_utime/clk_tck;
   }
 
-}// end of namespace ATOOLS;
+}// end of namespace FOAM;
 
 #endif

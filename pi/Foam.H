@@ -15,7 +15,7 @@
 #include <deque>
 #include <map>
 
-namespace ATOOLS {
+namespace FOAM {
 
   class Foam_Integrand {
   public:
@@ -151,7 +151,7 @@ namespace ATOOLS {
       \brief Adds the the squared weight, and the number of points 
       to the stored data employing the weight of the channel.
     */
-    void SelectSplitDimension();
+    void SelectSplitDimension(const std::vector<int> &nosplit);
     /*!
       \fn void SelectSplitDimension(Foam_Channel *const current)
       \brief Selectes a dimesion for the splitting of the active
@@ -358,7 +358,6 @@ namespace ATOOLS {
   public:
 
     typedef std::pair<size_t,std::pair<size_t,size_t> > Position_Pair;
-    typedef std::map<std::string,Position_Pair>         Position_Map;
 
   private:
 
@@ -369,8 +368,8 @@ namespace ATOOLS {
 
     std::deque<double> m_smax;
 
-    std::vector<double>   m_rmin, m_rmax, m_point, m_asum;
-    std::map<size_t,bool> m_nosplit;
+    std::vector<double> m_rmin, m_rmax, m_point, m_asum;
+    std::vector<int>    m_nosplit;
 
     std::vector<Foam_Channel*> m_channels;
 
@@ -382,7 +381,6 @@ namespace ATOOLS {
     rmc::code m_rmode;
 
     std::string  m_vname, m_uname;
-    Position_Map m_reserved;
 
     void Split();
     /*!
@@ -474,13 +472,13 @@ namespace ATOOLS {
       or the maximum number of integration points has been reached. 
     */
 
-    void Point();
+    double Point();
     /*!
       \fn void Point()
       \brief Generates one point inside the integration domain according 
       to the weights of the single channels.
     */
-    void   Point(std::vector<double> &x);
+    double Point(std::vector<double> &x);
     /*!
       \fn void   Point(std::vector<double> &x)
       \brief Generates one point inside the integration domain.
@@ -502,42 +500,16 @@ namespace ATOOLS {
       \brief Reads in the status of the integrator from the given file.
     */
 
-    void Reserve(const std::string &key,
-		 const size_t n,const size_t nprev=0);
+    void Split(const size_t dim,const std::vector<double> &pos,
+	       const bool nosplit=true);
     /*!
-      \fn void Reserve(const std::string &key,
-      const size_t n,const size_t nprev=0)
-      \brief Reserves the points generated in the given dimension 
-      for obejcts with the given key.
-
-      This method is used to tell the integrator that points which are 
-      generated inside the n'th - (n+nprev)'th dimesion shall be reserved 
-      for the purpose of objects which ask for it using the given key. 
-      This is particularly useful if the integration domain shall contain
-      the weight distribution of an external multi-channel. The functionality
-      of this multi channel may then be taken over by the Foam 
-      but the multi-channel may get its discriminators from the integrator
-      anyway by simply employing a unique key.
-    */
-    void Split(const std::string &key,const size_t nprev,
-	       const std::vector<double> &pos,const bool nosplit=true);
-    /*!
-      \fn void Split(const std::string &key,const size_t nprev,
+      \fn void Split(const size_t dim,
       const std::vector<double> &pos,const bool nosplit=true)
       \brief Splits an indicated dimension according to the given positions.
       
-      This method is to be used after the Reserve(const std::string &key,
-      const size_t n,const size_t nprev=0) method. After nprev dimesions have
-      been reserved for external objects using the given key, the integration 
-      domain may be splitted in the nprev'th of these dimensions according to
+      This method splits the integration in the dim'th dimension according to
       the positions given by the parameters in pos. The split flag nosplit 
-      determines, whether the integration domain is allowed to be split in 
-      this dimension again.
-    */
-    const double *const Reserved(const std::string &key) const;
-    /*!
-      \fn const double *const Reserved(const std::string &key) const
-      \brief Returns the reserved points for the given key.
+      determines, whether the integration domain is allowed to be split again.
     */
 
     // inline functions
@@ -668,6 +640,6 @@ namespace ATOOLS {
     Foam_Integrand.
   */
 
-}// end of namespace ATOOLS
+}// end of namespace FOAM
 
 #endif

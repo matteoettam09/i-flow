@@ -13,7 +13,7 @@
 
 // #define USING__IMMEDIATE_DELETE
 
-using namespace ATOOLS;
+using namespace FOAM;
 
 class Order_X {
 private:
@@ -51,7 +51,7 @@ void Foam_Integrand::FinishConstruction(const double apweight)
 
 #define DFORMAT std::setw(15)
 
-std::ostream &ATOOLS::operator<<(std::ostream &str,
+std::ostream &FOAM::operator<<(std::ostream &str,
 				 const Foam_Channel &channel)
 {
   str<<"("<<&channel<<"): {\n"
@@ -148,7 +148,7 @@ double Foam_Channel::Point(Foam_Integrand *const function,
   ++m_np;
   m_sum+=weight;
   m_sum2+=sqr(weight);
-  m_max=ATOOLS::Max(m_max,dabs(weight));
+  m_max=FOAM::Max(m_max,dabs(weight));
   if (p_integrator->RunMode()==rmc::construct) {
     m_points.push_back(std::pair<std::vector<double>,double>(point,cur));
     if (++s_npoints>s_nmaxpoints) THROW(fatal_error,"Too many stored points.");
@@ -178,7 +178,7 @@ void Foam_Channel::Reset()
       ++m_np;
       m_sum+=pit->second;
       m_sum2+=sqr(pit->second);
-      m_max=ATOOLS::Max(m_max,dabs(pit->second));
+      m_max=FOAM::Max(m_max,dabs(pit->second));
     }
     m_sum*=m_weight;
     m_sum2*=sqr(m_weight);
@@ -219,12 +219,13 @@ void Foam_Channel::Store()
   m_ssum2+=m_sum2/sqr(m_alpha);
 }
 
-void Foam_Channel::SelectSplitDimension()
+void Foam_Channel::SelectSplitDimension(const std::vector<int> &nosplit)
 {
   if (m_points.empty()) THROW(fatal_error,"No phase space points.");
   m_split=0;
   double diff(0.0);
   for (size_t dim(0);dim<m_this.size();++dim) {
+    if (!nosplit.at(dim)) {
     std::sort(m_points.begin(),m_points.end(),Order_X(dim));
     switch (p_integrator->Mode()) {
     case imc::maxopt: 
@@ -247,6 +248,7 @@ void Foam_Channel::SelectSplitDimension()
       }
       if (!IsEqual(m_sum2,s2l+sqr(m_points.back().second*m_weight))) 
 	THROW(fatal_error,"Summation does not agree.");
+    }
     }
     }
   }
@@ -338,7 +340,7 @@ void Foam::SetDimension(const size_t dim)
 {
   m_rmin.resize(dim,0.0);
   m_rmax.resize(dim,1.0);
-  m_nosplit.clear();
+  m_nosplit.resize(dim);
   for (size_t i(0);i<dim;++i) m_nosplit[i]=false;
 }
 
@@ -442,7 +444,7 @@ double Foam::Integrate(Foam_Integrand *const function)
     for (long unsigned int n(0);n<nsopt;++n) Point();
     CheckTime();
     if (Update(1)<m_error && 
-	add++>=ATOOLS::Max((size_t)5,m_point.size())) break;
+	add++>=FOAM::Max((size_t)5,m_point.size())) break;
     Shuffle();
   }
   msg_Info()<<mm_down(1)<<std::endl;
@@ -481,13 +483,13 @@ double Foam::Update(const int mode)
       m_np+=m_channels[i]->Points();
       m_sum+=m_channels[i]->Sum()/alpha;
       m_sum2+=m_channels[i]->Sum2()/sqr(alpha);
-      m_max=ATOOLS::Max(m_max,m_channels[i]->Max()/alpha);
+      m_max=FOAM::Max(m_max,m_channels[i]->Max()/alpha);
     }
   }
   m_smax.pop_back();
   m_smax.push_front(m_max);
   for (size_t i(0);i<m_smax.size();++i) 
-    m_max=ATOOLS::Max(m_max,m_smax[i]);
+    m_max=FOAM::Max(m_max,m_smax[i]);
   if (!IsEqual(sum,1.0)) 
     THROW(fatal_error,"Summation does not agree.");
   double error(dabs(Sigma()/Mean()));
@@ -512,7 +514,7 @@ double Foam::Update(const int mode)
   return error;
 }
 
-void Foam::Point()
+double Foam::Point()
 {
   Foam_Channel *selected=NULL;
   double disc(ran.Get());
@@ -541,14 +543,16 @@ void Foam::Point()
   if (selected==NULL) THROW(fatal_error,"No channel selected.");
   selected->Point(p_function,m_point);
   ++m_nrealp;
+  return selected->Weight()/selected->Alpha();
 }
 
-void Foam::Point(std::vector<double> &x)
+double Foam::Point(std::vector<double> &x)
 {
   if (x.size()!=m_point.size()) 
     THROW(fatal_error,"Inconsistent dimensions.");
-  Point();
+  double weight(Point());
   x=m_point;
+  return weight;
 }
 
 double Foam::Weight(const std::vector<double> &x) const
@@ -580,7 +584,7 @@ void Foam::Split()
     if (!m_channels[i]->Boundary()) {
       if (m_channels[i]->Position()!=std::string::npos) {
 	m_channels[i]->SetPosition(std::string::npos);
-	m_channels[i]->SelectSplitDimension();
+	m_channels[i]->SelectSplitDimension(m_nosplit);
       }
       m_channels[i]->SetAlpha(0.0);
       switch (m_mode) {
@@ -686,12 +690,6 @@ bool Foam::WriteOut(const std::string &filename) const
   for (size_t i(0);i<m_channels.size();++i) pmap[m_channels[i]]=i+1;
   for (size_t i(0);i<m_channels.size();++i) 
     if (!m_channels[i]->WriteOut(file,pmap)) result=false;
-  (*file)<<"}\n"<<m_reserved.size()<<" {\n";
-  for (Position_Map::const_iterator rit=m_reserved.begin();
-       rit!=m_reserved.end();++rit) 
-    (*file)<<rit->first<<" "<<rit->second.first<<" "
-	   <<rit->second.second.first<<" "
-	   <<rit->second.second.second<<"\n";
   (*file)<<"}\n"<<std::endl;
   delete file;
   return result;
@@ -757,55 +755,16 @@ bool Foam::ReadIn(const std::string &filename)
     delete file;
     return false;
   }
-  (*file)>>size>>dummy;
-  for (size_t i(0);i<size;++i) {
-    std::string tag;
-    size_t pos, next, ext;
-    (*file)>>tag>>pos>>next>>ext;
-    m_reserved[tag]=Position_Pair(pos,std::pair<size_t,size_t>(next,ext));
-  }
-  (*file)>>dummy;
-  if (file->eof() || dummy!="}") {
-    msg_Error()<<METHOD<<"("<<filename<<"): Data error.";
-    delete file;
-    return false;
-  }
   delete file;
   m_point.resize(m_rmin.size());
   return result;
 }
 
-void Foam::Reserve(const std::string &key,const size_t n,
-				   const size_t nprev)
-{
-  if (m_reserved.find(key)!=m_reserved.end())
-    THROW(critical_error,"Key already present.");
-  size_t cur(0);
-  for (Position_Map::iterator rit(m_reserved.begin());
-       rit!=m_reserved.end();++rit) cur+=rit->second.second.second;
-  if (cur+n>m_rmin.size()) THROW(fatal_error,"Inconsistent dimesions.");
-  m_reserved[key]=Position_Pair(cur,std::pair<size_t,size_t>(nprev,n));
-}
-
-const double *const Foam::
-Reserved(const std::string &key) const
-{
-  Position_Map::const_iterator rit(m_reserved.find(key));
-  if (rit==m_reserved.end()) THROW(critical_error,"Key not found.");
-  return &m_point[rit->second.first];
-}
-
-void Foam::
-Split(const std::string &key,const size_t nprev,
-      const std::vector<double> &pos,const bool nosplit)
+void Foam::Split(const size_t dim,
+		 const std::vector<double> &pos,const bool nosplit)
 {
   if (m_channels.empty()) 
     THROW(critical_error,"No cells. Call Initialize() first.");
-  Position_Map::const_iterator rit(m_reserved.find(key));
-  if (rit==m_reserved.end()) THROW(critical_error,"Key not found.");
-  if (nprev>=rit->second.second.first)
-    THROW(critical_error,"Inconsistent dimension.");
-  size_t dim(rit->second.first+nprev);
   m_nosplit[dim]=nosplit;
   const std::vector<Foam_Channel*> channels(m_channels);
   for (size_t i(pos.size());i>0;--i) {
@@ -826,14 +785,12 @@ Split(const std::string &key,const size_t nprev,
 void Foam::SetMin(const std::vector<double> &min) 
 { 
   m_rmin=min; 
-  m_nosplit.clear();
   for (size_t i(0);i<min.size();++i) m_nosplit[i]=false;
 }
 
 void Foam::SetMax(const std::vector<double> &max) 
 {
   m_rmax=max; 
-  m_nosplit.clear();
   for (size_t i(0);i<max.size();++i) m_nosplit[i]=false;
 }
 

@@ -9,7 +9,7 @@
 #define PROFILE_HERE
 #endif
 
-using namespace ATOOLS;
+using namespace FOAM;
 using namespace std;
 
 #define MAXLOGFILES 10
@@ -29,7 +29,7 @@ using namespace std;
 #define EPS 1.2e-7
 #define RNMX (1.0-EPS)
 
-ATOOLS::Random ATOOLS::ran(1234, 4321);
+FOAM::Random FOAM::ran(1234, 4321);
 
 
 Random::Random(long nid): 

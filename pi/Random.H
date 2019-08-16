@@ -4,7 +4,7 @@
 #include <fstream>
 #include "MathTools.H"
 
-namespace ATOOLS {
+namespace FOAM {
 
   class Random {
   private:
@@ -178,6 +178,6 @@ namespace ATOOLS {
     \brief reads in a status from a file
   */
 
-}// end of namespace ATOOLS
+}// end of namespace FOAM
  
 #endif

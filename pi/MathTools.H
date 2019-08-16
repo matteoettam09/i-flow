@@ -27,7 +27,7 @@
 #include <math.h> 
 #endif
 
-namespace ATOOLS {
+namespace FOAM {
 
   template <class Type> const Type &Min(const Type &a,const Type &b) 
   { return a<b?a:b; }
