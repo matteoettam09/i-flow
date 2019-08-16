@@ -85,9 +85,9 @@ class Piecewise(tfb.Bijector):
         return h8
 
     def _build_dense(self, inval):
-        h = layers.Dense(128, activation='relu')(inval)
+        h = layers.Dense(128, activation=tf.nn.leaky_relu)(inval)
         for i in range(4):
-            h = layers.Dense(128, activation='relu')(h)
+            h = layers.Dense(128, activation=tf.nn.leaky_relu)(h)
 
         return h
 
@@ -178,6 +178,7 @@ class PiecewiseLinear(Piecewise):
         yD = ((xD*self.nbins-tf.cast(ibins, dtype=tf.float32))
               * tf.reduce_sum(input_tensor=Q*one_hot, axis=-1)) \
             + tf.reduce_sum(input_tensor=tf.cumsum(Q, axis=-1)*one_hot2, axis=-1)
+        yD = tf.clip_by_value(yD,0.,1.)
         return tf.concat([xd, yD], axis=-1)
 
     def _forward(self, y, channel = 1):
@@ -192,6 +193,7 @@ class PiecewiseLinear(Piecewise):
         xD = ((yD-tf.reduce_sum(input_tensor=tf.cumsum(Q, axis=-1)*one_hot2, axis=-1))
               * tf.math.reciprocal(tf.reduce_sum(input_tensor=Q*one_hot, axis=-1))
               + tf.cast(ibins, dtype=tf.float32))*self.width
+        xD = tf.clip_by_value(xD,0.,1.)
         return tf.concat([yd, xD], axis=-1)
 
     def _inverse_log_det_jacobian(self, x, channel = 1):
