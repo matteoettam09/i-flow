@@ -1,6 +1,5 @@
 import tensorflow as tf
-import numpy as np
-from splines.spline import _padded, _knot_positions, _gather_squeeze, _search_sorted
+from .spline import _padded, _knot_positions, _gather_squeeze, _search_sorted
 
 DEFAULT_MIN_BIN_WIDTH = 1e-3
 DEFAULT_MIN_BIN_HEIGHT = 1e-3

@@ -1,6 +1,6 @@
 import tensorflow as tf
 import tensorflow_probability as tfp
-import splines
+from .. import splines
 tfb = tfp.bijectors
 
 class CouplingBijector(tfb.Bijector):

@@ -1,5 +1,4 @@
-import couplings
-import numpy as np
+from . import couplings
 import tensorflow as tf
 import tensorflow_probability as tfp
 tfb = tfp.bijectors
@@ -88,6 +87,7 @@ class Integrator():
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import corner
+    import numpy as np
     
     class CosineAnnealing(tf.keras.optimizers.schedules.LearningRateSchedule):
         def __init__(self, base_lr, total_epochs, eta_min=0):
@@ -146,8 +146,8 @@ if __name__ == '__main__':
     
     bijectors = []
     masks = [[x % 2 for x in range(1,ndims+1)],[x % 2 for x in range(0,ndims)],[1 if x < ndims/2 else 0 for x in range(0,ndims)],[0 if x < ndims/2 else 1 for x in range(0,ndims)]]
-    bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=100,blob=True))
-    bijectors.append(couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=100,blob=True))
+    bijectors.append(flow.couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=100,blob=True))
+    bijectors.append(flow.couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=100,blob=True))
     
     bijectors = tfb.Chain(list(reversed(bijectors)))
     
