@@ -69,8 +69,8 @@ namespace FOAM {
     inline void SetNCells(const size_t &ncells) { m_ncells=ncells; }
     inline void SetError(const double &error) { m_error=error; }
     inline void SetScale(const double &scale) { m_scale=scale; }
+    inline void SetMode(const int mode) { m_mode=mode; }
     %extend{
-    inline void SetMode(const int mode) { self->SetMode((imc::code)mode); }
     inline void SetVariableName(const char *vname)
     { self->SetVariableName(std::string(vname)); }
     inline void SetUnitName(const char *uname)
@@ -82,8 +82,7 @@ namespace FOAM {
     { p_function=function; }
     inline Foam_Integrand *const Function() const
     { return p_function; }
-    inline imc::code Mode() const { return m_mode; }
-    inline rmc::code RunMode() const { return m_rmode; }
+    inline int Mode() const { return m_mode; }
     inline double Mean() const { return m_sum/m_np; }
     inline double Max() const { return m_max; }
     inline double Points() const { return m_np; }

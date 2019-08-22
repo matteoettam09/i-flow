@@ -155,7 +155,7 @@ int main(int argc,char **argv)
   // set error
   integrator.SetError(5.0e-4);
   // set variance optimization mode
-  integrator.SetMode(imc::varopt);
+  integrator.SetMode(0);
   // integrate
   integrator.Initialize();
   PRINT_INFO("Integrate camel");

@@ -11,7 +11,7 @@
 #include <unistd.h>
 #include <algorithm>
 
-// #define USING__IMMEDIATE_DELETE
+#define USING__IMMEDIATE_DELETE
 
 using namespace FOAM;
 
@@ -86,26 +86,26 @@ std::ostream &FOAM::operator<<(std::ostream &str,
 
 Foam_Channel::Foam_Channel(Foam *const integrator):
   p_integrator(integrator),
-  m_alpha(0.0), m_oldalpha(0.0), m_weight(0.0), m_splitpos(0.0), 
+  m_alpha(0.0), m_oldalpha(0.0), m_weight(0.0), m_loss(0.0),
   m_sum(0.0), m_sum2(0.0), m_max(0.0), m_np(0.0), 
-  m_ssum(0.0), m_ssum2(0.0), m_snp(0.0), m_split(0) {}
+  m_ssum(0.0), m_ssum2(0.0), m_snp(0.0),
+  m_split(-1) {}
 
 Foam_Channel::
 Foam_Channel(Foam *const integrator,
 		  Foam_Channel *const prev,const size_t i,
 		  const double &pos):
   p_integrator(integrator),
-  m_alpha(0.0), m_oldalpha(0.0), m_weight(0.0), m_splitpos(0.0),
+  m_alpha(0.0), m_oldalpha(0.0), m_weight(0.0), m_loss(0.0),
   m_sum(0.0), m_sum2(0.0), m_max(0.0), m_np(0.0), 
   m_ssum(0.0), m_ssum2(0.0), m_snp(0.0),
   m_this(prev->m_this),
   m_next(prev->m_next),
-  m_split(0)
+  m_split(-1)
 {
   if (prev->Boundary()) THROW(fatal_error,"Attempt to split boundary cell.");
   if (i>=prev->m_this.size()) THROW(fatal_error,"Inconsistent dimensions.");
   if (pos!=std::numeric_limits<double>::max()) m_this[i]=pos;
-  else if (m_splitpos!=0.0) m_this[i]=m_splitpos;
   else m_this[i]=(m_next[i]->m_this[i]+m_this[i])/2.0;
   m_next[i]=prev->m_next[i];
   prev->m_next[i]=this;
@@ -221,37 +221,28 @@ void Foam_Channel::Store()
 
 void Foam_Channel::SelectSplitDimension(const std::vector<int> &nosplit)
 {
-  if (m_points.empty()) THROW(fatal_error,"No phase space points.");
-  m_split=0;
+  if (m_points.empty()) {
+    if (m_split<0) THROW(fatal_error,"No phase space points.");
+    return;
+  }
   double diff(0.0);
   for (size_t dim(0);dim<m_this.size();++dim) {
-    if (!nosplit.at(dim)) {
+    if (nosplit.at(dim)) continue;
     std::sort(m_points.begin(),m_points.end(),Order_X(dim));
-    switch (p_integrator->Mode()) {
-    case imc::maxopt: 
-    case imc::varopt:
-    default: {
-      double s2l(0.0), s2r(m_sum2);
-      for (size_t i(0);i<m_points.size()-1;++i) {
-	double cur(sqr(m_points[i].second*m_weight));
-	s2l+=cur;
-	s2r-=cur;
-	if (i>1) {
-	  double varl(s2l), varr(s2r);
-	  if (dabs(varl-varr)>diff) {
-	    diff=dabs(varl-varr);
-	    m_split=dim;
-	    m_splitpos=(m_points[i].first[dim]+
-			m_points[i+1].first[dim])/2.0;
-	  }
-	}
-      }
-      if (!IsEqual(m_sum2,s2l+sqr(m_points.back().second*m_weight))) 
-	THROW(fatal_error,"Summation does not agree.");
+    std::pair<double,double> s2=
+      p_integrator->Loss(this,m_points.size()/2);
+    double sl(0.0), sr(m_sum);
+    for (size_t i(0);i<m_points.size()/2;++i) {
+      sl+=dabs(m_points[i].second*m_weight);
+      sr-=dabs(m_points[i].second*m_weight);
     }
-    }
+    double varl(s2.first/sl), varr(s2.second/sr);
+    if (dabs(varl-varr)>diff) {
+      diff=dabs(varl-varr);
+      m_split=dim;
     }
   }
+  m_loss=p_integrator->Loss(this).first;
 #ifdef USING__IMMEDIATE_DELETE
   DeletePoints();
 #endif
@@ -262,8 +253,8 @@ WriteOut(std::fstream *const file,
 	 std::map<Foam_Channel*,size_t> &pmap) const
 {
   (*file)<<"[ "<<m_alpha<<" "<<m_oldalpha<<" "<<m_sum<<" "
-	 <<m_sum2<<" "<<m_max<<" "<<m_np
-	 <<" "<<m_ssum<<" "<<m_ssum2<<" "<<m_snp<<" ( ";
+	 <<m_sum2<<" "<<m_max<<" "<<m_np<<" "<<m_ssum
+	 <<" "<<m_ssum2<<" "<<m_snp<<" "<<m_loss<<" ( ";
   for (size_t i(0);i<m_this.size();++i) (*file)<<m_this[i]<<" ";
   (*file)<<") ( ";
   for (size_t i(0);i<m_next.size();++i) (*file)<<pmap[m_next[i]]<<" ";
@@ -277,7 +268,7 @@ bool Foam_Channel::ReadIn(std::fstream *const file,
   if (file->eof()) return false;
   std::string dummy;
   (*file)>>dummy>>m_alpha>>m_oldalpha>>m_sum>>m_sum2
-	 >>m_max>>m_np>>m_ssum>>m_ssum2>>m_snp>>dummy;
+	 >>m_max>>m_np>>m_ssum>>m_ssum2>>m_snp>>m_loss>>dummy;
   for (size_t i(0);i<m_this.size();++i) {
     if (file->eof()) return false;
     (*file)>>m_this[i];
@@ -324,7 +315,7 @@ Foam::Foam():
   m_np(0.0), m_nrealp(0.0), 
   m_smax(std::deque<double>(3,0.0)), 
   m_ncells(1000), m_split(1), m_shuffle(1), m_last(0), 
-  m_mode(imc::varopt), 
+  m_mode(0),
   m_rmode(rmc::none),
   m_vname("I") {}
 
@@ -587,16 +578,7 @@ void Foam::Split()
 	m_channels[i]->SelectSplitDimension(m_nosplit);
       }
       m_channels[i]->SetAlpha(0.0);
-      switch (m_mode) {
-      case imc::maxopt:
-	cur=m_channels[i]->Max();
-	break;
-      case imc::varopt: 
-      default:
-	cur=m_channels[i]->Sum2();
-      }
-      if (m_channels[i]->Max()<m_error*Mean())
-	m_channels[i]->DeletePoints();
+      cur=m_channels[i]->Loss();
       if (cur>max) {
 	max=cur;
 	selected=m_channels[i];
@@ -639,12 +621,7 @@ bool Foam::Shuffle()
       m_channels[i]->Store();
       if (m_channels[i]->Sum2()!=0.0) {
  	oldnorm+=alpha;
-	switch (m_mode) {
-	case imc::maxopt:
-	case imc::varopt:
-	default:
- 	  alpha=sqrt(alpha*m_channels[i]->SSum2()/m_channels[i]->SSum());
- 	}
+	alpha=sqrt(alpha*m_channels[i]->SSum2()/m_channels[i]->SSum());
 	if (!(alpha>0.0)) 
 	  THROW(fatal_error,"Invalid weight.");
 	m_channels[i]->SetAlpha(alpha);
@@ -658,7 +635,7 @@ bool Foam::Shuffle()
   if (diced==0) THROW(fatal_error,"No channel diced.");
   for (size_t i(0);i<m_channels.size();++i) {
     if (!m_channels[i]->Boundary()) {
-      if (m_channels[i]->Sum2()!=0.0) 
+      if (m_channels[i]->Sum2()!=0.0)
 	m_channels[i]->SetAlpha(m_channels[i]->Alpha()/norm);
       m_channels[i]->Reset();
     }
@@ -780,6 +757,23 @@ void Foam::Split(const size_t dim,
     m_channels[i]->SetAlpha(alpha);
     m_channels[i]->SaveAlpha();
   }
+}
+
+std::pair<double,double> Foam::Loss(const Foam_Channel *c,int pos) const
+{
+  const Foam_Channel::Point_Vector &points(c->GetPoints());
+  if (points.empty()) THROW(fatal_error,"No data points");
+  if (pos<0) pos=points.size();
+  double s2l(0.0), s2r(0.0), w(c->Weight());
+  if (m_mode==1) {
+    for (size_t i(0);i<pos;++i) s2l=FOAM::Max(points[i].second*w,s2l);
+    for (size_t i(pos);i<points.size();++i) s2r=FOAM::Max(points[i].second*w,s2r);
+  }
+  else {
+    for (size_t i(0);i<pos;++i) s2l+=sqr(points[i].second*w);
+    for (size_t i(pos);i<points.size();++i) s2r+=sqr(points[i].second*w);
+  }
+  return std::make_pair(s2l,s2r);
 }
 
 void Foam::SetMin(const std::vector<double> &min) 

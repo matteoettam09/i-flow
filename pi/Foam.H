@@ -69,19 +69,24 @@ namespace FOAM {
   class Foam;
 
   class Foam_Channel {
+  public:
+
+    typedef std::vector<std::pair<std::vector<double>,double> > Point_Vector;
+
   private:
     
     Foam *p_integrator;
 
-    double m_alpha, m_oldalpha, m_weight, m_splitpos;
+    double m_alpha, m_oldalpha, m_weight, m_loss;
     double m_sum, m_sum2, m_max, m_np, m_ssum, m_ssum2, m_snp;
 
-    std::vector<double>             m_this;
+    std::vector<double>        m_this;
     std::vector<Foam_Channel*> m_next;
 
-    std::vector<std::pair<std::vector<double>,double> > m_points;
+    Point_Vector m_points;
 
-    size_t m_pos, m_split;
+    size_t m_pos;
+    int    m_split;
 
     static long unsigned int s_npoints;
 
@@ -266,6 +271,11 @@ namespace FOAM {
       \fn inline double Max() const
       \brief Returns \f$max\{w\}\f$.
     */
+    inline double Loss() const { return m_loss; }
+    /*!
+      \fn inline double Loss() const
+      \brief Returns \f$loss\{w\}\f$.
+    */
     inline double Points() const { return m_np; }
     /*!
       \fn inline double Points() const
@@ -326,6 +336,8 @@ namespace FOAM {
       \brief Stores the weight.
     */
 
+    const Point_Vector &GetPoints() const { return m_points; }
+
   };// end of class Foam_Channel
   /*!
     \class Foam_Channel
@@ -344,15 +356,6 @@ namespace FOAM {
 
   std::ostream &
   operator<<(std::ostream &str,const Foam_Channel &channel);
-
-  struct imc {
-    
-    enum code {
-      varopt = 0,
-      maxopt = 1
-    };
-
-  };// end of struct imc
 
   class Foam {
   public:
@@ -377,7 +380,7 @@ namespace FOAM {
 
     size_t m_ncells, m_split, m_shuffle, m_last;
 
-    imc::code m_mode;
+    int       m_mode;
     rmc::code m_rmode;
 
     std::string  m_vname, m_uname;
@@ -512,6 +515,8 @@ namespace FOAM {
       determines, whether the integration domain is allowed to be split again.
     */
 
+    std::pair<double,double> Loss(const Foam_Channel *c,int pos=-1) const;
+
     // inline functions
     inline void SetNOpt(const long unsigned int &nopt) { m_nopt=nopt; }
     /*!
@@ -540,9 +545,9 @@ namespace FOAM {
       \fn inline void SetScale(const double &scale)
       \brief Sets a possible scale the result is multiplied with.
     */
-    inline void SetMode(const imc::code mode) { m_mode=mode; }
+    inline void SetMode(const int mode) { m_mode=mode; }
     /*!
-      \fn inline void SetMode(const imc::code mode)
+      \fn inline void SetMode(const int mode)
       \brief Sets the integration mode.
 
       This method sets the integration mode. Mode 0 corresponds to variance 
@@ -584,9 +589,9 @@ namespace FOAM {
       \brief Returns the integrand.
     */
 
-    inline imc::code Mode() const { return m_mode; }
+    inline int Mode() const { return m_mode; }
     /*!
-      \fn inline double Mode() const
+      \fn inline int Mode() const
       \brief Returns the current mode.
     */
     inline rmc::code RunMode() const { return m_rmode; }
