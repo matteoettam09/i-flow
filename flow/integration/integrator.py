@@ -50,7 +50,7 @@ class Integrator():
             grad = tf.reduce_mean(input_tensor=-tf.stop_gradient((p/q)**2)*logq)
            
         grads = tape.gradient(grad, self.dist.trainable_variables)
-        self.optimizer.apply_gradients(zip(grads, dist.trainable_variables))
+        self.optimizer.apply_gradients(zip(grads, self.dist.trainable_variables))
 
         if integral:
             return loss, mean, tf.sqrt(var/nsamples)
@@ -142,12 +142,12 @@ if __name__ == '__main__':
         return tf.where((x[:,0] < 0.9) & (x[:,1] < 0.9), (x[:,0]**2 + x[:,1]**2)/((1-x[:,0])*(1-x[:,1])), 0)
 
     ndims = 2
-    epochs = int(1000)
+    epochs = int(500)
     
     bijectors = []
     masks = [[x % 2 for x in range(1,ndims+1)],[x % 2 for x in range(0,ndims)],[1 if x < ndims/2 else 0 for x in range(0,ndims)],[0 if x < ndims/2 else 1 for x in range(0,ndims)]]
-    bijectors.append(flow.couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=100,blob=True))
-    bijectors.append(flow.couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=100,blob=True))
+    bijectors.append(couplings.PiecewiseRationalQuadratic([1,0],build_dense,num_bins=100,blob=True))
+    bijectors.append(couplings.PiecewiseRationalQuadratic([0,1],build_dense,num_bins=100,blob=True))
     
     bijectors = tfb.Chain(list(reversed(bijectors)))
     
@@ -171,28 +171,28 @@ if __name__ == '__main__':
     errors = []
     min_loss = 1e99
     nsamples = 5000
-    #try:
-    #    for epoch in range(epochs):
-    #        if epoch % 5 == 0:
-    #            samples = integrator.sample(10000)
-    #            hist2d_kwargs={'smooth':2}
-    #            figure = corner.corner(samples, labels=[r'$x_1$',r'$x_2$'], show_titles=True, title_kwargs={"fontsize": 12}, range=ndims*[[0,1]],**hist2d_kwargs)
+    try:
+        for epoch in range(epochs):
+            if epoch % 5 == 0:
+                samples = integrator.sample(10000)
+                hist2d_kwargs={'smooth':2}
+                figure = corner.corner(samples, labels=[r'$x_1$',r'$x_2$'], show_titles=True, title_kwargs={"fontsize": 12}, range=ndims*[[0,1]],**hist2d_kwargs)
 
-    #        loss, integral, error = integrator.train_one_step(nsamples,integral=True)
-    #        if epoch % 5 == 0:
-    #            figure.suptitle('loss = '+str(loss.numpy()),fontsize=16,x = 0.75)
-    #            plt.savefig('fig_{:04d}.png'.format(epoch))
-    #            plt.close()
-    #        losses.append(loss)
-    #        integrals.append(integral)
-    #        errors.append(error)
-    #        if loss < min_loss:
-    #            min_loss = loss
-    #            integrator.save()
-    #        if epoch % 10 == 0:
-    #            print(epoch, loss.numpy(), integral.numpy(), error.numpy())
-    #except KeyboardInterrupt:
-    #    pass
+            loss, integral, error = integrator.train_one_step(nsamples,integral=True)
+            if epoch % 5 == 0:
+                figure.suptitle('loss = '+str(loss.numpy()),fontsize=16,x = 0.75)
+                plt.savefig('fig_{:04d}.png'.format(epoch))
+                plt.close()
+            losses.append(loss)
+            integrals.append(integral)
+            errors.append(error)
+            if loss < min_loss:
+                min_loss = loss
+                integrator.save()
+            if epoch % 10 == 0:
+                print(epoch, loss.numpy(), integral.numpy(), error.numpy())
+    except KeyboardInterrupt:
+        pass
 
     integrator.load()
     

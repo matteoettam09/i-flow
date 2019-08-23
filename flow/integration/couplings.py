@@ -4,7 +4,7 @@ from .. import splines
 tfb = tfp.bijectors
 
 class CouplingBijector(tfb.Bijector):
-    def __init__(self, mask, transform_net_create_fn, blob=False, **kwargs):
+    def __init__(self, mask, transform_net_create_fn, blob=None, **kwargs):
         mask = tf.convert_to_tensor(mask)
 
         super(CouplingBijector,self).__init__(forward_min_event_ndims=1,**kwargs)
@@ -16,8 +16,11 @@ class CouplingBijector(tfb.Bijector):
 
         assert self.num_identity_features + self.num_transform_features == self.features
 
-        self.blob = blob
-        self.nbins_in = 32
+        self.blob = False if blob is None else True
+        if self.blob:
+            if not isinstance(blob,int):
+                raise ValueError('Blob encoding requires a number of bins')
+            self.nbins_in = int(blob)
 
         if self.blob:
             self.transform_net = transform_net_create_fn(
@@ -40,7 +43,7 @@ class CouplingBijector(tfb.Bijector):
 
     def _one_blob(self, xd):
         y = tf.tile(((0.5/self.nbins_in) + tf.range(0.,1.,delta = 1./self.nbins_in)),[tf.size(xd)]) 
-        y = tf.reshape(y,(-1,self.num_identity_features,self.nbins_in))
+        y = tf.cast(tf.reshape(y,(-1,self.num_identity_features,self.nbins_in)), dtype=tf.float64)
         res = tf.exp(((-self.nbins_in*self.nbins_in)/2.)*(y-xd[...,tf.newaxis])**2)
         res = tf.reshape(res,(-1,self.num_identity_features*self.nbins_in))
         return res

@@ -16,7 +16,7 @@ def rational_quadratic_spline(inputs,
                               min_derivative=DEFAULT_MIN_DERIVATIVE):
 
     out_of_bounds = (inputs < left) | (inputs > right)
-    tf.where(out_of_bounds, left, inputs)
+    tf.where(out_of_bounds, tf.cast(left, dtype=inputs.dtype), inputs)
 
     num_bins = unnormalized_widths.shape[-1]
 
