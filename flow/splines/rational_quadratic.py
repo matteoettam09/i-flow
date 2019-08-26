@@ -31,7 +31,8 @@ def rational_quadratic_spline(inputs,
     cumwidths = (right - left) * cumwidths + left
     widths = cumwidths[..., 1:] - cumwidths[..., :-1]
 
-    derivatives = min_derivative + tf.nn.softplus(unnormalized_derivatives)
+    derivatives = ((min_derivative + tf.nn.softplus(unnormalized_derivatives)) /
+                  (tf.cast(min_derivative + tf.math.log(2.),tf.float64)))
 
     heights = tf.nn.softmax(unnormalized_heights, axis=-1)
     heights = min_bin_height + (1 - min_bin_height * num_bins) * heights

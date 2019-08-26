@@ -40,8 +40,8 @@ class Integrator():
         with tf.GradientTape() as tape:
             x = tf.stop_gradient(self.dist.sample(nsamples))
             logq = self.dist.log_prob(x)
-            p = self._func(x)
             q = self.dist.prob(x)
+            p = self._func(x)
             xsec = p/q
             mean, var = tf.nn.moments(x=xsec, axes=[0])
             p = p/mean
@@ -57,16 +57,18 @@ class Integrator():
 
         return loss
 
+    @tf.function
     def sample(self, nsamples):
         return self.dist.sample(nsamples)
 
+    @tf.function
     def integrate(self, nsamples):
         x = self.dist.sample(nsamples)
         q = self.dist.prob(x)
         p = self._func(x)
-
         return tf.nn.moments(x=p/q, axes=[0])
 
+    @tf.function
     def acceptance(self, nsamples):
         x = self.dist.sample(nsamples)
         q = self.dist.prob(x)
