@@ -65,7 +65,7 @@ class CouplingBijector(tfb.Bijector):
 
         outputs = tf.concat([identity_split,transform_split],axis=1)
         indices = tf.concat([self.identity_features, self.transform_features], axis=-1)
-        outputs = tf.gather(outputs,indices,axis=1)
+        outputs = tf.gather(outputs,tf.argsort(indices),axis=1)
 
         return outputs
 
@@ -87,7 +87,7 @@ class CouplingBijector(tfb.Bijector):
 
         outputs = tf.concat([identity_split,transform_split],axis=1)
         indices = tf.concat([self.identity_features, self.transform_features], axis=-1)
-        outputs = tf.gather(outputs,indices,axis=1)
+        outputs = tf.gather(outputs,tf.argsort(indices),axis=1)
 
         return outputs
 
