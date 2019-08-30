@@ -11,7 +11,7 @@
 #include <unistd.h>
 #include <algorithm>
 
-#define USING__IMMEDIATE_DELETE
+// #define USING__IMMEDIATE_DELETE
 
 using namespace FOAM;
 
@@ -171,7 +171,7 @@ bool Foam_Channel::Find(const std::vector<double> &point) const
 
 void Foam_Channel::Reset()
 {
-  m_sum=m_sum2=m_max=m_np=0.0;
+  m_sum=m_sum2=m_max=m_loss=m_np=0.0;
   if (!m_points.empty()) {
     for (std::vector<std::pair<std::vector<double>,double> >::const_iterator
 	   pit(m_points.begin());pit!=m_points.end();++pit) {
@@ -183,6 +183,7 @@ void Foam_Channel::Reset()
     m_sum*=m_weight;
     m_sum2*=sqr(m_weight);
     m_max*=m_weight;
+    m_loss=p_integrator->Loss(this);
   }
 }
 
@@ -774,9 +775,7 @@ double Foam::Loss(const Foam_Channel *c,const size_t &dim,
     for (size_t i(start);i<end;++i) s2=FOAM::Max(points[i].second*w,s2);
   }
   else {
-    for (size_t i(start);i<end;++i) {
-      s2+=sqr(points[i].second*w);
-    }
+    for (size_t i(start);i<end;++i) s2+=sqr(points[i].second*w);
   }
   return s2;
 }
