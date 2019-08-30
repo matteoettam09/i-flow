@@ -515,7 +515,8 @@ namespace FOAM {
       determines, whether the integration domain is allowed to be split again.
     */
 
-    std::pair<double,double> Loss(const Foam_Channel *c,int pos=-1) const;
+    double Loss(const Foam_Channel *c,const size_t &dim=0,
+		size_t start=0,size_t end=0) const;
 
     // inline functions
     inline void SetNOpt(const long unsigned int &nopt) { m_nopt=nopt; }

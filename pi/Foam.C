@@ -229,20 +229,24 @@ void Foam_Channel::SelectSplitDimension(const std::vector<int> &nosplit)
   for (size_t dim(0);dim<m_this.size();++dim) {
     if (nosplit.at(dim)) continue;
     std::sort(m_points.begin(),m_points.end(),Order_X(dim));
-    std::pair<double,double> s2=
-      p_integrator->Loss(this,m_points.size()/2);
-    double sl(0.0), sr(m_sum);
-    for (size_t i(0);i<m_points.size()/2;++i) {
-      sl+=dabs(m_points[i].second*m_weight);
-      sr-=dabs(m_points[i].second*m_weight);
+    size_t nbins(10), nstep(m_points.size()/nbins);
+    int nrem(m_points.size()%nbins);
+    if (nrem) ++nstep;
+    double sum(0.0), sum2(0.0); 
+    for (size_t i(0);i<m_points.size();) {
+      double s2(p_integrator->Loss(this,dim,i,i+nstep));
+      sum+=s2;
+      sum2+=s2*s2;
+      i+=nstep;
+      if (--nrem==0) --nstep;
     }
-    double varl(s2.first/sl), varr(s2.second/sr);
-    if (dabs(varl-varr)>diff) {
-      diff=dabs(varl-varr);
+    double err(sqrt((sum2/nbins-sqr(sum/nbins))/(nbins-1.0)));
+    if (err>diff) {
+      diff=err;
       m_split=dim;
     }
   }
-  m_loss=p_integrator->Loss(this).first;
+  m_loss=p_integrator->Loss(this);
 #ifdef USING__IMMEDIATE_DELETE
   DeletePoints();
 #endif
@@ -759,21 +763,22 @@ void Foam::Split(const size_t dim,
   }
 }
 
-std::pair<double,double> Foam::Loss(const Foam_Channel *c,int pos) const
+double Foam::Loss(const Foam_Channel *c,const size_t &dim,
+		  size_t start,size_t end) const
 {
   const Foam_Channel::Point_Vector &points(c->GetPoints());
   if (points.empty()) THROW(fatal_error,"No data points");
-  if (pos<0) pos=points.size();
-  double s2l(0.0), s2r(0.0), w(c->Weight());
+  if (end==start) end=points.size();
+  double s2(0.0), w(c->Weight());
   if (m_mode==1) {
-    for (size_t i(0);i<pos;++i) s2l=FOAM::Max(points[i].second*w,s2l);
-    for (size_t i(pos);i<points.size();++i) s2r=FOAM::Max(points[i].second*w,s2r);
+    for (size_t i(start);i<end;++i) s2=FOAM::Max(points[i].second*w,s2);
   }
   else {
-    for (size_t i(0);i<pos;++i) s2l+=sqr(points[i].second*w);
-    for (size_t i(pos);i<points.size();++i) s2r+=sqr(points[i].second*w);
+    for (size_t i(start);i<end;++i) {
+      s2+=sqr(points[i].second*w);
+    }
   }
-  return std::make_pair(s2l,s2r);
+  return s2;
 }
 
 void Foam::SetMin(const std::vector<double> &min) 
