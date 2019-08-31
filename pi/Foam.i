@@ -70,6 +70,7 @@ namespace FOAM {
     inline void SetError(const double &error) { m_error=error; }
     inline void SetScale(const double &scale) { m_scale=scale; }
     inline void SetMode(const int mode) { m_mode=mode; }
+    inline void SetStorePoints(const int store) { m_store=store; }
     %extend{
     inline void SetVariableName(const char *vname)
     { self->SetVariableName(std::string(vname)); }
@@ -83,6 +84,7 @@ namespace FOAM {
     inline Foam_Integrand *const Function() const
     { return p_function; }
     inline int Mode() const { return m_mode; }
+    inline int StorePoints() const { return m_store; }
     inline double Mean() const { return m_sum/m_np; }
     inline double Max() const { return m_max; }
     inline double Points() const { return m_np; }
