@@ -11,8 +11,6 @@
 #include <unistd.h>
 #include <algorithm>
 
-// #define USING__IMMEDIATE_DELETE
-
 using namespace FOAM;
 
 class Order_X {
@@ -28,7 +26,6 @@ public:
 };// end of class Order_X
 
 long unsigned int Foam_Channel::s_npoints(0);
-long unsigned int s_nmaxpoints(1000000);
 
 Foam_Integrand::~Foam_Integrand()
 {
@@ -151,7 +148,6 @@ double Foam_Channel::Point(Foam_Integrand *const function,
   m_max=FOAM::Max(m_max,dabs(weight));
   if (p_integrator->RunMode()==rmc::construct) {
     m_points.push_back(std::pair<std::vector<double>,double>(point,cur));
-    if (++s_npoints>s_nmaxpoints) THROW(fatal_error,"Too many stored points.");
   }
   else {
     function->AddPoint(cur,m_weight/m_alpha);
@@ -248,9 +244,7 @@ void Foam_Channel::SelectSplitDimension(const std::vector<int> &nosplit)
     }
   }
   m_loss=p_integrator->Loss(this);
-#ifdef USING__IMMEDIATE_DELETE
-  DeletePoints();
-#endif
+  if (!p_integrator->StorePoints()) DeletePoints();
 }
 
 bool Foam_Channel::
@@ -320,7 +314,7 @@ Foam::Foam():
   m_np(0.0), m_nrealp(0.0), 
   m_smax(std::deque<double>(3,0.0)), 
   m_ncells(1000), m_split(1), m_shuffle(1), m_last(0), 
-  m_mode(0),
+  m_mode(0), m_store(0),
   m_rmode(rmc::none),
   m_vname("I") {}
 
@@ -776,6 +770,7 @@ double Foam::Loss(const Foam_Channel *c,const size_t &dim,
   }
   else {
     for (size_t i(start);i<end;++i) s2+=sqr(points[i].second*w);
+    s2/=end-start;
   }
   return s2;
 }

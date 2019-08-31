@@ -380,7 +380,7 @@ namespace FOAM {
 
     size_t m_ncells, m_split, m_shuffle, m_last;
 
-    int       m_mode;
+    int       m_mode, m_store;
     rmc::code m_rmode;
 
     std::string  m_vname, m_uname;
@@ -554,6 +554,11 @@ namespace FOAM {
       This method sets the integration mode. Mode 0 corresponds to variance 
       minimization, mode 1 corresponds to maximum minimization.
     */
+    inline void SetStorePoints(const int store) { m_store=store; }
+    /*!
+      \fn inline void SetStorePoints(const int &store)
+      \brief Sets the mode for storing points.
+    */
 
     inline void SetVariableName(const std::string &vname) { m_vname=vname; }
     /*!
@@ -594,6 +599,11 @@ namespace FOAM {
     /*!
       \fn inline int Mode() const
       \brief Returns the current mode.
+    */
+    inline int StorePoints() const { return m_store; }
+    /*!
+      \fn inline int StorePoints() const
+      \brief Returns the store points mode.
     */
     inline rmc::code RunMode() const { return m_rmode; }
     /*!
