@@ -8,7 +8,7 @@ def _padded(t, lhs, rhs=None):
     result = tf.pad(t, paddings=lhs_paddings, constant_values=lhs)
     if rhs is not None:
         rhs = tf.convert_to_tensor(lhs, dtype=t.dtype)
-        rhs_paddings = tf.concat([zeros, [[1, 0]]], axis=0)
+        rhs_paddings = tf.concat([zeros, [[0, 1]]], axis=0)
         result = tf.pad(result, paddings=rhs_paddings, constant_values=rhs)
     return result
 
@@ -29,3 +29,5 @@ def _search_sorted(cdf, inputs):
                     side='right',
                     out_type=tf.int32) - 1)
 
+def _cube_root(x):
+    return tf.sign(x) * tf.exp(tf.math.log(tf.abs(x))/3.0)

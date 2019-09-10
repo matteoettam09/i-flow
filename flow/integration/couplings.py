@@ -229,6 +229,37 @@ class PiecewiseQuadratic(PiecewiseBijector):
                 min_bin_height=self.min_bin_height
         )
 
+class PiecewiseCubic(PiecewiseBijector):
+    def __init__(self, mask, transform_net_create_fn, num_bins=10,
+            min_bin_width=splines.quadratic.DEFAULT_MIN_BIN_WIDTH,
+            min_bin_height=splines.quadratic.DEFAULT_MIN_BIN_HEIGHT,
+            **kwargs):
+        self.num_bins = num_bins
+        self.min_bin_width = min_bin_width
+        self.min_bin_height = min_bin_height
+
+        super(PiecewiseCubic,self).__init__(mask, transform_net_create_fn, **kwargs)
+
+    def _transform_dim_multiplier(self):
+        return self.num_bins * 2 + 2
+
+    def _piecewise_cdf(self, inputs, transform_params, inverse=False):
+        unnormalized_widths = transform_params[..., :self.num_bins]
+        unnormalized_heights = transform_params[..., self.num_bins:2*self.num_bins]
+        unnorm_derivatives_left = transform_params[..., 2*self.num_bins][..., tf.newaxis]
+        unnorm_derivatives_right = transform_params[..., 2*self.num_bins+1][..., tf.newaxis]
+
+        return splines.cubic_spline(
+                inputs=inputs,
+                unnormalized_widths=unnormalized_widths,
+                unnormalized_heights=unnormalized_heights,
+                unnorm_derivatives_left=unnorm_derivatives_left,
+                unnorm_derivatives_right=unnorm_derivatives_right,
+                inverse=inverse,
+                min_bin_width=self.min_bin_width,
+                min_bin_height=self.min_bin_height
+        )
+
 class PiecewiseRationalQuadratic(PiecewiseBijector):
     def __init__(self, mask, transform_net_create_fn, num_bins=10,
             min_bin_width=splines.rational_quadratic.DEFAULT_MIN_BIN_WIDTH,
@@ -260,39 +291,3 @@ class PiecewiseRationalQuadratic(PiecewiseBijector):
                 min_bin_height=self.min_bin_height,
                 min_derivative=self.min_derivative
         )
-
-
-if __name__ == '__main__':
-    import numpy as np
-
-    def build_dense(in_features, out_features):
-        model = tf.keras.models.Sequential()
-        model.add(tf.keras.layers.Input(in_features))
-        model.add(tf.keras.layers.Dense(128))
-        model.add(tf.keras.layers.Dense(out_features))
-        model.summary()
-        return model
-
-    layer = PiecewiseRationalQuadratic([1,1,0,0], build_dense)
-
-    inputs = np.array(np.random.random((10,4)),dtype=np.float32)
-
-    outputs = layer.forward(inputs)
-    inputs_inv = layer.inverse(outputs)
-
-    print(inputs[np.logical_not(np.isclose(inputs,inputs_inv))])
-    print(inputs_inv[np.logical_not(np.isclose(inputs,inputs_inv))])
-
-    jac_f = layer._forward_log_det_jacobian(inputs)
-    jac_b = layer._inverse_log_det_jacobian(outputs)
-
-    print(jac_f[np.logical_not(np.isclose(jac_f,jac_b))])
-    print(jac_b[np.logical_not(np.isclose(jac_f,jac_b))])
-
-    bijectors = [layer]
-    bijectors.append(PiecewiseRationalQuadratic([0,1,1,0], build_dense))
-
-    bijector = tfb.Chain(bijectors)
-
-    print(inputs[np.logical_not(np.isclose(inputs,bijector.inverse(bijector.forward(inputs))))])
-    print(inputs[:10], bijector.forward(inputs[:10]))

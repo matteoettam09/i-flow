@@ -1,10 +1,10 @@
 import tensorflow as tf
-from .spline import _padded, _knot_positions, _gather_squeeze, _search_sorted
+from .spline import _padded, _knot_positions, _gather_squeeze, _search_sorted, _cube_root
 
 DEFAULT_MIN_BIN_WIDTH = 1e-3
 DEFAULT_MIN_BIN_HEIGHT = 1e-3
-DEFAULT_EPS = 1e-5
-DEFAULT_QUADRATIC_THRESHOLD = 1e-3
+DEFAULT_EPS = 1e-8
+DEFAULT_QUADRATIC_THRESHOLD = 1e-8
 
 def cubic_spline(inputs,
                  unnormalized_widths,
@@ -18,10 +18,17 @@ def cubic_spline(inputs,
                  eps=DEFAULT_EPS,
                  quadratic_threshold=DEFAULT_QUADRATIC_THRESHOLD):
 
-    if not inverse and (tf.math.reduce_min(inputs) < left or tf.math.reduce_max(inputs) > right):
-        raise ValueError('Outside domain')
-    elif inverse and (tf.math.reduce_min(inputs) < bottom or tf.math.reduce_max(inputs) > top):
-        raise ValueError('Outside domain')
+    left = tf.cast(left,dtype=tf.float64)
+    right = tf.cast(right,dtype=tf.float64)
+    bottom = tf.cast(bottom,dtype=tf.float64)
+    top = tf.cast(top,dtype=tf.float64)
+
+    if not inverse: 
+        out_of_bounds = (inputs < left) | (inputs > right)
+        tf.where(out_of_bounds, left, inputs)
+    else:
+        out_of_bounds = (inputs < bottom) | (inputs > top)
+        tf.where(out_of_bounds, bottom, inputs)
 
     if inverse:
         inputs = (inputs - bottom) / (top - bottom)
@@ -44,13 +51,13 @@ def cubic_spline(inputs,
     cumheights = _knot_positions(heights,0)
 
     slopes = heights / widths
-    min_slope_1 = np.minimum(np.abs(slopes[..., :-1]),
-                             np.abs(slopes[..., 1:]))
+    min_slope_1 = tf.minimum(tf.abs(slopes[..., :-1]),
+                             tf.abs(slopes[..., 1:]))
     min_slope_2 = (
             0.5 * (widths[..., 1:] * slopes[..., :-1] + widths[..., :-1] * slopes[..., 1:])
             / (widths[..., :-1] + widths[..., 1:])
     )
-    min_slope = np.minimum(min_slope_1, min_slope_2)
+    min_slope = tf.minimum(min_slope_1, min_slope_2)
 
     derivatives_left = tf.nn.sigmoid(unnorm_derivatives_left) * 3 * slopes[..., 0][..., tf.newaxis]
     derivatives_right = tf.nn.sigmoid(unnorm_derivatives_right) * 3 * slopes[..., -1][..., tf.newaxis]
@@ -66,9 +73,9 @@ def cubic_spline(inputs,
     d = cumheights[..., :-1]
 
     if inverse:
-        bin_idx = _search_sorted(cumheights, inputs)[...,tf.newaxis]
+        bin_idx = _search_sorted(cumheights, inputs)
     else:
-        bin_idx = _search_sorted(cumwidths, inputs)[...,tf.newaxis]
+        bin_idx = _search_sorted(cumwidths, inputs)
 
     inputs_a = _gather_squeeze(a, bin_idx)
     inputs_b = _gather_squeeze(b, bin_idx)
@@ -93,64 +100,67 @@ def cubic_spline(inputs,
         depressed_1 = -2 * inputs_b_ * delta_1 + delta_2
         depressed_2 = delta_1
 
-        three_roots_mask = discriminant >= 0 # Discriminant == 0 might be a problem in practice.
-        one_root_mask = discriminant < 0
+        def one_root():
+            # Deal with one root cases
+            p = _cube_root((-depressed_1 + tf.sqrt(-discriminant)) / 2.)
+            q = _cube_root((-depressed_1 - tf.sqrt(-discriminant)) / 2.)
 
-        outputs = tf.zeros_like(inputs)
+            return ((p+q) - inputs_b_ + input_left_cumwidths)
 
-        # Deal with one root cases
-        p = ((-depressed_1[one_root_mask] + tf.sqrt(-discriminant[one_root_mask])) / 2.)**(1./3.)
-        q = ((-depressed_1[one_root_mask] - tf.sqrt(-discriminant[one_root_mask])) / 2.)**(1./3.)
+        def three_roots():
+            # Deal with three root cases
+            theta = tf.atan2(tf.sqrt(discriminant), -depressed_1)
+            theta /= 3.
 
-        outputs[one_root_mask] = ((p+q)
-                                 - inputs_b_[one_root_mask]
-                                 + input_left_cumwidths[one_root_mask])
+            cubic_root_1 = tf.cos(theta)
+            cubic_root_2 = tf.sin(theta)
 
-        # Deal with three root cases
-        theta = tf.atan2(tf.sqrt(discriminant[three_roots_mask]), -depressed_1[three_roots_mask])
-        theta /= 3.
+            root_1 = cubic_root_1
+            root_2 = (-0.5 * cubic_root_1 
+                    - tf.cast(0.5 * tf.sqrt(3.),dtype=tf.float64) * cubic_root_2)
+            root_3 = (-0.5 * cubic_root_1 
+                    + tf.cast(0.5 * tf.sqrt(3.),dtype=tf.float64) * cubic_root_2)
 
-        cubic_root_1 = tf.cos(theta)
-        cubic_root_2 = tf.sin(theta)
+            root_scale = 2 * tf.sqrt(-depressed_2)
+            root_shift = (-inputs_b_ + input_left_cumwidths)
 
-        root_1 = cubic_root_1
-        root_2 = -0.5 * cubic_root_1 - 0.5 * tf.sqrt(3) * cubic_root_2
-        root_2 = -0.5 * cubic_root_1 + 0.5 * tf.sqrt(3) * cubic_root_2
+            root_1 = root_1 * root_scale + root_shift
+            root_2 = root_2 * root_scale + root_shift
+            root_3 = root_3 * root_scale + root_shift
 
-        root_scale = 2 * tf.sqrt(-depressed_2[three_roots_mask])
-        root_shift = (-inputs_b_[three_roots_mask] + input_left_cumwidths[three_roots_mask])
+            root1_mask = tf.cast((input_left_cumwidths - eps) < root_1, dtype=tf.float64)
+            root1_mask *= tf.cast(root_1 < (input_right_cumwidths + eps), dtype=tf.float64)
 
-        root_1 = root_1 * root_scale + root_shift
-        root_2 = root_2 * root_scale + root_shift
-        root_3 = root_3 * root_scale + root_shift
+            root2_mask = tf.cast((input_left_cumwidths - eps) < root_2, dtype=tf.float64)
+            root2_mask *= tf.cast(root_2 < (input_right_cumwidths + eps), dtype=tf.float64)
 
-        root1_mask = tf.cast((input_left_cumwidths[three_roots_mask] - eps) < root_1, dtype=tf.float32)
-        root1_mask *= tf.cast(root1 < (input_right_cumwidths[three_roots_mask] + eps), dtype=tf.float32)
+            root3_mask = tf.cast((input_left_cumwidths - eps) < root_3, dtype=tf.float64)
+            root3_mask *= tf.cast(root_3 < (input_right_cumwidths + eps), dtype=tf.float64)
 
-        root2_mask = tf.cast((input_left_cumwidths[three_roots_mask] - eps) < root_1, dtype=tf.float32)
-        root2_mask *= tf.cast(root2 < (input_right_cumwidths[three_roots_mask] + eps), dtype=tf.float32)
+            roots = tf.stack([root_1, root_2, root_3], axis=-1)
+            masks = tf.stack([root1_mask, root2_mask, root3_mask], axis=-1)
+            mask_index = tf.argsort(masks, axis=-1, direction="DESCENDING")[..., 0][..., tf.newaxis]
 
-        root3_mask = tf.cast((input_left_cumwidths[three_roots_mask] - eps) < root_1, dtype=tf.float32)
-        root3_mask *= tf.cast(root3 < (input_right_cumwidths[three_roots_mask] + eps), dtype=tf.float32)
+            return _gather_squeeze(roots, mask_index)
 
-        roots = tf.stack([root_1, root_2, root_3], axis=-1)
-        masks = tf.stack([root1_mask, root2_mask, root3_mask], axis=-1)
-        mask_index = tf.argsort(masks, axis=-1, descending=True)[..., 0][..., tf.newaxis]
-        outputs[three_roots_mask] = _gather_squeeze(roots, mask_index)
+        def quadratic():
+            # Deal with a -> 0 (almost quadratic) cases
+            
+            a = inputs_b
+            b = inputs_c
+            c = (inputs_d - inputs)
+            alpha = tf.where(tf.abs(a) > 1e-16, (-b + tf.sqrt(b**2 - 4*a*c)) / (2*a), -c/b)
+            return alpha + input_left_cumwidths
 
-        # Deal with a -> 0 (almost quadratic) cases
-        
-        quadratic_mask = tf.abs(inputs_a) < quadratic_threshold
-        a = inputs_b[quadratic_mask]
-        b = inputs_c[quadratic_mask]
-        c = (inputs_d[quadratic_mask] - inputs[quadratic_mask])
-        alpha = (-b + tf.sqrt(b**2 - 4*a*c)) / (2*a)
-        outputs[quadratic_mask] = alpha + input_left_cumwidths[quadratic_mask]
+        outputs = tf.where(tf.abs(inputs_a) < quadratic_threshold,
+                    quadratic(),
+                    tf.where(discriminant < 0, one_root(), three_roots()))
 
         shifted_outputs = (outputs - input_left_cumwidths)
-        logabsdet = -np.log(3 * inputs_a * shifted_outputs ** 2 
-                          + 2 * inputs_b * shifted_outputs
+        logabsdet = -tf.math.log(3. * inputs_a * shifted_outputs ** 2 
+                          + 2. * inputs_b * shifted_outputs
                           + inputs_c)
+        print(outputs, logabsdet)
 
     else:
         shifted_inputs = (inputs - input_left_cumwidths)
@@ -159,43 +169,17 @@ def cubic_spline(inputs,
                  + inputs_c * shifted_inputs
                  + inputs_d)
 
-        logabsdet = np.log(3 * inputs_a * shifted_inputs ** 2 
-                         + 2 * inputs_b * shifted_inputs
+        logabsdet = tf.math.log(3. * inputs_a * shifted_inputs ** 2 
+                         + 2. * inputs_b * shifted_inputs
                          + inputs_c)
 
     outputs = tf.clip_by_value(outputs, 0, 1)
 
     if inverse:
         outputs = outputs * (right - left) + left
-        logabsdet = logabsdet - np.log(top - bottom) + np.log(right - left)
+        logabsdet = logabsdet - tf.math.log(top - bottom) + tf.math.log(right - left)
     else:
         outputs = outputs * (top - bottom) + bottom
-        logabsdet = logabsdet + np.log(top - bottom) - np.log(right - left)
+        logabsdet = logabsdet + tf.math.log(top - bottom) - tf.math.log(right - left)
 
     return outputs, logabsdet
-        
-if __name__ == '__main__':
-    nbatch = 10000
-    ndims = 10
-    num_bins = 32
-
-    unnormalized_widths = np.random.random((nbatch,ndims,num_bins))
-    unnormalized_heights = np.random.random((nbatch,ndims,num_bins))
-    unnorm_derivatives_left = np.random.random((nbatch,ndims,num_bins))
-    unnorm_derivatives_right = np.random.random((nbatch,ndims,num_bins))
-
-    def call_spline_fn(inputs, inverse=False):
-        return cubic_spline(
-                inputs=inputs,
-                unnormalized_widths=unnormalized_widths,
-                unnormalized_heights=unnormalized_heights,
-                unnorm_derivatives_left=unnorm_derivatives_left,
-                unnorm_derivatives_right=unnorm_derivatives_right,
-                inverse=inverse
-        )
-
-    inputs = np.random.random((nbatch,ndims))
-    outputs, logabsdet = call_spline_fn(inputs, inverse=False)
-    inputs_inv, logabsdet_inv = call_spline_fn(outputs, inverse=True)
-
-    print(np.allclose(inputs,inputs_inv))

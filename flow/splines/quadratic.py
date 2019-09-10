@@ -12,6 +12,11 @@ def quadratic_spline(inputs,
                      min_bin_width=DEFAULT_MIN_BIN_WIDTH,
                      min_bin_height=DEFAULT_MIN_BIN_HEIGHT):
 
+    left = tf.cast(left,dtype=tf.float64)
+    right = tf.cast(right,dtype=tf.float64)
+    bottom = tf.cast(bottom,dtype=tf.float64)
+    top = tf.cast(top,dtype=tf.float64)
+
     if not inverse: 
         out_of_bounds = (inputs < left) | (inputs > right)
         tf.where(out_of_bounds, left, inputs)
@@ -80,7 +85,7 @@ def quadratic_spline(inputs,
 
     if inverse:
         c_ = c - inputs
-        alpha = tf.where(a > 1e-3, (-b + tf.sqrt(b**2 - 4*a*c_)) / (2*a), -c_/b)
+        alpha = tf.where(tf.abs(a) > 1e-16, (-b + tf.sqrt(b**2 - 4*a*c_)) / (2*a), -c_/b)
         outputs = alpha * input_bin_widths + input_bin_locations
     else:
         alpha = (inputs - input_bin_locations) / input_bin_widths
@@ -98,27 +103,3 @@ def quadratic_spline(inputs,
         logabsdet = logabsdet + tf.math.log(top - bottom) - tf.math.log(right - left)
 
     return outputs, logabsdet
-        
-if __name__ == '__main__':
-    import numpy as np
-
-    nbatch = 10000
-    ndims = 10
-    num_bins = 32
-
-    unnormalized_widths = np.random.random((nbatch,ndims,num_bins))
-    unnormalized_heights = np.random.random((nbatch,ndims,num_bins+1))
-
-    def call_spline_fn(inputs, inverse=False):
-        return quadratic_spline(
-                inputs=inputs,
-                unnormalized_widths=unnormalized_widths,
-                unnormalized_heights=unnormalized_heights,
-                inverse=inverse
-        )
-
-    inputs = np.random.random((nbatch,ndims))
-    outputs, logabsdet = call_spline_fn(inputs, inverse=False)
-    inputs_inv, logabsdet_inv = call_spline_fn(outputs, inverse=True)
-
-    print(np.allclose(inputs,inputs_inv))

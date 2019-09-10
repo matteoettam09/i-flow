@@ -1,9 +1,9 @@
 import tensorflow as tf
 from .spline import _padded, _knot_positions, _gather_squeeze, _search_sorted
 
-DEFAULT_MIN_BIN_WIDTH = 1e-4
-DEFAULT_MIN_BIN_HEIGHT = 1e-4
-DEFAULT_MIN_DERIVATIVE = 1e-4
+DEFAULT_MIN_BIN_WIDTH = 1e-6
+DEFAULT_MIN_BIN_HEIGHT = 1e-6
+DEFAULT_MIN_DERIVATIVE = 1e-6
 
 def rational_quadratic_spline(inputs,
                               unnormalized_widths,
@@ -98,30 +98,3 @@ def rational_quadratic_spline(inputs,
         logabsdet = tf.math.log(derivative_numerator) - 2 * tf.math.log(denominator)
 
         return outputs, logabsdet
-
-if __name__ == '__main__':
-    import numpy as np
-
-    nbatch = 10000
-    ndims = 20
-    num_bins = 32
-
-    unnormalized_widths = np.random.random((nbatch,ndims,num_bins))
-    unnormalized_heights = np.random.random((nbatch,ndims,num_bins))
-    unnormalized_derivatives = np.random.random((nbatch,ndims,num_bins))
-
-    def call_spline_fn(inputs, inverse=False):
-        return rational_quadratic_spline(
-                inputs=inputs,
-                unnormalized_widths=unnormalized_widths,
-                unnormalized_heights=unnormalized_heights,
-                unnormalized_derivatives=unnormalized_derivatives,
-                inverse=inverse
-        )
-
-    inputs = np.random.random((nbatch,ndims))
-    outputs, logabsdet = call_spline_fn(inputs, inverse=False)
-    inputs_inv, logabsdet_inv = call_spline_fn(outputs, inverse=True)
-
-    print(np.allclose(inputs,inputs_inv))
-    print(np.allclose(logabsdet,-logabsdet_inv))
