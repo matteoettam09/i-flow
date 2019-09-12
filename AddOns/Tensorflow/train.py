@@ -11,6 +11,8 @@ import corner
 tfb = tfp.bijectors
 tfd = tfp.distributions
 
+tf.keras.backend.set_floatx('float64')
+
 FLAGS = flags.FLAGS
 flags.DEFINE_float('lr', 1e-3, 'Learning rate')
 flags.DEFINE_integer('epochs', 100, 'Number of epochs', short_name='e')
@@ -29,9 +31,7 @@ def build_dense(in_features, out_features):
     invals = tf.keras.layers.Input(in_features, dtype=tf.float64)
     h = tf.keras.layers.Dense(128, activation='relu')(invals)
     h = tf.keras.layers.Dense(128, activation='relu')(h)
-    h = tf.keras.layers.Dense(128, activation='relu')(h)
-    h = tf.keras.layers.Dense(128, activation='relu')(h)
-    outputs = tf.keras.layers.Dense(out_features, kernel_initializer='zeros')(h)
+    outputs = tf.keras.layers.Dense(out_features)(h)
     model = tf.keras.models.Model(invals, outputs)
     model.summary()
     return model
@@ -57,16 +57,25 @@ def mask_random(ndims):
 def mask_flip(mask):
     return 1-mask
 
-def build_network(masks, num_bins = 32, blob = None):
+def build_network(channel_masks, ps_masks, num_bins = 32, blob = None):
     bijectors = []
-    for mask in masks:
+    for mask in channel_masks:
+        bijectors.append(couplings.PiecewiseLinear(mask,build_dense,
+                                                   num_bins = num_bins,
+                                                   blob = blob))
+
+    for bijector in bijectors:
+        for layer in bijector.transform_net.layers:
+            layer.trainable = False
+
+    for mask in ps_masks:
         bijectors.append(couplings.PiecewiseRationalQuadratic(mask,build_dense,
                                                               num_bins = num_bins,
                                                               blob = blob))
 
     bijectors = tfb.Chain(list(reversed(bijectors)))
    
-    ndims = len(masks[0])
+    ndims = len(ps_masks[0])
     low = np.zeros(ndims,dtype=np.float64)
     high = np.ones(ndims,dtype=np.float64)
     base_dist = tfd.Uniform(low=low, high=high)
@@ -135,18 +144,28 @@ def main(argv):
     # Create the masks for the bijectors
     channel_mask = np.zeros(nchannels)
     dims_mask = np.zeros(ndims)
-    masks = []
-    masks.append(np.concatenate([dims_mask,mask_alternating(nchannels)]))
-    masks.append(np.concatenate([dims_mask,mask_alternating(nchannels, False)]))
-    masks.append(np.concatenate([mask_alternating(ndims),channel_mask]))
-    masks.append(np.concatenate([mask_alternating(ndims, False),channel_mask]))
-    masks.append(np.concatenate([mask_split(ndims),channel_mask]))
-    masks.append(np.concatenate([mask_split(ndims, False),channel_mask]))
-    masks = np.array(masks)
-    print(masks)
+    
+    channel_masks = []
+    channel_masks.append(np.concatenate([dims_mask,np.ones(nchannels)]))
+    for i in range(1,nchannels):
+        channel_masks.append(np.concatenate([dims_mask,np.zeros(i),np.ones(nchannels-i)]))
+#    channel_masks.append(np.concatenate([dims_mask,mask_alternating(nchannels, False)]))
+    channel_masks = np.array(channel_masks)
+
+    ps_masks = []
+    ps_masks.append(np.concatenate([mask_alternating(ndims),channel_mask]))
+    ps_masks.append(np.concatenate([mask_alternating(ndims, False),channel_mask]))
+    ps_masks.append(np.concatenate([mask_alternating(ndims),channel_mask]))
+    ps_masks.append(np.concatenate([mask_alternating(ndims, False),channel_mask]))
+#    ps_masks.append(np.concatenate([mask_split(ndims),channel_mask]))
+#    ps_masks.append(np.concatenate([mask_split(ndims, False),channel_mask]))
+    ps_masks = np.array(ps_masks)
 
     # Build the integrator
-    dist = build_network(masks)
+    dist = build_network(channel_masks, ps_masks)
+    lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
+        FLAGS.lr,decay_steps=100,decay_rate=0.96,
+    )
     optimizer = tf.keras.optimizers.Adam(FLAGS.lr, clipnorm = 5.0)
     integrate = integrator.Integrator(call_sherpa, dist, optimizer)
 
@@ -162,6 +181,11 @@ def main(argv):
             if epoch % printout == 0:
                 print('Epoch: {:4d} Loss = {:8e} Integral = {:8e} +/- {:8e}'
                         .format(epoch, loss, integral, error))
+
+                for bijector in integrate.dist.bijector.bijectors:
+                    for layer in bijector.transform_net.layers:
+                        layer.trainable = not layer.trainable
+
                 if FLAGS.plot:
                     figure.suptitle('loss = {:8e}'.format(loss.numpy()), fontsize=16, x=0.75)
                     plt.savefig('fig_{:04d}.png'.format(epoch))
@@ -195,6 +219,18 @@ def main(argv):
         plt.yscale('log')
         plt.xscale('log')
         plt.savefig('efficiency.png')
+        plt.close()
+
+        samples = []
+        for i in range(10):
+            samples.append(integrate.sample(10000).numpy())
+        samples = np.concatenate(samples)
+        figure = corner.corner(samples, labels = [r'$x_{{{}}}$'.format(x) for x in range(nrans)],
+                               show_titles=True, title_kwargs={'fontsize': 12},
+                               range=nrans*[[0,1]], **hist2d_kwargs)
+
+        plt.savefig('final_corner.png'.format(epoch))
+        plt.close()
 
 if __name__ == '__main__':
     app.run(main)
