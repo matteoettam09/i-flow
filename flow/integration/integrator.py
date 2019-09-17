@@ -35,12 +35,12 @@ def ewma(data, window):
 class Integrator():
     """ Class implementing a normalizing flow integrator. """
 
-    def __init__(self, func_, dist_, optimizer_, **kwargs):
+    def __init__(self, func, dist, optimizer, **kwargs):
         """ Initialize the normalizing flow integrator. """
-        self._func = func_
+        self._func = func
         self.global_step = 0
-        self.dist = dist_
-        self.optimizer = optimizer_
+        self.dist = dist
+        self.optimizer = optimizer
         if 'chi2' in kwargs:
             self.loss_func = 'chi2'
         else:
@@ -54,7 +54,7 @@ class Integrator():
             logq = self.dist.log_prob(samples)
             test = self.dist.prob(samples)
             true = self._func(samples)
-            mean, var = tf.nn.moments(x=test/true, axes=[0])
+            mean, var = tf.nn.moments(x=true/test, axes=[0])
             true = true/mean
             logp = tf.where(true > 1e-16, tf.math.log(true),
                             tf.math.log(true+1e-16))
@@ -143,7 +143,7 @@ if __name__ == '__main__':
         model.summary()
         return model
 
-    def func(x):
+    def func_(x):
         """ Test function 1. """
         return tf.reduce_prod(x, axis=-1)
 
@@ -189,7 +189,7 @@ if __name__ == '__main__':
     base_dist = tfd.Independent(distribution=base_dist,
                                 reinterpreted_batch_ndims=1,
                                 )
-    dist = tfd.TransformedDistribution(
+    dist_ = tfd.TransformedDistribution(
         distribution=base_dist,
         bijector=bijectors,
     )
@@ -197,10 +197,10 @@ if __name__ == '__main__':
     initial_learning_rate = 1e-4
     lr_schedule = CosineAnnealing(initial_learning_rate, epochs)
 
-    optimizer = tf.keras.optimizers.Adam(
+    optimizer_ = tf.keras.optimizers.Adam(
         lr_schedule, clipnorm=5.0)  # lr_schedule)
 
-    integrator = Integrator(func2, dist, optimizer)
+    integrator = Integrator(func2, dist_, optimizer_)
     losses = []
     integrals = []
     errors = []
