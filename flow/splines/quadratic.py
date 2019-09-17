@@ -1,8 +1,14 @@
+""" Implement quadratic splines. """
+
+# pylint: disable=too-many-arguments, too-many-locals, too-many-branches
+# pylint: disable=too-many-statements, invalid-name
+
 import tensorflow as tf
 from .spline import _padded, _knot_positions, _gather_squeeze, _search_sorted
 
 DEFAULT_MIN_BIN_WIDTH = 1e-3
 DEFAULT_MIN_BIN_HEIGHT = 1e-3
+
 
 def quadratic_spline(inputs,
                      unnormalized_widths,
@@ -11,13 +17,14 @@ def quadratic_spline(inputs,
                      left=0., right=1., bottom=0., top=1.,
                      min_bin_width=DEFAULT_MIN_BIN_WIDTH,
                      min_bin_height=DEFAULT_MIN_BIN_HEIGHT):
+    """ Definition of quadratic splines. """
 
-    left = tf.cast(left,dtype=tf.float64)
-    right = tf.cast(right,dtype=tf.float64)
-    bottom = tf.cast(bottom,dtype=tf.float64)
-    top = tf.cast(top,dtype=tf.float64)
+    left = tf.cast(left, dtype=tf.float64)
+    right = tf.cast(right, dtype=tf.float64)
+    bottom = tf.cast(bottom, dtype=tf.float64)
+    top = tf.cast(top, dtype=tf.float64)
 
-    if not inverse: 
+    if not inverse:
         out_of_bounds = (inputs < left) | (inputs > right)
         tf.where(out_of_bounds, left, inputs)
     else:
@@ -45,27 +52,31 @@ def quadratic_spline(inputs,
         # Set boundary heights s.t. after normalization they are exactly 1.
         first_widths = 0.5 * widths[..., 0]
         last_widths = 0.5 * widths[..., -1]
-        numerator = (0.5 * first_widths * unnormalized_heights_exp[...,0]
-                    + 0.5 * last_widths * unnormalized_heights_exp[...,-1]
-                    + tf.reduce_sum(((unnormalized_heights_exp[..., :-1]
-                        + unnormalized_heights_exp[..., 1:]) / 2)
-                        * widths[..., 1:-1], axis=-1))
+        numerator = (0.5 * first_widths * unnormalized_heights_exp[..., 0]
+                     + 0.5 * last_widths * unnormalized_heights_exp[..., -1]
+                     + tf.reduce_sum(
+                         ((unnormalized_heights_exp[..., :-1]
+                           + unnormalized_heights_exp[..., 1:]) / 2)
+                         * widths[..., 1:-1], axis=-1))
 
         constant = numerator / (1. - 0.5 * first_widths - 0.5 * last_widths)
         constant = constant[..., tf.newaxis]
-        unnormalized_heights_exp = tf.concat([constant, unnormalized_heights_exp, constant], axis=-1)
+        unnormalized_heights_exp = tf.concat(
+            [constant, unnormalized_heights_exp, constant], axis=-1)
 
-    unnormalized_area = tf.reduce_sum(((unnormalized_heights_exp[..., :-1]
-                                      + unnormalized_heights_exp[..., 1:]) / 2.) 
-                                      * widths, axis=-1)[..., tf.newaxis]
+    unnormalized_area = tf.reduce_sum(
+        ((unnormalized_heights_exp[..., :-1]
+          + unnormalized_heights_exp[..., 1:]) / 2.)
+        * widths, axis=-1)[..., tf.newaxis]
 
     heights = unnormalized_heights_exp / unnormalized_area
     heights = min_bin_height + (1. - min_bin_height) * heights
 
-    bin_left_cdf = tf.cumsum(((heights[..., :-1] + heights[..., 1:]) / 2.) * widths, axis=-1)
-    bin_left_cdf = _padded(bin_left_cdf,lhs=0.)
+    bin_left_cdf = tf.cumsum(
+        ((heights[..., :-1] + heights[..., 1:]) / 2.) * widths, axis=-1)
+    bin_left_cdf = _padded(bin_left_cdf, lhs=0.)
 
-    bin_locations = _knot_positions(widths,0.)
+    bin_locations = _knot_positions(widths, 0.)
 
     if inverse:
         bin_idx = _search_sorted(bin_left_cdf, inputs)
@@ -85,7 +96,8 @@ def quadratic_spline(inputs,
 
     if inverse:
         c_ = c - inputs
-        alpha = tf.where(tf.abs(a) > 1e-16, (-b + tf.sqrt(b**2 - 4*a*c_)) / (2*a), -c_/b)
+        alpha = tf.where(tf.abs(a) > 1e-16,
+                         (-b + tf.sqrt(b**2 - 4*a*c_)) / (2*a), -c_/b)
         outputs = alpha * input_bin_widths + input_bin_locations
     else:
         alpha = (inputs - input_bin_locations) / input_bin_widths
@@ -93,13 +105,15 @@ def quadratic_spline(inputs,
 
     outputs = tf.clip_by_value(outputs, 0, 1)
     logabsdet = tf.math.log((alpha * (input_right_heights - input_left_heights)
-            + input_left_heights))
-    
+                             + input_left_heights))
+
     if inverse:
         outputs = outputs * (right - left) + left
-        logabsdet = -logabsdet - tf.math.log(top - bottom) + tf.math.log(right - left)
+        logabsdet = -logabsdet - \
+            tf.math.log(top - bottom) + tf.math.log(right - left)
     else:
         outputs = outputs * (top - bottom) + bottom
-        logabsdet = logabsdet + tf.math.log(top - bottom) - tf.math.log(right - left)
+        logabsdet = logabsdet + \
+            tf.math.log(top - bottom) - tf.math.log(right - left)
 
     return outputs, logabsdet

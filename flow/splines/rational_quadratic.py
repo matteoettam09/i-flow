@@ -1,9 +1,14 @@
+""" Implement Rational Quadratic splines. """
+
+# pylint: disable=too-many-arguments, too-many-locals, invalid-name
+
 import tensorflow as tf
-from .spline import _padded, _knot_positions, _gather_squeeze, _search_sorted
+from .spline import _knot_positions, _gather_squeeze, _search_sorted
 
 DEFAULT_MIN_BIN_WIDTH = 1e-6
 DEFAULT_MIN_BIN_HEIGHT = 1e-6
 DEFAULT_MIN_DERIVATIVE = 1e-6
+
 
 def rational_quadratic_spline(inputs,
                               unnormalized_widths,
@@ -14,6 +19,7 @@ def rational_quadratic_spline(inputs,
                               min_bin_width=DEFAULT_MIN_BIN_WIDTH,
                               min_bin_height=DEFAULT_MIN_BIN_HEIGHT,
                               min_derivative=DEFAULT_MIN_DERIVATIVE):
+    """ Definition of rational quadratic spline. """
 
     out_of_bounds = (inputs < left) | (inputs > right)
     tf.where(out_of_bounds, tf.cast(left, dtype=inputs.dtype), inputs)
@@ -27,12 +33,12 @@ def rational_quadratic_spline(inputs,
 
     widths = tf.nn.softmax(unnormalized_widths, axis=-1)
     widths = min_bin_width + (1 - min_bin_width * num_bins) * widths
-    cumwidths = _knot_positions(widths,0)
+    cumwidths = _knot_positions(widths, 0)
     cumwidths = (right - left) * cumwidths + left
     widths = cumwidths[..., 1:] - cumwidths[..., :-1]
 
-    derivatives = ((min_derivative + tf.nn.softplus(unnormalized_derivatives)) /
-                  (tf.cast(min_derivative + tf.math.log(2.),tf.float64)))
+    derivatives = ((min_derivative + tf.nn.softplus(unnormalized_derivatives))
+                   / (tf.cast(min_derivative + tf.math.log(2.), tf.float64)))
 
     heights = tf.nn.softmax(unnormalized_heights, axis=-1)
     heights = min_bin_height + (1 - min_bin_height * num_bins) * heights
@@ -59,42 +65,53 @@ def rational_quadratic_spline(inputs,
 
     if inverse:
         a = ((inputs - input_cumheights) * (input_derivatives
-                                             + input_derivatives_p1
-                                             - 2 * input_delta)
-              + input_heights * (input_delta - input_derivatives))
+                                            + input_derivatives_p1
+                                            - 2 * input_delta)
+             + input_heights * (input_delta - input_derivatives))
         b = (input_heights * input_derivatives
-                - (inputs - input_cumheights) * (input_derivatives
-                                                + input_derivatives_p1
-                                                - 2 * input_delta))
+             - (inputs - input_cumheights) * (input_derivatives
+                                              + input_derivatives_p1
+                                              - 2 * input_delta))
         c = - input_delta * (inputs - input_cumheights)
 
         discriminant = b**2 - 4 * a * c
-        
+
         theta = (2 * c) / (-b - tf.sqrt(discriminant))
         outputs = theta * input_bin_widths + input_cumwidths
 
         theta_one_minus_theta = theta * (1 - theta)
-        denominator = input_delta + ((input_derivatives + input_derivatives_p1 - 2 * input_delta)
+        denominator = input_delta + ((input_derivatives + input_derivatives_p1
+                                      - 2 * input_delta)
                                      * theta_one_minus_theta)
-        derivative_numerator = input_delta**2 * (input_derivatives_p1 * theta**2
-                                                + 2 * input_delta * theta_one_minus_theta
-                                                + input_derivatives * (1 - theta)**2)
-        logabsdet = tf.math.log(derivative_numerator) - 2 * tf.math.log(denominator)
+        derivative_numerator = input_delta**2 * (input_derivatives_p1
+                                                 * theta**2
+                                                 + 2 * input_delta
+                                                 * theta_one_minus_theta
+                                                 + input_derivatives
+                                                 * (1 - theta)**2)
+        logabsdet = tf.math.log(derivative_numerator) - \
+            2 * tf.math.log(denominator)
 
         return outputs, -logabsdet
-    else:
-        theta = (inputs - input_cumwidths) / input_bin_widths
-        theta_one_minus_theta = theta * (1 - theta)
 
-        numerator = input_heights * (input_delta * theta**2
-                                    + input_derivatives * theta_one_minus_theta)
-        denominator = input_delta + ((input_derivatives + input_derivatives_p1 - 2 * input_delta)
-                                     * theta_one_minus_theta)
-        outputs = input_cumheights + numerator / denominator
+    theta = (inputs - input_cumwidths) / input_bin_widths
+    theta_one_minus_theta = theta * (1 - theta)
 
-        derivative_numerator = input_delta**2 * (input_derivatives_p1 * theta**2
-                                                + 2 * input_delta * theta_one_minus_theta
-                                                + input_derivatives * (1 - theta)**2)
-        logabsdet = tf.math.log(derivative_numerator) - 2 * tf.math.log(denominator)
+    numerator = input_heights * (input_delta * theta**2
+                                 + input_derivatives
+                                 * theta_one_minus_theta)
+    denominator = input_delta + ((input_derivatives + input_derivatives_p1
+                                  - 2 * input_delta)
+                                 * theta_one_minus_theta)
+    outputs = input_cumheights + numerator / denominator
 
-        return outputs, logabsdet
+    derivative_numerator = input_delta**2 * (input_derivatives_p1
+                                             * theta**2
+                                             + 2 * input_delta
+                                             * theta_one_minus_theta
+                                             + input_derivatives
+                                             * (1 - theta)**2)
+    logabsdet = tf.math.log(derivative_numerator) - \
+        2 * tf.math.log(denominator)
+
+    return outputs, logabsdet

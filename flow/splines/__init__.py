@@ -1,3 +1,5 @@
+""" Imports for flow module. """
+
 from .linear import linear_spline
 from .quadratic import quadratic_spline
 from .cubic import cubic_spline
