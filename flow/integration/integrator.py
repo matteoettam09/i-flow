@@ -86,11 +86,14 @@ class Integrator():
         return tf.nn.moments(x=true/test, axes=[0])
 
     @tf.function
-    def acceptance(self, nsamples):
+    def acceptance(self, nsamples, yield_samples=False):
         """ Calculate the acceptance for nsamples points. """
         samples = self.dist.sample(nsamples)
         test = self.dist.prob(samples)
         true = self._func(samples)
+
+        if yield_samples:
+            return true/test, samples
 
         return true/test
 
