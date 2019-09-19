@@ -33,7 +33,14 @@ def ewma(data, window):
 
 
 class Integrator():
-    """ Class implementing a normalizing flow integrator. """
+    """ Class implementing a normalizing flow integrator.
+
+    Metrics:
+    -------
+        - KL-Divergence
+        - Chi2-Divergence
+
+    """
 
     def __init__(self, func, dist, optimizer, **kwargs):
         """ Initialize the normalizing flow integrator. """
@@ -60,9 +67,7 @@ class Integrator():
                             tf.math.log(true+1e-16))
             loss = tf.reduce_mean(input_tensor=tf.stop_gradient(
                 true/test)*(tf.stop_gradient(logp)-logq))
-            # grad = tf.reduce_mean(
-            #     input_tensor=-tf.stop_gradient((true/test)**2)*logq)
-            grad = tf.reduce_max(
+            grad = tf.reduce_mean(
                 input_tensor=-tf.stop_gradient((true/test)**2)*logq)
 
         grads = tape.gradient(grad, self.dist.trainable_variables)
