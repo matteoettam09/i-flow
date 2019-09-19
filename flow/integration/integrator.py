@@ -60,7 +60,9 @@ class Integrator():
                             tf.math.log(true+1e-16))
             loss = tf.reduce_mean(input_tensor=tf.stop_gradient(
                 true/test)*(tf.stop_gradient(logp)-logq))
-            grad = tf.reduce_mean(
+            # grad = tf.reduce_mean(
+            #     input_tensor=-tf.stop_gradient((true/test)**2)*logq)
+            grad = tf.reduce_max(
                 input_tensor=-tf.stop_gradient((true/test)**2)*logq)
 
         grads = tape.gradient(grad, self.dist.trainable_variables)
