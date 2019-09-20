@@ -84,8 +84,8 @@ std::ostream &FOAM::operator<<(std::ostream &str,
 Foam_Channel::Foam_Channel(Foam *const integrator):
   p_integrator(integrator),
   m_alpha(0.0), m_oldalpha(0.0), m_weight(0.0), m_loss(0.0),
-  m_sum(0.0), m_sum2(0.0), m_max(0.0), m_np(0.0), 
-  m_ssum(0.0), m_ssum2(0.0), m_snp(0.0),
+  m_sum(0.0), m_sum2(0.0), m_max(0.0), m_np(0.0), m_nvp(0.0),
+  m_ssum(0.0), m_ssum2(0.0), m_snp(0.0), m_snvp(0.0),
   m_split(-1) {}
 
 Foam_Channel::
@@ -94,8 +94,8 @@ Foam_Channel(Foam *const integrator,
 		  const double &pos):
   p_integrator(integrator),
   m_alpha(0.0), m_oldalpha(0.0), m_weight(0.0), m_loss(0.0),
-  m_sum(0.0), m_sum2(0.0), m_max(0.0), m_np(0.0), 
-  m_ssum(0.0), m_ssum2(0.0), m_snp(0.0),
+  m_sum(0.0), m_sum2(0.0), m_max(0.0), m_np(0.0), m_nvp(0.0),
+  m_ssum(0.0), m_ssum2(0.0), m_snp(0.0), m_snvp(0.0),
   m_this(prev->m_this),
   m_next(prev->m_next),
   m_split(-1)
@@ -143,6 +143,7 @@ double Foam_Channel::Point(Foam_Integrand *const function,
   double cur((*function)(point)), weight(cur*m_weight);
   if (!(cur<0.0) && !(cur>=0.0)) THROW(critical_error,"Integrand is nan.");
   ++m_np;
+  if (weight) ++m_nvp;
   m_sum+=weight;
   m_sum2+=sqr(weight);
   m_max=std::max(m_max,dabs(weight));
@@ -167,11 +168,12 @@ bool Foam_Channel::Find(const std::vector<double> &point) const
 
 void Foam_Channel::Reset()
 {
-  m_sum=m_sum2=m_max=m_loss=m_np=0.0;
+  m_sum=m_sum2=m_max=m_loss=m_np=m_nvp=0.0;
   if (!m_points.empty()) {
     for (std::vector<std::pair<std::vector<double>,double> >::const_iterator
 	   pit(m_points.begin());pit!=m_points.end();++pit) {
       ++m_np;
+      if (pit->second) ++m_nvp;
       m_sum+=pit->second;
       m_sum2+=sqr(pit->second);
       m_max=std::max(m_max,dabs(pit->second));
@@ -212,8 +214,9 @@ void Foam_Channel::SetAlpha(const double &alpha)
 void Foam_Channel::Store()
 {
   m_snp+=m_np;
-  m_ssum+=m_sum/m_alpha;
-  m_ssum2+=m_sum2/sqr(m_alpha);
+  m_snvp+=m_nvp;
+  m_ssum+=m_sum;
+  m_ssum2+=m_sum2;
 }
 
 void Foam_Channel::SelectSplitDimension(const std::vector<int> &nosplit)
@@ -252,8 +255,8 @@ WriteOut(std::fstream *const file,
 	 std::map<Foam_Channel*,size_t> &pmap) const
 {
   (*file)<<"[ "<<m_alpha<<" "<<m_oldalpha<<" "<<m_sum<<" "
-	 <<m_sum2<<" "<<m_max<<" "<<m_np<<" "<<m_ssum
-	 <<" "<<m_ssum2<<" "<<m_snp<<" "<<m_loss<<" ( ";
+	 <<m_sum2<<" "<<m_max<<" "<<m_np<<" "<<m_nvp<<" "<<m_ssum
+	 <<" "<<m_ssum2<<" "<<m_snp<<" "<<m_snvp<<" "<<m_loss<<" ( ";
   for (size_t i(0);i<m_this.size();++i) (*file)<<m_this[i]<<" ";
   (*file)<<") ( ";
   for (size_t i(0);i<m_next.size();++i) (*file)<<pmap[m_next[i]]<<" ";
@@ -266,8 +269,8 @@ bool Foam_Channel::ReadIn(std::fstream *const file,
 {
   if (file->eof()) return false;
   std::string dummy;
-  (*file)>>dummy>>m_alpha>>m_oldalpha>>m_sum>>m_sum2
-	 >>m_max>>m_np>>m_ssum>>m_ssum2>>m_snp>>m_loss>>dummy;
+  (*file)>>dummy>>m_alpha>>m_oldalpha>>m_sum>>m_sum2>>m_max>>m_np
+	 >>m_nvp>>m_ssum>>m_ssum2>>m_snp>>m_snvp>>m_loss>>dummy;
   for (size_t i(0);i<m_this.size();++i) {
     if (file->eof()) return false;
     (*file)>>m_this[i];
@@ -311,7 +314,7 @@ void Foam_Channel::CreateRoot(Foam *const integrator,
 Foam::Foam():
   m_nopt(10000), m_nmax(1000000), m_error(0.01), m_scale (1.0),
   m_apweight(1.0), m_sum(0.0), m_sum2(0.0), m_max(0.0), 
-  m_np(0.0), m_nrealp(0.0), 
+  m_np(0.0), m_nvp(0.0),
   m_smax(std::deque<double>(3,0.0)), 
   m_ncells(1000), m_split(1), m_shuffle(1), m_last(0), 
   m_store(0),
@@ -336,7 +339,7 @@ void Foam::SetDimension(const size_t dim)
 
 void Foam::Reset()
 {
-  m_sum=m_sum2=m_max=m_np=m_nrealp=0.0; 
+  m_sum=m_sum2=m_max=m_np=m_nvp=0.0;
   while (!m_channels.empty()) {
     delete m_channels.back();
     m_channels.pop_back();
@@ -442,7 +445,7 @@ double Foam::Integrate(Foam_Integrand *const function)
 double Foam::Update(const int mode)
 {
   double sum(0.0), alpha(1.0/(m_channels.size()-m_point.size()));
-  if (mode==0) m_sum=m_sum2=m_np=0.0;
+  if (mode==0) m_sum=m_sum2=m_np=m_nvp=0.0;
   m_max=0.0;
   for (size_t i(0);i<m_channels.size();++i) {
     if (!m_channels[i]->Boundary()) {
@@ -453,6 +456,7 @@ double Foam::Update(const int mode)
 	msg_Error()<<METHOD<<"(): "
 		   <<"Few points in cell. Increase NOpt."<<std::endl;
       m_np+=m_channels[i]->Points();
+      m_nvp+=m_channels[i]->ValidPoints();
       m_sum+=m_channels[i]->Sum()/alpha;
       m_sum2+=m_channels[i]->Sum2()/sqr(alpha);
       m_max=std::max(m_max,m_channels[i]->Max()/alpha);
@@ -471,7 +475,7 @@ double Foam::Update(const int mode)
 	    <<error*Mean()*m_scale<<" "<<m_uname<<" = "<<om::red
 	    <<error*100.0<<" %"<<om::reset<<" )\n  eff = "
 	    <<Mean()/m_max*100.0<<" %, n = "<<m_np
-	    <<" ( "<<m_np/m_nrealp*100.0<<" % ), "
+	    <<" ( "<<m_nvp/m_np*100.0<<" % ), "
 	    <<m_channels.size()-m_point.size()
 	    <<" cells      "<<mm(1,mm::up)<<bm::cr<<std::flush;
 #else
@@ -479,7 +483,7 @@ double Foam::Update(const int mode)
 	    <<" +- ( "<<error*Mean()*m_scale<<" "<<m_uname<<" = "
 	    <<error*100.0<<" % )\n  eff = "
 	    <<Mean()/m_max*100.0<<" %, n = "<<m_np
-	    <<" ( "<<m_np/m_nrealp*100.0<<" % ), "
+	    <<" ( "<<m_nvp/m_np*100.0<<" % ), "
 	    <<m_channels.size()-m_point.size()
 	    <<" cells      "<<mm_up(1)<<bm_cr<<std::flush;
 #endif
@@ -514,7 +518,6 @@ double Foam::Point()
   }
   if (selected==NULL) THROW(fatal_error,"No channel selected.");
   selected->Point(p_function,m_point);
-  ++m_nrealp;
   return selected->Weight()/selected->Alpha();
 }
 
@@ -600,9 +603,10 @@ bool Foam::Shuffle()
     if (!m_channels[i]->Boundary()) {
       double alpha(m_channels[i]->Alpha());
       m_channels[i]->Store();
-      if (m_channels[i]->Sum2()!=0.0) {
+      if (m_channels[i]->SSum2()!=0.0) {
  	oldnorm+=alpha;
-	alpha=sqrt(alpha*m_channels[i]->SSum2()/m_channels[i]->SSum());
+	alpha=sqrt(m_channels[i]->SSum2()/
+		   m_channels[i]->SValidPoints());
 	if (!(alpha>0.0)) 
 	  THROW(fatal_error,"Invalid weight.");
 	m_channels[i]->SetAlpha(alpha);
@@ -616,7 +620,7 @@ bool Foam::Shuffle()
   if (diced==0) THROW(fatal_error,"No channel diced.");
   for (size_t i(0);i<m_channels.size();++i) {
     if (!m_channels[i]->Boundary()) {
-      if (m_channels[i]->Sum2()!=0.0)
+      if (m_channels[i]->SSum2()!=0.0)
 	m_channels[i]->SetAlpha(m_channels[i]->Alpha()/norm);
       m_channels[i]->Reset();
     }
@@ -638,7 +642,7 @@ bool Foam::WriteOut(const std::string &filename) const
   file->precision(14);
   (*file)<<m_nopt<<" "<<m_nmax<<" "<<m_ncells<<"\n";
   (*file)<<m_error<<" "<<m_scale<<"\n";
-  (*file)<<m_sum<<" "<<m_sum2<<" "<<m_max<<" "<<m_np<<"\n";
+  (*file)<<m_sum<<" "<<m_sum2<<" "<<m_max<<" "<<m_np<<" "<<m_nvp<<"\n";
   (*file)<<m_rmin.size()<<" ";
   for (size_t i(0);i<m_rmin.size();++i) (*file)<<m_rmin[i]<<" ";
   (*file)<<"\n"<<m_rmax.size()<<" ";
@@ -670,7 +674,7 @@ bool Foam::ReadIn(const std::string &filename)
   file->precision(14);
   (*file)>>m_nopt>>m_nmax>>m_ncells;
   (*file)>>m_error>>m_scale;
-  (*file)>>m_sum>>m_sum2>>m_max>>m_np;
+  (*file)>>m_sum>>m_sum2>>m_max>>m_np>>m_nvp;
   if (file->eof()) {
     delete file;
     return false;

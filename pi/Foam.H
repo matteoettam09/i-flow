@@ -78,7 +78,7 @@ namespace FOAM {
     Foam *p_integrator;
 
     double m_alpha, m_oldalpha, m_weight, m_loss;
-    double m_sum, m_sum2, m_max, m_np, m_ssum, m_ssum2, m_snp;
+    double m_sum, m_sum2, m_max, m_np, m_nvp, m_ssum, m_ssum2, m_snp, m_snvp;
 
     std::vector<double>        m_this;
     std::vector<Foam_Channel*> m_next;
@@ -281,10 +281,20 @@ namespace FOAM {
       \fn inline double Points() const
       \brief Returns \f$n\f$.
     */
+    inline double ValidPoints() const { return m_nvp; }
+    /*!
+      \fn inline double ValidPoints() const
+      \brief Returns the number of nonzero points.
+    */
     inline double SPoints() const { return m_snp; }
     /*!
       \fn inline double SPoints() const
       \brief Returns \f$n_{stored}\f$.
+    */
+    inline double SValidPoints() const { return m_snvp; }
+    /*!
+      \fn inline double SPoints() const
+      \brief Returns the number of stored nonzero points.
     */
 
     inline double Mean() const { return m_sum/m_np; }
@@ -367,7 +377,7 @@ namespace FOAM {
     long unsigned int m_nopt, m_nmax, m_ndiced;
 
     double m_error, m_scale, m_apweight;
-    double m_sum, m_sum2, m_max, m_np, m_nrealp;
+    double m_sum, m_sum2, m_max, m_np, m_nvp;
 
     std::deque<double> m_smax;
 
