@@ -145,7 +145,7 @@ double Foam_Channel::Point(Foam_Integrand *const function,
   ++m_np;
   m_sum+=weight;
   m_sum2+=sqr(weight);
-  m_max=FOAM::Max(m_max,dabs(weight));
+  m_max=std::max(m_max,dabs(weight));
   if (p_integrator->RunMode()==rmc::construct) {
     m_points.push_back(std::pair<std::vector<double>,double>(point,cur));
   }
@@ -174,7 +174,7 @@ void Foam_Channel::Reset()
       ++m_np;
       m_sum+=pit->second;
       m_sum2+=sqr(pit->second);
-      m_max=FOAM::Max(m_max,dabs(pit->second));
+      m_max=std::max(m_max,dabs(pit->second));
     }
     m_sum*=m_weight;
     m_sum2*=sqr(m_weight);
@@ -314,7 +314,7 @@ Foam::Foam():
   m_np(0.0), m_nrealp(0.0), 
   m_smax(std::deque<double>(3,0.0)), 
   m_ncells(1000), m_split(1), m_shuffle(1), m_last(0), 
-  m_mode(0), m_store(0),
+  m_store(0),
   m_rmode(rmc::none),
   m_vname("I") {}
 
@@ -356,6 +356,7 @@ void Foam::Initialize()
   m_ndiced=0;
 }
 
+#ifdef USING__PI_only
 class Python_Function: public Foam_Integrand {
 public:
   PyObject *self, *method;
@@ -388,6 +389,7 @@ double Foam::Integrate(PyObject *const function)
   Python_Function *pyfunc = new Python_Function(function);
   return Integrate(pyfunc);
 }
+#endif
 
 double Foam::Integrate(Foam_Integrand *const function)
 {
@@ -401,13 +403,9 @@ double Foam::Integrate(Foam_Integrand *const function)
   long unsigned int nfirst((m_channels.size()-m_point.size())*m_nopt/2);
   for (long unsigned int n(0);n<nfirst;++n) Point();
   Split();
-#ifndef USING__PI_only
-  msg_Info()<<tm::curoff;
-#endif
   while (((long unsigned int)m_np)<m_nmax/2 &&
 	 m_channels.size()-m_point.size()<m_ncells) {
     for (;m_ndiced<m_nopt;++m_ndiced) Point();
-    CheckTime();
     if (Update(0)<m_error) break;
     Split();
   }
@@ -432,29 +430,13 @@ double Foam::Integrate(Foam_Integrand *const function)
   long unsigned int nsopt(m_point.size()*m_nopt);
   while (((long unsigned int)m_np)<m_nmax) {
     for (long unsigned int n(0);n<nsopt;++n) Point();
-    CheckTime();
     if (Update(1)<m_error && 
-	add++>=FOAM::Max((size_t)5,m_point.size())) break;
+	add++>=std::max((size_t)5,m_point.size())) break;
     Shuffle();
   }
   msg_Info()<<mm_down(1)<<std::endl;
   m_rmode=rmc::run;
-#ifndef USING__PI_only
-  msg_Info()<<tm::curon<<std::flush;
-#endif
   return Mean();
-}
-
-void Foam::CheckTime() const 
-{
-#ifndef USING__PI_only
-  if (rpa.gen.CheckTime()) return;
-  msg_Error()<<om::bold<<"Foam::Integrate(..): "
-	     <<om::reset<<om::red<<"Timeout. Interrupt integration."
-	     <<om::reset<<std::endl;
-  kill(getpid(),SIGINT);
-#else
-#endif
 }
 
 double Foam::Update(const int mode)
@@ -473,13 +455,13 @@ double Foam::Update(const int mode)
       m_np+=m_channels[i]->Points();
       m_sum+=m_channels[i]->Sum()/alpha;
       m_sum2+=m_channels[i]->Sum2()/sqr(alpha);
-      m_max=FOAM::Max(m_max,m_channels[i]->Max()/alpha);
+      m_max=std::max(m_max,m_channels[i]->Max()/alpha);
     }
   }
   m_smax.pop_back();
   m_smax.push_front(m_max);
   for (size_t i(0);i<m_smax.size();++i) 
-    m_max=FOAM::Max(m_max,m_smax[i]);
+    m_max=std::max(m_max,m_smax[i]);
   if (!IsEqual(sum,1.0)) 
     THROW(fatal_error,"Summation does not agree.");
   double error(dabs(Sigma()/Mean()));
@@ -765,13 +747,8 @@ double Foam::Loss(const Foam_Channel *c,const size_t &dim,
   if (points.empty()) THROW(fatal_error,"No data points");
   if (end==start) end=points.size();
   double s2(0.0), w(c->Weight());
-  if (m_mode==1) {
-    for (size_t i(start);i<end;++i) s2=FOAM::Max(points[i].second*w,s2);
-  }
-  else {
-    for (size_t i(start);i<end;++i) s2+=sqr(points[i].second*w);
-    s2/=end-start;
-  }
+  for (size_t i(start);i<end;++i) s2+=sqr(points[i].second*w);
+  s2/=end-start;
   return s2;
 }
 

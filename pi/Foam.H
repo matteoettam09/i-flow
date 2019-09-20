@@ -380,7 +380,7 @@ namespace FOAM {
 
     size_t m_ncells, m_split, m_shuffle, m_last;
 
-    int       m_mode, m_store;
+    int       m_store;
     rmc::code m_rmode;
 
     std::string  m_vname, m_uname;
@@ -415,12 +415,6 @@ namespace FOAM {
       \sigma\,=\;\sqrt{\frac{\sum\limits_{i\in channels} 
       \sum_i (w^2-\left<w\right>^2)}{\sum\limits_{i\in channels} n_i-1}}
       \f]
-    */
-
-    void CheckTime() const;
-    /*!
-      \fn void CheckTime() const
-      \brief Checks whether the user defined time limit has beeen reached.
     */
 
   public:
@@ -464,7 +458,9 @@ namespace FOAM {
       of type Foam_Channel inside the integration domain.
     */
 
+#ifdef USING__PI_only
     double Integrate(PyObject *const function);
+#endif
     double Integrate(Foam_Integrand *const function);
     /*!
       \fn double Integrate(Foam_Integrand *const function)
@@ -546,14 +542,6 @@ namespace FOAM {
       \fn inline void SetScale(const double &scale)
       \brief Sets a possible scale the result is multiplied with.
     */
-    inline void SetMode(const int mode) { m_mode=mode; }
-    /*!
-      \fn inline void SetMode(const int mode)
-      \brief Sets the integration mode.
-
-      This method sets the integration mode. Mode 0 corresponds to variance 
-      minimization, mode 1 corresponds to maximum minimization.
-    */
     inline void SetStorePoints(const int store) { m_store=store; }
     /*!
       \fn inline void SetStorePoints(const int &store)
@@ -595,11 +583,6 @@ namespace FOAM {
       \brief Returns the integrand.
     */
 
-    inline int Mode() const { return m_mode; }
-    /*!
-      \fn inline int Mode() const
-      \brief Returns the current mode.
-    */
     inline int StorePoints() const { return m_store; }
     /*!
       \fn inline int StorePoints() const
