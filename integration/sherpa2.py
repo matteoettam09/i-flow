@@ -330,6 +330,22 @@ class eetojjj:
         logger.debug('ecm = {}'.format(self.ecms))
 
         dxs = lome*wsum*hbarc2/self.ecms**2/2.0
+        """
+        plt.hist(lome,bins=np.logspace(-10,5,500))
+        plt.yscale('log')
+        plt.xscale('log')
+        plt.savefig('figs/ME_{:04d}.pdf'.format(self.index))
+        plt.close()
+
+        plt.hist(dxs,bins=np.logspace(-6,10,500))
+        plt.yscale('log')
+        plt.xscale('log')
+        plt.savefig('figs/dsig_{:04d}.pdf'.format(self.index))
+        plt.close()
+        """
+        self.index += 1
+
+        #print(np.mean(dxs))
 
         return tf.maximum(dxs,1e-7)
 
@@ -484,6 +500,8 @@ if __name__ == '__main__':
     optimizer = tf.keras.optimizers.Adam(initial_learning_rate, clipnorm = 5.0)#lr_schedule)
     
     integrator = integrator.Integrator(hardxs.GeneratePointIso, dist, optimizer)
+
+
 
 #    print(integrator.integrate(nint,
 #          acceptance=acceptance,
