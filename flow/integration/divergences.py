@@ -104,4 +104,4 @@ class Divergence:
         raise NotImplementedError('The requested loss function {} '
                                   'is not implemented. Allowed '
                                   'options are {}.'.format(
-                                      name, dir(self)))
+                                      name, self.divergences))
