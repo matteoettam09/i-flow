@@ -22,6 +22,8 @@ class BijectorFactory:
 
 factory = BijectorFactory()
 factory.register_bijector('linear_channel', piecewiseUnet_channel.PiecewiseLinear)
+factory.register_bijector('quadratic_channel', piecewiseUnet_channel.PiecewiseQuadratic)
+factory.register_bijector('quadraticConst_channel', piecewiseUnet_channel.PiecewiseQuadraticConst)
 class Integrator():
     def __init__(self, func, ndims, nchannels, layers=4, mode='linear_channel', nbins=32):
         self.func = func
@@ -40,19 +42,21 @@ class Integrator():
 
         arange = np.arange(ndims)
         permute = np.hstack([arange[1:],arange[0]])
+        #self.bijectors.append(piecewiseUnet_channel.Permute(permutation=np.array([4,2,1,3,0])))
         for i in range(ndims):
             self.bijectors.append(factory.create(
                     mode,**{
                         'D': ndims,
-                        'd': ndims-1, #ndims//2,
+                        'd': ndims//2 + ndims % 2, #ndims-1,
                         'nbins': nbins,
                         'nchannels': nchannels,
                         'layer_id': i,
-                        'name':"PwL"
+                        'name':"L"
                         }
                     ))
-            self.bijectors.append(piecewiseUnet_channel.Permute(permutation=permute,name="Prm"))
-
+            self.bijectors.append(piecewiseUnet_channel.Permute(permutation=permute,name="P"))
+            #self.bijectors.append(piecewiseUnet_channel.Permute(permutation=np.array([4,0,1,2,3]),name="P"))
+        #self.bijectors.append(piecewiseUnet_channel.Permute(permutation=np.array([4,2,1,3,0])))
         self.bijectors = tfb.Chain(list(reversed(self.bijectors))) 
 
         self.base_dist = tfd.Uniform(low=ndims*[0.],high=ndims*[1.],name="UnF")
@@ -75,24 +79,32 @@ class Integrator():
         self.saver.restore(sess, name)
         print("Model restored")
 
-
+        
     def _loss_fn(self,nsamples,sess):
         ran = tf.cast(tf.floor(tf.random.uniform((nsamples,),minval=0., maxval=self.nchannels,dtype=tf.dtypes.float32)),tf.dtypes.int32)
         ran_np=ran.eval(session=sess)
 
         randic = {"channel": ran_np.tolist()}
-        layerdic = {"PwL":randic}
+        layerdic = {"L":randic}
         kwargs={"bijector_kwargs":layerdic}
+        #x = tf.stop_gradient(self.dist.sample(nsamples,**kwargs))
         x = self.dist.sample(nsamples,**kwargs)
         logq = self.dist.log_prob(x,**kwargs)
         p = self.func(x,randic)
         q = self.dist.prob(x,**kwargs)
-
         xsec = p/q
+        
+        #xs = tf.stop_gradient(self.dist.sample(nsamples,**kwargs))
+        #xs = self.dist.sample(nsamples,**kwargs)
+        #xsec = self.func(xs,randic)/self.dist.prob(xs,**kwargs)
+
         p = p/tf.reduce_mean(xsec)
         mean, var = tf.nn.moments(xsec,axes=[0])
         # KL divergence:
         return tf.reduce_mean((p/q)*(tf.log(p)-logq)), mean, var/nsamples, x, p, q
+        # KL divergence with acceptance:
+        #return tf.reduce_mean((p/q)*(tf.log(p)-logq)) + 0.01*(1.-tf.reduce_mean(p/q)/tf.reduce_max(p/q)), mean, var/nsamples, x, p, q
+
         # chi^2 divergence:
         #return tf.reduce_mean(((p-q)/q)**2), mean, var/nsamples, x, p, q
 
@@ -178,10 +190,11 @@ class Integrator():
 
     def integrate(self,sess,nsamples=10000):
         ran = tf.cast(tf.floor(tf.random.uniform((nsamples,),minval=0., maxval=self.nchannels,dtype=tf.dtypes.float32)),tf.dtypes.int32)
+        #ran = tf.cast(tf.floor(tf.random.uniform((nsamples,),minval=1., maxval=2.,dtype=tf.dtypes.float32)),tf.dtypes.int32)
         ran_np=ran.eval()
 
         randic = {"channel": ran_np.tolist()}
-        layerdic = {"PwL":randic}
+        layerdic = {"L":randic}
         kwargs={"bijector_kwargs":layerdic}
         x = self.dist.sample(nsamples,**kwargs)
         p = self.func(x,randic)

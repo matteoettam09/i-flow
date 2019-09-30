@@ -128,10 +128,28 @@ class eetojjj:
 
     def GenerateMomenta(self,channel,rans,pa,pb):
 	return self.channels[channel](rans,pa,pb)
-    
+
     def GeneratePointCh(self,rans,channel):
         #print("Generate Point Channel "+str(channel))
-        rans=np.minimum(rans,1.-5e-8)
+        """
+        if tf.reduce_any(rans <=0.):
+            print(rans[tf.reduce_any(rans<0.,axis = -1)])
+        if  tf.reduce_any(rans >=1.):
+            print(rans[tf.reduce_any(rans>1.,axis = -1)])
+        if  tf.reduce_any(rans == np.nan):
+            print(rans[tf.reduce_any(rans == np.nan,axis = -1)])
+        import warnings
+        warnings.filterwarnings("error")
+
+        try:
+            rans=np.minimum(rans,1.)
+        except RuntimeWarning:
+            np.set_printoptions(threshold=np.inf)
+            print(rans)
+        """
+        rans=np.minimum(rans,1.)
+        rans=np.maximum(rans,0.)
+
         logger.debug("  rans = {0}".format(rans))
         pa = Vector4(self.ecms/2*np.ones(np.shape(rans)[0]),
                      np.zeros(np.shape(rans)[0]),
@@ -186,7 +204,7 @@ class eetojjj:
         wsum = 1./((0.5/(wp13_2*ws13*wp1_3)) + (0.5/(wp23_1*ws23*wp2_3)))
         #lome = sherpa.ME2(np.array([pa,pb,p3,p1,p2]))
         lome = np.array(sherpa.process.CSMatrixElementVec(np.array([pa,pb,p3,p1,p2])))
-        dxs = (lome*wsum*3.89379656e8/(2.*self.ecms**2))+1e-8
+        dxs = (lome*wsum*3.89379656e8/(2.*self.ecms**2))+1e-6
         return dxs
     """
     def GeneratePoint_train(self,rans):
@@ -260,18 +278,19 @@ if __name__ == '__main__':
     import tensorflow as tf
     from tensorflow.python import debug
 
-    integrator = Integrator(func_int, 5, nchannels = 2, mode='linear_channel',nbins=24)
+    integrator = Integrator(func_int, 5, nchannels = 2, mode='quadratic_channel',nbins=24)
     #integrator.make_optimizer(nsamples=750, learning_rate=1e-3)
     trained = False
     with tf.Session(config=tf.ConfigProto(device_count={'GPU':0})) as sess:
         #sess=debug.LocalCLIDebugWrapperSession(sess)
         #sess=debug.TensorBoardDebugWrapperSession(sess, 'Triton:6064',send_traceback_and_source_code=False)
-        integrator.make_optimizer(nsamples=10000, session=sess, learning_rate=1.5e-3)
+        integrator.make_optimizer(nsamples=10000, session=sess, learning_rate=2.e-4)
         sess.run(tf.global_variables_initializer())
         try:
             integrator.load(sess,"models/eejjj.ckpt")
         except:
-            integrator.optimize(sess,epochs=1000,printout=25)
+            #pass
+            integrator.optimize(sess,epochs=500,printout=25)
             trained = True
         #integrator.func=func_int
         print(integrator.integrate(sess,100000))
