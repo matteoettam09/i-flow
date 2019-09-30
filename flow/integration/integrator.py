@@ -1,5 +1,5 @@
 """ Implement the flow integrator. """
-# pylint: disable=locally-disabled, invalid-name
+# pylint: disable=invalid-name
 
 import tensorflow as tf
 import tensorflow_probability as tfp
@@ -42,35 +42,85 @@ class Integrator():
 
     """
 
-    def __init__(self, func, dist, optimizer, **kwargs):
+    def __init__(self, func, dist, optimizer, loss_func='chi2', **kwargs):
         """ Initialize the normalizing flow integrator. """
         self._func = func
         self.global_step = 0
         self.dist = dist
         self.optimizer = optimizer
-        if 'loss_func' in kwargs:
-            if kwargs['loss_func'] == 'chi2':
-                self.loss_func = lambda true, test, logq, logp: tf.reduce_mean(
-                    input_tensor=(true - test)**2/test**2)
-                self.grad = lambda true, test, logq, logp: tf.reduce_mean(
-                    input_tensor=-tf.stop_gradient(
-                        (true/test)**2)*logq)
-            elif kwargs['loss_func'] == 'kl':
-                self.loss_func = lambda true, test, logq, logp: tf.reduce_mean(
-                    input_tensor=(true/test)*(logp-logq))
-                self.grad = lambda true, test, logq, logp: tf.reduce_mean(
-                    input_tensor=-tf.stop_gradient(
-                        (true/test))*logq)
-            else:
-                raise NotImplementedError('Requested loss_func: {}, '
-                                          'is not implemented'.format(
-                                              kwargs['loss_func']))
-        else:
+        if loss_func == 'chi2':
             self.loss_func = lambda true, test, logq, logp: tf.reduce_mean(
                 input_tensor=(true - test)**2/test**2)
             self.grad = lambda true, test, logq, logp: tf.reduce_mean(
                 input_tensor=-tf.stop_gradient(
                     (true/test)**2)*logq)
+        elif loss_func == 'kl':
+            self.loss_func = lambda true, test, logq, logp: tf.reduce_mean(
+                input_tensor=(true/test)*(logp-logq))
+            self.grad = lambda true, test, logq, logp: tf.reduce_mean(
+                input_tensor=-tf.stop_gradient(
+                    (true/test))*logq)
+        elif loss_func == 'hellinger':
+            self.loss_func = lambda true, test, logq, logp: tf.reduce_mean(
+                input_tensor=2.0*(tf.math.sqrt(true)
+                                  - tf.math.sqrt(test))**2/test)
+            self.grad = lambda true, test, logq, logp: tf.reduce_mean(
+                input_tensor=(2.0*(tf.stop_gradient(tf.math.sqrt(true))
+                                   - tf.math.sqrt(test))**2
+                              / tf.stop_gradient(test)))
+        elif loss_func == 'jeffreys':
+            self.loss_func = lambda true, test, logq, logp: tf.reduce_mean(
+                input_tensor=(true - test)*(logp - logq)/test)
+            self.grad = lambda true, test, logq, logp: tf.reduce_mean(
+                input_tensor=((tf.stop_gradient(true) - test)
+                              * (tf.stop_gradient(logp) - logq)
+                              / tf.stop_gradient(test)))
+        elif loss_func == 'chernoff':
+            if 'alpha' not in kwargs:
+                raise ValueError('Chernoff divergence requires an alpha '
+                                 'input')
+            alpha = kwargs['alpha']
+            self.loss_func = lambda true, test, logq, logp: \
+                (4.0 / (1-alpha**2)*(1 - tf.reduce_mean(
+                    input_tensor=(tf.pow(true, (1.0-alpha)/2.0)
+                                  * tf.pow(test, (1.0+alpha)/2.0)/test))))
+            self.grad = lambda true, test, logq, logp: \
+                (4.0 / (1-alpha**2)*(1 - tf.reduce_mean(
+                    input_tensor=(tf.stop_gradient(tf.pow(true,
+                                                          (1.0-alpha)/2.0))
+                                  * tf.pow(test, (1.0-alpha)/2.0)
+                                  / tf.stop_gradient(test)))))
+        elif loss_func == 'exponential':
+            self.loss_func = lambda true, test, logq, logp: tf.reduce_mean(
+                input_tensor=true/test*(logp - logq)**2)
+            self.grad = lambda true, test, logq, logp: tf.reduce_mean(
+                input_tensor=tf.stop_gradient(true/test)*(
+                    tf.stop_gradient(logp) - logq)**2)
+        elif loss_func == 'ab-product':
+            if 'alpha' not in kwargs:
+                raise ValueError('ab-product divergence requires an alpha '
+                                 'input')
+            if 'beta' not in kwargs:
+                raise ValueError('ab-product divergence requires an alpha '
+                                 'input')
+            alpha = kwargs['alpha']
+            beta = kwargs['beta']
+            self.loss_func = lambda true, test, logq, logp: tf.reduce_mean(
+                input_tensor=(2.0/((1-alpha)*(1-beta))
+                              * (1-tf.pow(test/true, 1-alpha/2.0))
+                              * (1-tf.pow(test/true, 1-beta/2.0))
+                              * true/test))
+            self.grad = lambda true, test, logq, logp: tf.reduce_mean(
+                input_tensor=(2.0/((1-alpha)*(1-beta))
+                              * (1-tf.pow(test/tf.stop_gradient(true),
+                                          1-alpha/2.0))
+                              * (1-tf.pow(test/tf.stop_gradient(true),
+                                          1-beta/2.0))
+                              * tf.stop_gradient(true/test)))
+        else:
+            raise NotImplementedError('Requested loss_func: {}, '
+                                      'is not implemented'.format(
+                                          loss_func))
 
     @tf.function
     def train_one_step(self, nsamples, integral=False):
@@ -235,6 +285,8 @@ if __name__ == '__main__':
         return tf.where((x[:, 0] < 0.9) & (x[:, 1] < 0.9),
                         (x[:, 0]**2 + x[:, 1]**2)/((1-x[:, 0])*(1-x[:, 1])), 0)
 
+    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-statements
     def main():
         """ Main function. """
         ndims = 2
