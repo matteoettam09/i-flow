@@ -53,7 +53,7 @@ setup(
         ],
     # Provide executable script to run the main code
     entry_points={},
-    extra_require={
+    extras_require={
         'test': ['pytest', 'coverage', 'pytest-cov'],
     },
 )
