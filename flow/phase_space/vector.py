@@ -1,8 +1,8 @@
 
 import tensorflow as tf
 
-def Vector4(E=tf.zeros(1),Px=tf.zeros(1),Py=tf.zeros(1),Pz=tf.zeros(2)):
-    return tf.array([E,Px,Py,Pz]).T
+def Vector4(E=0,Px=0,Py=0,Pz=0):
+    return tf.transpose(tf.convert_to_tensor([E,Px,Py,Pz],dtype=tf.float64))
 
 def Dot(pi,pj):
     return  pi[:,0]*pj[:,0]-pi[:,1]*pj[:,1]-pi[:,2]*pj[:,2]-pi[:,3]*pj[:,3] 

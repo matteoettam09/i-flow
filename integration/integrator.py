@@ -142,7 +142,41 @@ class Integrator():
             self.losses.append(np_loss)
             self.integrals.append(np_integral)
             self.vars.append(np_var)
-            if epoch % printout == 0:
+            if epoch % printout == 0:#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+
                 print("Epoch %4d: loss = %e, average integral = %e, average variance = %e"   
                         %(epoch, np_loss, np.mean(self.integrals), np.mean(self.vars))) 
                 figure = corner.corner(xpts, labels=[r'$x_{}$'.format(i) for i in range(self.ndims)], show_titles=True, title_kwargs={"fontsize": 12}, range=self.ndims*[[0,1]])
@@ -214,7 +248,13 @@ class Integrator():
 
         np_r = sess.run(r)
 
-        return np.mean(np_r)
+        plt.hist(np_r)
+        plt.yscale('log')
+        plt.xscale('log')
+        plt.savefig('acceptance.pdf')
+        plt.close()
+
+        return
         
 
 if __name__ == '__main__':

@@ -186,7 +186,6 @@ class eetojjj:
 if __name__ == '__main__':
     from qcd import AlphaS
     from comix import Comix
-    from integrator import *
 
     import logging
     logging.basicConfig()
@@ -239,6 +238,7 @@ if __name__ == '__main__':
     import tensorflow as tf
     from tensorflow.python import debug
 
+    from integrator import *
     integrator = Integrator(func_int, 5, mode='linear_blob',nbins=16)
     integrator.make_optimizer(nsamples=750, learning_rate=1e-3)
 

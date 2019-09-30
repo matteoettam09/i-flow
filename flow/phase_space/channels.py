@@ -1,10 +1,9 @@
 
-import numpy as np
 import tensorflow as tf
 import math as m
 from absl import logging
 
-from vector import *
+from .vector import *
 #from particle import Particle
 
 class SChannelDecay:
@@ -36,11 +35,11 @@ class SChannelDecay:
         logging.debug("  rans = {0}".format(rans))
         ecm = Mass(p)
 
-        ct = 1.-(((1-rans[:,0])*self.eps**(1-self.alpha) 
-            + rans[:,0]*((2.-self.eps)**(1-self.alpha))) ** (1./(1-self.alpha)))
+        ct = tf.convert_to_tensor(1.-(((1-rans[:,0])*self.eps**(1-self.alpha) 
+            + rans[:,0]*((2.-self.eps)**(1-self.alpha))) ** (1./(1-self.alpha))),dtype=tf.float64)
 
         st = tf.sqrt(1.-ct*ct)
-        phi = 2.*m.pi*rans[:,1]
+        phi = tf.convert_to_tensor(2.*m.pi*rans[:,1],dtype=tf.float64)
 
         pl, pt1, pt2 = self._find_axes(p)
 
@@ -48,7 +47,8 @@ class SChannelDecay:
         p1 = (ps*st*tf.cos(phi))[:,tf.newaxis]*pt1 \
              +(ps*st*tf.sin(phi))[:,tf.newaxis]*pt2 \
              +(ps*ct)[:,tf.newaxis]*pl
-        p1[:,0] = (Mass2(p)+s1-s2)/(2.*ecm)
+        tmp = (Mass2(p)+s1-s2)/(2.*ecm)*tf.ones_like(p1[:,0])
+        p1 = tf.concat([tmp[:,tf.newaxis],p1[:,1:]],axis=-1)
         p2 = Vector4(ecm-p1[:,0],-p1[:,1],-p1[:,2],-p1[:,3])
         p1 = BoostBack(p,p1)
         p2 = BoostBack(p,p2)
@@ -75,9 +75,9 @@ class SChannelDecay:
 
         pl, pt1, pt2 = self._find_axes(p)
 
-#        ct = -(pl*q1)/Momentum(q1)[:,tf.newaxis]
+        #ct = -(pl*q1)/Momentum(q1)[:,tf.newaxis]
         ct = -Dot(pl,q1)/Momentum(q1)#[:,tf.newaxis]
-        phi = tf.arctan(Dot(q1,pt2)/Dot(q1,pt1))
+        phi = tf.atan(Dot(q1,pt2)/Dot(q1,pt1))
 
         #if ((q1*pt1)>0): phi += m.pi
         #else:
@@ -112,11 +112,11 @@ class Propagator:
             s = ((1-ran)*smin**(1-self.alpha) + ran*(smax**(1-self.alpha))) ** (1./(1-self.alpha))
             logging.debug("MasslessPoint: ran = {0}, s_min = {1}, s_max = {2}, s = {3}".format(ran,smin,smax,s))
         else:
-            mass2 = mass**2
-            mw = mass*width
-            ymax = tf.arctan((smin-mass2)/mw)
-            ymin = tf.arctan((smax-mass2)/mw)
-            s = mass2+mw*tf.tan(ymin + ran*(ymax-ymin))
+            mass2 = tf.convert_to_tensor(mass**2,dtype=tf.float64)
+            mw = tf.convert_to_tensor(mass*width, dtype=tf.float64)
+            ymax = tf.atan((smin-mass2)/mw)
+            ymin = tf.atan((smax-mass2)/mw)
+            s = mass2+mw*tf.tan(ymin + tf.cast(ran,dtype=tf.float64)*(ymax-ymin))
             logging.debug("MassivePoint: ran = {0}, s_min = {1}, s_max = {2}, s = {3}".format(ran,smin,smax,s))
 
         return s
@@ -135,11 +135,11 @@ class Propagator:
             logging.debug("MasslessWeight: s_min = {0}, s_max = {1}, s = {2}, ran = {3}".format(smin,smax,s,ran))
 
         else:
-            mass2 = mass**2
-            mw = mass*width
-            ymax = tf.arctan((smin-mass2)/mw)
-            ymin = tf.arctan((smax-mass2)/mw)
-            y = tf.arctan((s-mass2)/mw)
+            mass2 = tf.convert_to_tensor(mass**2, dtype=tf.float64)
+            mw = tf.convert_to_tensor(mass*width, dtype=tf.float64)
+            ymax = tf.atan((smin-mass2)/mw)
+            ymin = tf.atan((smax-mass2)/mw)
+            y = tf.atan((s-mass2)/mw)
             I = ymin - ymax
             wgt = I/(2.*m.pi)
             wgt /= (mw/((s-mass2)**2+mw**2))
