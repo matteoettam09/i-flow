@@ -8,6 +8,7 @@ from os import path
 # and accepts an argument to specify the text encoding
 from io import open
 
+import setuptools
 from setuptools import setup, find_packages
 
 
