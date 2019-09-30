@@ -1,0 +1,20 @@
+image: "python:3.7"
+
+before_script:
+    - python --version
+    - pip install "[.test]" .
+
+stages:
+    - Static Analysis
+    - Test
+
+pylint:
+    stage: Static Analysis
+    allow_failure: true
+    script:
+        - pylint flow/*.py
+
+unit_test:
+    stage: Test
+    script:
+        - pytest
