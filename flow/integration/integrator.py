@@ -5,6 +5,7 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 
 from . import couplings
+from . import divergences
 
 tfb = tfp.bijectors
 tfd = tfp.distributions
@@ -48,79 +49,8 @@ class Integrator():
         self.global_step = 0
         self.dist = dist
         self.optimizer = optimizer
-        if loss_func == 'chi2':
-            self.loss_func = lambda true, test, logq, logp: tf.reduce_mean(
-                input_tensor=(true - test)**2/test**2)
-            self.grad = lambda true, test, logq, logp: tf.reduce_mean(
-                input_tensor=-tf.stop_gradient(
-                    (true/test)**2)*logq)
-        elif loss_func == 'kl':
-            self.loss_func = lambda true, test, logq, logp: tf.reduce_mean(
-                input_tensor=(true/test)*(logp-logq))
-            self.grad = lambda true, test, logq, logp: tf.reduce_mean(
-                input_tensor=-tf.stop_gradient(
-                    (true/test))*logq)
-        elif loss_func == 'hellinger':
-            self.loss_func = lambda true, test, logq, logp: tf.reduce_mean(
-                input_tensor=2.0*(tf.math.sqrt(true)
-                                  - tf.math.sqrt(test))**2/test)
-            self.grad = lambda true, test, logq, logp: tf.reduce_mean(
-                input_tensor=(2.0*(tf.stop_gradient(tf.math.sqrt(true))
-                                   - tf.math.sqrt(test))**2
-                              / tf.stop_gradient(test)))
-        elif loss_func == 'jeffreys':
-            self.loss_func = lambda true, test, logq, logp: tf.reduce_mean(
-                input_tensor=(true - test)*(logp - logq)/test)
-            self.grad = lambda true, test, logq, logp: tf.reduce_mean(
-                input_tensor=((tf.stop_gradient(true) - test)
-                              * (tf.stop_gradient(logp) - logq)
-                              / tf.stop_gradient(test)))
-        elif loss_func == 'chernoff':
-            if 'alpha' not in kwargs:
-                raise ValueError('Chernoff divergence requires an alpha '
-                                 'input')
-            alpha = kwargs['alpha']
-            self.loss_func = lambda true, test, logq, logp: \
-                (4.0 / (1-alpha**2)*(1 - tf.reduce_mean(
-                    input_tensor=(tf.pow(true, (1.0-alpha)/2.0)
-                                  * tf.pow(test, (1.0+alpha)/2.0)/test))))
-            self.grad = lambda true, test, logq, logp: \
-                (4.0 / (1-alpha**2)*(1 - tf.reduce_mean(
-                    input_tensor=(tf.stop_gradient(tf.pow(true,
-                                                          (1.0-alpha)/2.0))
-                                  * tf.pow(test, (1.0-alpha)/2.0)
-                                  / tf.stop_gradient(test)))))
-        elif loss_func == 'exponential':
-            self.loss_func = lambda true, test, logq, logp: tf.reduce_mean(
-                input_tensor=true/test*(logp - logq)**2)
-            self.grad = lambda true, test, logq, logp: tf.reduce_mean(
-                input_tensor=tf.stop_gradient(true/test)*(
-                    tf.stop_gradient(logp) - logq)**2)
-        elif loss_func == 'ab-product':
-            if 'alpha' not in kwargs:
-                raise ValueError('ab-product divergence requires an alpha '
-                                 'input')
-            if 'beta' not in kwargs:
-                raise ValueError('ab-product divergence requires an alpha '
-                                 'input')
-            alpha = kwargs['alpha']
-            beta = kwargs['beta']
-            self.loss_func = lambda true, test, logq, logp: tf.reduce_mean(
-                input_tensor=(2.0/((1-alpha)*(1-beta))
-                              * (1-tf.pow(test/true, 1-alpha/2.0))
-                              * (1-tf.pow(test/true, 1-beta/2.0))
-                              * true/test))
-            self.grad = lambda true, test, logq, logp: tf.reduce_mean(
-                input_tensor=(2.0/((1-alpha)*(1-beta))
-                              * (1-tf.pow(test/tf.stop_gradient(true),
-                                          1-alpha/2.0))
-                              * (1-tf.pow(test/tf.stop_gradient(true),
-                                          1-beta/2.0))
-                              * tf.stop_gradient(true/test)))
-        else:
-            raise NotImplementedError('Requested loss_func: {}, '
-                                      'is not implemented'.format(
-                                          loss_func))
+        self.divergence = divergences.Divergence(**kwargs)
+        self.loss_func = self.divergence(loss_func)
 
     @tf.function
     def train_one_step(self, nsamples, integral=False):
@@ -134,10 +64,9 @@ class Integrator():
             true = true/mean
             logp = tf.where(true > 1e-16, tf.math.log(true),
                             tf.math.log(true+1e-16))
-            loss = self.loss_func(true, test, logq, logp)
-            grad = self.grad(true, test, logq, logp)
+            loss = self.loss_func(true, test, logp, logq)
 
-        grads = tape.gradient(grad, self.dist.trainable_variables)
+        grads = tape.gradient(loss, self.dist.trainable_variables)
         self.optimizer.apply_gradients(
             zip(grads, self.dist.trainable_variables))
 
