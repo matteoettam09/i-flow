@@ -24,7 +24,7 @@ pylint:
     stage: Static Analysis
     allow_failure: true
     script:
-        - pylint flow/*.py
+        - pylint flow/*
 
 unit_test:
     stage: Test
