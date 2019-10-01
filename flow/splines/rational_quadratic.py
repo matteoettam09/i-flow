@@ -5,9 +5,9 @@
 import tensorflow as tf
 from .spline import _knot_positions, _gather_squeeze, _search_sorted
 
-DEFAULT_MIN_BIN_WIDTH = 1e-6
-DEFAULT_MIN_BIN_HEIGHT = 1e-6
-DEFAULT_MIN_DERIVATIVE = 1e-6
+DEFAULT_MIN_BIN_WIDTH = 1e-15
+DEFAULT_MIN_BIN_HEIGHT = 1e-15
+DEFAULT_MIN_DERIVATIVE = 1e-15
 
 
 def rational_quadratic_spline(inputs,
