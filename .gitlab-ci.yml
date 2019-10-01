@@ -30,3 +30,4 @@ unit_test:
     stage: Test
     script:
         - pytest
+        - codecov
