@@ -30,7 +30,7 @@ class Divergence:
 
     # pylint: disable=invalid-name
     @staticmethod
-    def kl(true, test, logq, logp):
+    def kl(true, test, logp, logq):
         """ Implement kl divergence. """
         return tf.reduce_mean(input_tensor=tf.stop_gradient(true/test)
                               * (tf.stop_gradient(logp) - logq))
