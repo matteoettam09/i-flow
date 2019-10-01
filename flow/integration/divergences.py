@@ -97,6 +97,15 @@ class Divergence:
                                       1-self.beta/2.0))
                           * tf.stop_gradient(true/test)))
 
+    @staticmethod
+    def JS(true, test, logp, logq):
+        """ Implement Jensen–Shannon divergence. """
+        logpq = tf.math.log(0.5*(test+tf.stop_gradient(true)))
+        return tf.reduce_mean(input_tensor=(
+            tf.stop_gradient(1./test) * ((tf.stop_gradient(true)
+            * (tf.stop_gradient(logp)-logpq))
+            + (test * (logq-logpq)))))
+        
     def __call__(self, name):
         fn = getattr(self, name, None)
         if fn is not None:
