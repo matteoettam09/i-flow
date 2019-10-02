@@ -10,6 +10,7 @@ cache:
 
 before_script:
     - python --version
+    - pip install -U pip
     - pip install virtualenv
     - virtualenv venv
     - source venv/bin/activate
@@ -30,4 +31,3 @@ unit_test:
     stage: Test
     script:
         - pytest
-        - codecov

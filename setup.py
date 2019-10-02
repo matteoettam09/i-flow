@@ -46,8 +46,8 @@ setup(
     python_requires='>=2.7, !=3.0.*, !=3.1.*, !=3.2.*, <4',
     install_requires=[
         'numpy',
-        'tensorflow>=2.0rc0',
-        'tensorflow_probability>=0.8.0rc0',
+        'tensorflow>=2.0',
+        'tensorflow_probability>=0.8.0',
         'matplotlib',
         'corner',
         'absl-py',

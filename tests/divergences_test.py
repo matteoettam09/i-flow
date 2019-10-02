@@ -48,7 +48,7 @@ def test_chi2_divergence(divergence, distributions):
     expected = (tf.exp(-(MU_1-MU_2)**2/(SIGMA_1**2-2*SIGMA_2**2))*SIGMA_2**2
                 / (SIGMA_1*tf.sqrt(-SIGMA_1**2+2*SIGMA_2**2)) - 1)
 
-    assert abs(loss - expected) <= 3*loss/tf.sqrt(float(NSAMPLES))
+    assert abs(loss - expected) <= 4*loss/tf.sqrt(float(NSAMPLES))
 
 
 def test_kl_divergence(divergence, distributions):
@@ -59,7 +59,7 @@ def test_kl_divergence(divergence, distributions):
                 + (SIGMA_1**2+(MU_1 - MU_2)**2)/(2*SIGMA_2**2)
                 - 0.5)
 
-    assert abs(loss - expected) <= 3*loss/tf.sqrt(float(NSAMPLES))
+    assert abs(loss - expected) <= 4*loss/tf.sqrt(float(NSAMPLES))
 
 
 def test_hellinger_divergence(divergence, distributions):
@@ -69,7 +69,7 @@ def test_hellinger_divergence(divergence, distributions):
     expected = (4.0-4*tf.sqrt((2.0*SIGMA_1*SIGMA_2)/(SIGMA_1**2 + SIGMA_2**2))
                 * tf.exp(-0.25*(MU_1-MU_2)**2/(SIGMA_1**2 + SIGMA_2**2)))
 
-    assert abs(loss - expected) <= 3*loss/tf.sqrt(float(NSAMPLES))
+    assert abs(loss - expected) <= 4*loss/tf.sqrt(float(NSAMPLES))
 
 
 def test_jeffreys_divergence(divergence, distributions):
@@ -80,7 +80,7 @@ def test_jeffreys_divergence(divergence, distributions):
                  + ((MU_1-MU_2)**2-2*SIGMA_1**2)*SIGMA_2**2+SIGMA_2**4)
                 / (2*SIGMA_1**2*SIGMA_2**2))
 
-    assert abs(loss - expected) <= 3*loss/tf.sqrt(float(NSAMPLES))
+    assert abs(loss - expected) <= 4*loss/tf.sqrt(float(NSAMPLES))
 
 
 def test_chernoff_divergence(divergence, distributions):
@@ -97,7 +97,7 @@ def test_chernoff_divergence(divergence, distributions):
            * tf.sqrt((SIGMA_1*SIGMA_2)
                      / ((1+alpha)*SIGMA_1**2-(-1+alpha)*SIGMA_2**2))))
 
-    assert abs(loss - expected) <= 3*loss/tf.sqrt(float(NSAMPLES))
+    assert abs(loss - expected) <= 4*loss/tf.sqrt(float(NSAMPLES))
 
 
 def test_exponential_divergence(divergence, distributions):
@@ -112,7 +112,7 @@ def test_exponential_divergence(divergence, distributions):
             (MU_1-MU_2)**2+(SIGMA_1-SIGMA_2)*(SIGMA_1+SIGMA_2)
             + SIGMA_2**2*tf.math.log(SIGMA_2/SIGMA_1)))
 
-    assert abs(loss - expected) <= 3*loss/tf.sqrt(float(NSAMPLES))
+    assert abs(loss - expected) <= 4*loss/tf.sqrt(float(NSAMPLES))
 
 
 def test_ab_product_divergence(divergence, distributions):
@@ -145,7 +145,7 @@ def test_ab_product_divergence(divergence, distributions):
            * exponent(1-alpha/2.-beta/2.,
                       (alpha+beta)/2.))
 
-    assert abs(loss - expected) <= 3*loss/tf.sqrt(float(NSAMPLES))
+    assert abs(loss - expected) <= 4*loss/tf.sqrt(float(NSAMPLES))
 
 
 def test_jensen_shannon(divergence, distributions):
@@ -160,4 +160,4 @@ def test_jensen_shannon(divergence, distributions):
                     + divergence('kl')(distributions[1], distributions[1],
                                        distributions[3], log_m))
 
-    assert abs(loss - expected) <= 3*loss/tf.sqrt(float(NSAMPLES))
+    assert abs(loss - expected) <= 4*loss/tf.sqrt(float(NSAMPLES))
