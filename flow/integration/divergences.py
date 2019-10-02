@@ -19,21 +19,13 @@ class Divergence:
         return tf.reduce_mean(input_tensor=(tf.stop_gradient(true) - test)**2
                               / test / tf.stop_gradient(test))
 
-    #    def loss_func(true, test):
-    #        return tf.reduce_mean(input_tensor=(true - test)**2/test**2)
-    #
-    #    def gradient(true, test, logq):
-    #        return tf.reduce_mean(input_tensor=-tf.stop_gradient(
-    #            (true/test)**2)*logq)
-    #
-    #    return loss_func(true, test), gradient(true, test, logq)
-
     # pylint: disable=invalid-name
     @staticmethod
     def kl(true, test, logp, logq):
         """ Implement kl divergence. """
         return tf.reduce_mean(input_tensor=tf.stop_gradient(true/test)
                               * (tf.stop_gradient(logp) - logq))
+    # pylint: enable=invalid-name
 
     @staticmethod
     def hellinger(true, test, logp, logq):
@@ -64,7 +56,7 @@ class Divergence:
         return (4.0 / (1-self.alpha**2)*(1 - tf.reduce_mean(
             input_tensor=(tf.stop_gradient(tf.pow(true,
                                                   (1.0-self.alpha)/2.0))
-                          * tf.pow(test, (1.0-self.alpha)/2.0)
+                          * tf.pow(test, (1.0+self.alpha)/2.0)
                           / tf.stop_gradient(test)))))
 
     @staticmethod
@@ -78,38 +70,40 @@ class Divergence:
         """ Implement (alpha, beta)-product divergence. """
         del logp, logq
         if self.alpha is None:
-            raise ValueError('Must give an alpha value to use Chernoff '
-                             'Divergence.')
+            raise ValueError('Must give an alpha value to use '
+                             '(alpha, beta)-product Divergence.')
         if not 0 < self.alpha < 1:
             raise ValueError('Alpha must be between 0 and 1.')
 
         if self.beta is None:
-            raise ValueError('Must give an beta value to use Chernoff '
-                             'Divergence.')
+            raise ValueError('Must give an beta value to use '
+                             '(alpha, beta)-product Divergence.')
         if not 0 < self.beta < 1:
             raise ValueError('Beta must be between 0 and 1.')
 
         return tf.reduce_mean(
             input_tensor=(2.0/((1-self.alpha)*(1-self.beta))
                           * (1-tf.pow(test/tf.stop_gradient(true),
-                                      1-self.alpha/2.0))
+                                      (1-self.alpha)/2.0))
                           * (1-tf.pow(test/tf.stop_gradient(true),
-                                      1-self.beta/2.0))
+                                      (1-self.beta)/2.0))
                           * tf.stop_gradient(true/test)))
 
+    # pylint: disable=invalid-name
     @staticmethod
-    def JS(true, test, logp, logq):
+    def js(true, test, logp, logq):
         """ Implement Jensen–Shannon divergence. """
-        logpq = tf.math.log(0.5*(test+tf.stop_gradient(true)))
+        logm = tf.math.log(0.5*(test+tf.stop_gradient(true)))
         return tf.reduce_mean(input_tensor=(
-            tf.stop_gradient(1./test) * ((tf.stop_gradient(true)
-            * (tf.stop_gradient(logp)-logpq))
-            + (test * (logq-logpq)))))
-        
+            tf.stop_gradient(0.5/test) * ((tf.stop_gradient(true)
+                                           * (tf.stop_gradient(logp)-logm))
+                                          + (test * (logq-logm)))))
+    # pylint: enable=invalid-name
+
     def __call__(self, name):
-        fn = getattr(self, name, None)
-        if fn is not None:
-            return fn
+        func = getattr(self, name, None)
+        if func is not None:
+            return func
         raise NotImplementedError('The requested loss function {} '
                                   'is not implemented. Allowed '
                                   'options are {}.'.format(
