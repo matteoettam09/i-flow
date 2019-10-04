@@ -6,6 +6,7 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 
 from . import divergences
+from . import sinkhorn
 
 # pylint: disable=invalid-name
 tfb = tfp.bijectors
@@ -52,6 +53,7 @@ class Integrator():
         self.dist = dist
         self.optimizer = optimizer
         self.divergence = divergences.Divergence(**kwargs)
+        self.loss_func = sinkhorn.sinkhorn_normalized
         self.loss_func = self.divergence(loss_func)
 
     @tf.function
@@ -66,6 +68,7 @@ class Integrator():
             true = true/mean
             logp = tf.where(true > 1e-16, tf.math.log(true),
                             tf.math.log(true+1e-16))
+            # loss = self.loss_func(samples, samples, 1e-2, true, test, 5)
             loss = self.loss_func(true, test, logp, logq)
 
         grads = tape.gradient(loss, self.dist.trainable_variables)

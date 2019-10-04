@@ -1,4 +1,9 @@
-""" Implement the Sinkhorn loss. """
+""" Implement the Sinkhorn loss.
+
+    Modified from the pyTorch implementation found here,
+    https://github.com/gpeyre/SinkhornAutoDiff/tree/generalization
+    into Tensorflow.
+"""
 
 import tensorflow as tf
 
@@ -67,7 +72,8 @@ def cost_matrix(x, y, p=2):
     return tf.reduce_sum(tf.abs(x_col - y_row)**p, axis=2)
 
 
-if __name__ == '__main__':
+def main():
+    """ Basic test of the Sinkhorn loss. """
     import numpy as np
     import matplotlib.pyplot as plt
 
@@ -78,7 +84,8 @@ if __name__ == '__main__':
     x = tf.convert_to_tensor(np.random.rand(N[0], 2)-0.5, dtype=tf.float32)
     theta = 2*np.pi*np.random.rand(1, N[1])
     r = 0.8 + 0.2 * np.random.rand(1, N[1])
-    y = tf.convert_to_tensor(np.vstack((np.cos(theta)*r, np.sin(theta)*r)).T, dtype=tf.float32)
+    y = tf.convert_to_tensor(np.vstack((np.cos(theta)*r, np.sin(theta)*r)).T,
+                             dtype=tf.float32)
 
     def plotp(x, col):
         plt.scatter(x[:, 0], x[:, 1], s=50,
@@ -120,3 +127,7 @@ if __name__ == '__main__':
 
     print(tape.gradient(l2, y))
     # plt.show()
+
+
+if __name__ == '__main__':
+    main()
