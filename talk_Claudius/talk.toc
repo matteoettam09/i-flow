@@ -1,0 +1,6 @@
+\beamer@endinputifotherversion {3.36pt}
+\beamer@sectionintoc {1}{Part I: \hskip 1em\relax The ``traditional'' approach}{6}{0}{1}
+\beamer@sectionintoc {2}{Part II: \hskip 1em\relax The Machine Learning approach}{19}{0}{2}
+\beamer@subsectionintoc {2}{1}{Part II.1: \hskip 1em\relax Neural Network Basics}{20}{0}{2}
+\beamer@subsectionintoc {2}{2}{Part II.2: \hskip 1em\relax Numerical Integration with Neural Networks}{23}{0}{2}
+\beamer@subsectionintoc {2}{3}{Part II.3: \hskip 1em\relax Examples}{35}{0}{2}

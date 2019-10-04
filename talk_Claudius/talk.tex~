@@ -1,0 +1,538 @@
+\documentclass[10pt]{beamer}
+
+
+\usepackage{amsmath}
+\usepackage{amstext}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{slashed}
+\usepackage{color}
+\usepackage{epstopdf}
+\usepackage{caption}
+\usepackage{multirow}
+\usepackage{overpic}
+\usepackage{tikz}
+\usetikzlibrary{shapes.callouts}
+\usetikzlibrary{decorations.text}
+\usetikzlibrary{decorations.pathreplacing}
+\usetikzlibrary{arrows,shapes,shadows}
+\usetikzlibrary{calc}
+
+
+\beamertemplatenavigationsymbolsempty
+\usetheme{Boadilla}
+\definecolor{FERMILABblue}{RGB}{65,182,230}% FERMILAB 
+\usecolortheme[RGB={0,76,151}]{structure} %FERMILAB
+\setbeamertemplate{frametitle}[default][center]
+\usepackage{textcomp}
+
+
+
+
+\title[Machine Learning Phase Space]{Improving Numerical Integration and Event Generation with Normalizing Flows}
+\subtitle{ --- HET Brown Bag Seminar, University of Michigan ---}
+\author[Claudius Krause]{\large Claudius Krause}
+\date{September 25, 2019}
+\institute[Fermilab]{Fermi National Accelerator Laboratory}
+\titlegraphic{\vspace*{-0.5cm}\includegraphics[height=1cm]{Logo/FNAL-Logo-NAL-Blue.pdf} \hspace{1.5cm}\includegraphics[height=2cm,trim=0 50 0 50,clip]{Logo/Humboldt-Stiftung.jpg} }
+
+\begin{document}
+
+
+% Slide 1 (title)
+\begin{frame}
+  \titlepage
+    \begin{scriptsize}
+    \begin{center}
+      In collaboration with: Christina Gao, Stefan H\"oche, Joshua Isaacson, Holger Schulz\\
+      arXiv: 191x.abcde
+    \end{center}
+  \end{scriptsize}
+\end{frame}
+
+
+% Slide (motivation)
+\begin{frame}
+  \frametitle{Monte Carlo Simulations are increasingly important.}
+  \vspace*{-0.5em}
+  \tikzstyle{blockgr} = [draw, text width=32em, fill=FERMILABblue!20, rounded corners, drop shadow]
+  \begin{center}
+    \begin{tikzpicture}
+      \node (pic) [text width = 0.8\textwidth, text centered] at (0em,0em) {\includegraphics[width=0.925\textwidth]{figures/cpuHLLHC_noold.png}};
+\node (ref) [text width = 30em,anchor = south, text centered] at ($(pic.south)+(0em,-0.75em)$){\begin{scriptsize}\textcolor[rgb]{.4,.4,.4}{https://twiki.cern.ch/twiki/bin/view/AtlasPublic/ComputingandSoftwarePublicResults}\end{scriptsize}};      
+      \node at ($(pic.south)+(0em,-2.5em)$) (text) [blockgr] {
+        \begin{itemize}
+        \item[$\Rightarrow$] MC event generation is needed for singal and background predictions.
+        \item[$\Rightarrow$] The required CPU time will increase in the next years. 
+        \end{itemize}
+      };
+    \end{tikzpicture}
+  \end{center}
+\end{frame}
+
+
+% Slide (motivation)
+\begin{frame}
+  \frametitle{Monte Carlo Simulations are increasingly important.}
+  \vspace*{-2em}
+  \tikzstyle{blockgr} = [draw, text width=30em, fill=FERMILABblue!20, rounded corners, drop shadow]
+  \begin{center}
+    \begin{tikzpicture}
+      \node (pic) [text width = \textwidth, text centered] at (0em,0em) {\includegraphics[width=0.48\textwidth]{source/1905.05120/fig/timing.pdf}\hfill \includegraphics[width=0.48\textwidth]{source/1905.05120/fig/wpj/trials.pdf}};
+\node (ref) [text width = 30em,anchor = south, text centered] at ($(pic.south)+(0em,-0.75em)$){\begin{scriptsize}\textcolor[rgb]{.4,.4,.4}{Stefan H\"oche, Stefan Prestel, Holger Schulz [1905.05120;PRD]}\end{scriptsize}};      
+      \node at ($(pic.south)+(0em,-5em)$) (text) [blockgr] {
+        The bottlenecks for evaluating large final state multiplicities are \\
+        $ $ 
+        \begin{itemize}
+        \item a slow evaluation of the matrix element
+        \item a low unweighting efficiency
+        \end{itemize}
+      };
+      \uncover<2>{\draw ($(text.south)+(-8em,0.75em)$) ellipse (8em and 1.5em);}
+    \end{tikzpicture}
+  \end{center}
+\end{frame}
+
+
+% Slide  (Mapping)
+\begin{frame}
+  \frametitle{Improving Numerical Integration and Event Generation with Normalizing Flows}
+  \vspace{0.5cm}
+  \tikzstyle{part} = [text width = 8cm]
+  \begin{tikzpicture}
+    \node [part, align = right, text width = 8cm](part1) at (-3em,0em) {\large Part I: \quad The ``traditional'' approach};
+    \node [anchor = north west](part1pic) at ($(part1.north east)+(1.5em,0em)$) {\framebox{pic VEGAS}};
+    \node [part, align = right, text width=9cm](part2) at (4em,-8em) {\large Part II: \quad  The Machine Learning approach};
+    \node [anchor = north east] (part2pic) at ($(part2.north west)+(4em,0.25em)$) {\framebox{pic ML}};
+  \end{tikzpicture}
+\end{frame}
+
+
+\section{Part I: \quad The }
+
+
+
+
+% Slide 
+\begin{frame}
+  \frametitle{Improving Numerical Integration and Event Generation with Normalizing Flows \\ --- Summary ---}
+  \vspace*{-0.25em}
+    \tikzstyle{summary} = [draw, text width=32em, fill=FERMILABblue!20, rounded corners, drop shadow,minimum height=6.75em]
+  \begin{center}
+    \begin{tikzpicture}
+      \node (con1) [summary] at (0,0) {};
+      %\node (pic1) [anchor=east] at ($(con1.east)$) {\framebox{\begin{Huge}\ewXL\end{Huge}}};
+      \node (sum1) [anchor=west,text width = 32em] at ($(con1.west)+(-0.75em,0.25em)$) {\begin{itemize}
+        \item 
+          \item[$ $]
+        \item 
+      \end{itemize}};
+      \uncover<2->{
+        \node (con2) [summary,anchor=north] at ($(con1.south)+(0em,-0.6em)$) {};
+        \node (pic2) [anchor=north east] at ($(con2.north east)$) {\framebox{}};
+        \node (pic22) [anchor=south east] at ($(con2.south east)$) {\framebox{}};
+      \node (sum2) [anchor=west,text width = 30em] at ($(con2.west)+(-0.75em,0.25em)$) {\begin{itemize}
+        \item 
+          \item[$ $]
+          \item  
+      \end{itemize}};
+      }
+      \uncover<3->{
+        \node (con3) [summary,anchor=north] at ($(con2.south)+(0em,-0.6em)$) {};
+        %\node (pic3) [anchor=east] at ($(con3.east)$) {\framebox{\includegraphics[height=5em, trim = 8em 32em 5em 25em, clip]{FeynmanDiagrams/Feynman2.pdf}}};
+        \node (sum3) [anchor=west,text width = 32em] at ($(con3.west)+(-0.75em,0.25em)$) {\; Ideas for discussion:
+          \begin{itemize}
+        \item Where should we ``meet''? At the level of EFT coefficients? Or Pseudo-observables? Or fiducial cross sections? Or \dots?
+        \item \dots 
+      \end{itemize}};
+    }
+    \end{tikzpicture}
+  \end{center}
+\end{frame}
+
+
+%%%\section*{Backup}
+%%%\addtocounter{framenumber}{-1} 
+%%%\begin{frame}
+%%%  \begin{center}
+%%%    {\Huge Backup}
+%%%  \end{center}
+%%%\end{frame}
+
+%%%%%
+%%%%%\addtocounter{framenumber}{-1} 
+%%%%%\begin{frame}
+%%%%%  \frametitle{Naive Dimensional Analysis (NDA)}
+%%%%%  \tikzstyle{myblock} = [draw, text width = 32em, fill=FERMILABblue!20, minimum height = 6em, rounded corners, drop shadow]
+%%%%%  \begin{center}
+%%%%%    \begin{tikzpicture}
+%%%%%      \path (0,0) node[myblock] (NDA) {Naive dimensional analysis - NDA: \\ 
+%%%%%          \begin{scriptsize} \textcolor[rgb]{.4,.4,.4}{ Georgi, Manohar ['84 NPB]; Georgi [hep-ph/9207278]} \end{scriptsize}
+%%%%%          \begin{itemize}
+%%%%%          \item Overall factor $f^{2}\Lambda^{2}$, $f^{-1}$ for each strongly interacting field, $\Lambda^{-1}$ to reach dimension $4$.
+%%%%%          \item It is consistent with our counting only if internal gauge lines and Yukawa interactions are neglected.
+%%%%%          \item It gives a wrong scaling in some cases, {\it e.g.} $F_{\mu\nu}F^{\mu\nu}$.
+%%%%%          \end{itemize} };
+%%%%%\end{tikzpicture}
+%%%%%\end{center}
+%%%%%\end{frame}
+%%%%%
+%%%%%
+%%%%%\addtocounter{framenumber}{-1} 
+%%%%%\begin{frame}
+%%%%%  \frametitle{There is a relation between the electroweak chiral Lagrangian and the $\kappa$ framework.}
+%%%%%  \begin{center}
+%%%%%    \begin{tikzpicture}
+%%%%%      \node [text width = 34em] (top) at (0em,0em) {
+%%%%%  \begin{columns}
+%%%%%    \begin{column}{0.5\textwidth}
+%%%%%      \vspace{-6.5cm}
+%%%%%      \begin{center}\ewXL\end{center}
+%%%%%      \vspace{-0.5cm}
+%%%%%      \begin{table}
+%%%%%        \begin{tabular}{p{0.5cm}p{2cm}p{0.05cm}p{2cm}p{0.05cm}}
+%%%%%          \hspace{-0.25cm}\vspace{-0.5cm} tree: & \includegraphics[width=1.85cm]{FeynmanDiagrams/fermiontree.eps}& & \hspace*{-0.5cm}\includegraphics[width=1.85cm]{FeynmanDiagrams/gaugetree.eps}&\\
+%%%%%                                                & \begin{center}\vspace{-0.75cm}$c_{t,b,\tau}$\vspace{-1.0cm}\end{center} & & \begin{center}\vspace{-0.75cm}\hspace*{-0.5cm}$c_{V}$ \vspace{-1.0cm}\end{center} \\
+%%%%%          \\
+%%%%%          \\
+%%%%%          \hspace*{-0.25cm}\vspace{-0.5cm}\mbox{1-loop:} & \includegraphics[width=1.85cm]{FeynmanDiagrams/fermionloop.eps} & \hspace*{-0.5cm}$+$ & \hspace*{-0.5cm}\includegraphics[width=1.85cm]{FeynmanDiagrams/gaugeloop.eps}&\hspace*{-1cm}$+$\\
+%%%%%                                                & \begin{center}\vspace{-0.75cm}$c_{t,b,\tau}$\vspace{-1.0cm}\end{center}  & & \begin{center}\vspace{-0.75cm}\hspace*{-0.5cm}$c_{V}$ \vspace{-1.0cm}\end{center} \\
+%%%%%                                                & \includegraphics[width=1.85cm]{FeynmanDiagrams/local.eps}\\
+%%%%%                                                & \begin{center}\vspace{-0.75cm}$c_{\gamma\gamma,gg} $\vspace{-1.0cm}\end{center} \\
+%%%%%        \end{tabular}
+%%%%%      \end{table}
+%%%%%    \end{column}
+%%%%%    {\textcolor{FERMILABblue}{\vspace*{-5cm}\rule {0.5pt}{7cm}}}
+%%%%%    \begin{column}{0.5\textwidth}
+%%%%%      \vspace{-6.75cm}
+%%%%%      \begin{center}$\kappa_{i}^{2} = \Gamma^{i}/\Gamma^{i}_{\text{SM}},\quad \kappa_{i}^{2} =  \sigma^{i}/\sigma^{i}_{\text{SM}}$ \\ \begin{scriptsize}\textcolor[rgb]{.3,.3,.3}{LHCHXSWG [1209.0040,1307.1347]}\end{scriptsize}\end{center}
+%%%%%      \vspace{-1cm}
+%%%%%      \begin{table}
+%%%%%        \begin{tabular}{p{0.5cm}p{2cm}p{0.05cm}p{2cm}p{0.05cm}}
+%%%%%          \hspace{-0.25cm}\vspace{-0.5cm} tree: & \includegraphics[width=1.85cm]{FeynmanDiagrams/fermiontree.eps}& & \includegraphics[width=1.85cm]{FeynmanDiagrams/gaugetree.eps}&\\
+%%%%%                                                & \begin{center}\vspace{-0.75cm}$\kappa_{t,b,\tau}$\vspace{-1.0cm}\end{center} & & \begin{center}\vspace{-0.75cm}$\kappa_{V}$ \vspace{-1.0cm}\end{center} \\
+%%%%%          \\
+%%%%%          \\
+%%%%%          \hspace*{-0.25cm}\vspace{-0.5cm}\mbox{1-loop:} &\includegraphics[width=1.85cm]{FeynmanDiagrams/blob.eps}\\
+%%%%%                                                & \begin{center}\vspace{-0.5cm}$\kappa_{\gamma,g} $\vspace{-1.0cm}\end{center} \\
+%%%%%          \\
+%%%%%          \\
+%%%%%          \\
+%%%%%          \\
+%%%%%        \end{tabular}
+%%%%%      \end{table}
+%%%%%    \end{column}
+%%%%%  \end{columns}};
+%%%%%  \uncover<2>{
+%%%%%    \node [anchor=center, text width = 32em,draw,fill = FERMILABblue!20, text centered, minimum height = 4em, rounded corners, drop shadow] (popup) at ($(top.center)$) {
+%%%%%      Both have the same number of free parameters:
+%%%%%      $$\{ c_{V},c_{t,b,\tau},c_{\gamma},c_{g}\} \hspace{1em}{\it vs.} \hspace{1em} \{ \kappa_{V},\kappa_{t,b,\tau},\kappa_{\gamma},\kappa_{g}\}$$
+%%%%%        $\Rightarrow ~\kappa$'s are QFT consistent and with small modifications directly\\ interpretable within an EFT!
+%%%%%    };}
+%%%%%\end{tikzpicture}
+%%%%%\end{center}
+%%%%%\end{frame}
+%%%%%
+%%%%%
+%%%%%\addtocounter{framenumber}{-1} 
+%%%%%\begin{frame}
+%%%%%  \frametitle{The $\kappa$ framework cannot be recovered as a limit of the SMEFT (dim 6).}
+%%%%%  % \vspace{-0.5cm}
+%%%%%  Full dimension 6 \begin{scriptsize}\textcolor[rgb]{.3,.3,.3}{Grzadkowski {\it et al.} [1008.4884, JHEP]}\end{scriptsize}:\begin{tikzpicture}[overlay]
+%%%%%    \node[text width=2.75cm,anchor=west,ellipse,fill=FERMILABblue] at (4em,0)  {\vspace*{-0.4cm}\begin{center}example: $h\rightarrow Z\gamma$\end{center}};\end{tikzpicture}\\%laptop:-0.4cm; MAC 0.0
+%%%%%  \begin{table}
+%%%%%    \begin{tabular}{m{2.5cm}m{0.2cm}m{2cm}m{0.2cm}m{2cm}m{.02cm}}
+%%%%%      LO:\\
+%%%%%      \includegraphics[width=1.85cm]{FeynmanDiagrams/fermionloopSM.eps}&$+$&\includegraphics[width=1.85cm]{FeynmanDiagrams/gaugeloopSM.eps}&$+$&\includegraphics[width=1.85cm]{FeynmanDiagrams/local.eps}&$+ \quad \dots$\\
+%%%%%      \vspace{-0.5cm}$\qquad$SM & \vspace{-0.5cm}$+$& \vspace{-0.5cm}$\qquad$SM & \vspace{-0.5cm}$+$& \vspace{-0.5cm}$\quad\mathcal{O}(\frac{v^{2}}{\Lambda^{2}})$\\
+%%%%%      LO $+$ NLO:\\
+%%%%%      \includegraphics[width=1.85cm]{FeynmanDiagrams/local.eps}&$+$&\includegraphics[width=1.85cm]{FeynmanDiagrams/fermionloopdim61.eps}&$+$&\includegraphics[width=1.85cm]{FeynmanDiagrams/fermionloopdim62.eps}&$+ \quad \dots$\\
+%%%%%      \vspace{-0.5cm}SM $+ ~ \mathcal{O}(\frac{v^{2}}{\Lambda^{2}})$ & \vspace{-0.5cm}$+$&\vspace{-0.5cm}$\mathcal{O}(\frac{v^{2}}{16\pi^{2}\Lambda^{2}})$&\vspace{-0.5cm} $+$&\vspace{-0.5cm}$\mathcal{O}(\frac{v^{2}}{16\pi^{2}\Lambda^{2}})$
+%%%%%    \end{tabular}
+%%%%%  \end{table}
+%%%%%  Additional assumption of weakly coupled UV \begin{scriptsize}\textcolor[rgb]{.3,.3,.3}{Einhorn/Wudka[1307.0478]}\end{scriptsize}:
+%%%%%  \begin{table}
+%%%%%    \begin{tabular}{m{2.5cm}m{0.2cm}m{2cm}m{0.2cm}m{2cm}m{.02cm}}
+%%%%%      \includegraphics[width=1.85cm]{FeynmanDiagrams/local.eps}&$+$&\includegraphics[width=1.85cm]{FeynmanDiagrams/fermionloopdim61.eps}&$+$&\includegraphics[width=1.85cm]{FeynmanDiagrams/fermionloopdim62.eps}&$+ \quad \dots$\\
+%%%%%      \vspace{-0.5cm}SM $+~ \mathcal{O}(\frac{v^{2}}{16\pi^{2}\Lambda^{2}})$ &\vspace{-0.5cm} $+$&\vspace{-0.5cm}$\mathcal{O}(\frac{v^{2}}{16\pi^{2}\Lambda^{2}})$&\vspace{-0.5cm} $+$&\vspace{-0.5cm}$\mathcal{O}(\frac{v^{2}}{16\pi^{2}\Lambda^{2}})$\\
+%%%%%    \end{tabular}
+%%%%%  \end{table}
+%%%%%\end{frame}
+%%%%%
+%%%%%
+%%%%%\addtocounter{framenumber}{-1} 
+%%%%%\begin{frame}
+%%%%%  \frametitle{The Minimal Composite Higgs Model}
+%%%%%  \vspace*{-1em}
+%%%%%  \begin{flushright}
+%%%%%    \begin{scriptsize}\textcolor[rgb]{.3,.3,.3}{Agashe {\it et al.} [hep-ph/0412089,NPB], Contino {\it et al. } [hep-ph/0612048,PRD]}\end{scriptsize}\end{flushright}
+%%%%%  \tikzstyle{myblock} = [draw, text width = 32em, fill=FERMILABblue!20, minimum height = 6em, rounded corners, drop shadow]
+%%%%%  \begin{center}
+%%%%%    \vspace*{0em}
+%%%%%    \begin{tikzpicture}
+%%%%%      \node (con1) [myblock] {
+%%%%%        \begin{itemize}
+%%%%%        \item global symmetry spontaneoulsy broken at scale $f$: $SO(5)\rightarrow SO(4)$
+%%%%%        \item $SU(2)_{L}\times U(1)_{Y}\subset SO(4)$ is gauged 
+%%%%%        \item[$\rightarrow$] massive $W^{\pm}/Z$, light $h$
+%%%%%        \end{itemize}
+%%%%%      };
+%%%%%      \path (con1.south)+(0,-4em) node[myblock] (con2) {\begin{columns}
+%%%%%          \column{0.1\textwidth}
+%%%%%          \column{0.5\textwidth}
+%%%%%          $\mathcal{L}_{\text{kin}} =\tfrac{f^{2}}{2}(D_{\mu}\Sigma)^{T}(D^{\mu}\Sigma),$ 
+%%%%%          \column{0.4\textwidth}
+%%%%%          where\\
+%%%%%          $  \Sigma = \frac{\sin{|h|/f}}{|h|}\begin{pmatrix}h_{a}\\ \cot{|h|/f}  \end{pmatrix},$\\ $  |h| = \sqrt{h_{a}h_{a}},\;  a=1, 2, 3, 4 $
+%%%%%        \end{columns}
+%%%%%      };
+%%%%%      \path (con2.south)+(0,-4em) node[myblock] (con3) {
+%%%%%        With $|h|U \equiv \begin{pmatrix}h_{4}+ih_{3}&h_{2}+ih_{1}\\-(h_{2}-ih_{1})&h_{4}-ih_{3}\end{pmatrix} = (\widetilde{\phi},\phi)$ we find: \\ \vspace{1em}
+%%%%%        $\mathcal{L}_{\text{kin}} = \tfrac{1}{2}\partial_{\mu}|h|\partial^{\mu}|h| + \tfrac{f^{2}}{4} \langle D_{\mu}UD^{\mu}U^{\dagger}\rangle(\sin{|h|/f})^{2}$
+%%%%%      };
+%%%%%    \end{tikzpicture}
+%%%%%  \end{center}
+%%%%%\end{frame}
+%%%%%
+%%%%%
+%%%%%\addtocounter{framenumber}{-1}
+%%%%%\begin{frame}
+%%%%%  \frametitle{The Minimal Composite Higgs Model}
+%%%%%  \vspace*{-1.5em}
+%%%%%  \tikzstyle{block} = [draw, text width=16em, fill=FERMILABblue!20, rounded corners, drop shadow]
+%%%%%  \begin{center}
+%%%%%    \begin{tikzpicture}
+%%%%%      \node [block] (text) at (0em,0em) {In the coset $SO(5)/SO(4)$:
+%%%%%        \begin{itemize}
+%%%%%        \item[$ $]
+%%%%%        \item $c_{V} =\sqrt{1-\xi}$ 
+%%%%%        \item[$ $]universal
+%%%%%        \item[$ $]
+%%%%%        \item $c_{\psi}^{(4)} = \sqrt{1-\xi}$ or $c_{\psi}^{(5)} = \frac{1-2\xi}{\sqrt{1-\xi}}$ 
+%%%%%        \item[$ $] representation dependent
+%%%%%        \item[$ $]
+%%%%%        \item $\mathbf{4}: \quad \xi< 0.22, \quad f> 530~$GeV
+%%%%%        \item[$ $]$\mathbf{5}: \quad \xi< 0.12, \quad f> 710~$GeV
+%%%%%        \item[$ $]
+%%%%%        \end{itemize}
+%%%%%      };
+%%%%%      \node [anchor=north east, text width = 5em, align=right] (xi) at ($(text.north east)$) {\fbox{$\xi=\frac{v^{2}}{f^{2}}$}};
+%%%%%      \node [anchor = north west,text width = 16em] (bild) at ($(text.north east)+(1em,1em)$) {\framebox{\includegraphics[width=\textwidth,trim = 0 0 0 0, clip]{figures/MCHMnow.pdf}}};
+%%%%%      \node (prelim) [anchor=north]at ($(bild.south)+(0em,0em)$) {de Blas/Eberhardt/CK [1803.00939,JHEP]};
+%%%%%      \node (ref) [anchor=south east, align = right] at ($(bild.north east)$) {\begin{scriptsize}\textcolor[rgb]{.3,.3,.3}{Agashe {\it et al.} [hep-ph/0412089,NPB], Contino {\it et al. } [hep-ph/0612048,PRD]}\end{scriptsize}};
+%%%%%    \end{tikzpicture}
+%%%%%  \end{center}
+%%%%%\end{frame}
+%%%%%
+%%%%%
+%%%%%\addtocounter{framenumber}{-1}
+%%%%%\begin{frame}
+%%%%%  \frametitle{An Example, the SM Singlet Extension}
+%%%%%  \tikzstyle{blockkl} = [draw, text width=32em, fill=FERMILABblue!20, rounded corners, drop shadow, minimum height = 4em, text centered]
+%%%%%  \tikzstyle{blockgr} = [draw, text width=32em, fill=FERMILABblue!20, rounded corners, drop shadow, minimum height = 10em, text centered]
+%%%%%  \vspace*{-1em}
+%%%%%  \begin{center}
+%%%%%    \begin{tikzpicture}
+%%%%%      \node (model) [blockkl] {
+%%%%%        $\mathcal{L}_{\text{SM+S}} = \mathcal{L}_{\text{SM}} +  \partial^{\mu}  S \partial_{\mu} S + \frac{\mu_{2}^{2}}{2} S^2  - \frac{\lambda_{2}}{4}  S^4 - \frac{\lambda_{3}}{2}    \phi^{\dagger} \phi  S^2$\\$ $ \\
+%%%%%        $S$: \qquad real scalar singlet with $Z_{2}$ symmetry \\ \begin{scriptsize}\textcolor[rgb]{.4,.4,.4}{Schabinger/Wells [hep-ph/0509209], Patt/Wilczek [hep-ph/0605188], Robens/Stefaniak [1601.07880], Englert/Plehn/Zerwas/Zerwas [1106.3097], Buttazzo/Sala/Tesi [1505.05488], Freitas/L\'opez-Val/Plehn [1607.08251] }\end{scriptsize}
+%%%%%      };
+%%%%%      \path (model.south)+(0em,-8em) node[blockgr] (physbasis) {
+%%%%%        \begin{align}
+%%%%%          \begin{aligned}
+%%%%%            V(h,H) =&  \tfrac{1}{2} m^2 h^2 +   \tfrac{1}{2} M^2 H^2  - d_1 h^{3} - d_2  h^2 H - d_3 h H^2  - d_4 H^3 \nonumber \\
+%%%%%            &- z_1 h^4 - z_2 h^3 H - z_3 h^2 H^2 -z_4 h H^3 - z_5 H^4 \nonumber
+%%%%%          \end{aligned}
+%%%%%        \end{align} $ $\\ $ $\\
+%%%%%        $d_{i} = d_{i}( m^{2}, M^{2}, v, \xi,\sin{\chi}) $,\qquad $z_{i} = z_{i}( m^{2}, M^{2}, v, \xi,\sin{\chi}) $
+%%%%%      };
+%%%%%      \path[->, line width = 1pt] (model.south west) edge [bend right] node [midway,right] {In physical parameters: $m, v, M, \sin{\chi},$ and $\xi = \frac{v^{2}}{f^{2}}=\frac{v^{2}}{v^{2}+v_{s}^{2}} $} (physbasis.north west);
+%%%%%    \end{tikzpicture}
+%%%%%  \end{center}
+%%%%%\end{frame}
+%%%%%
+%%%%%
+%%%%%\addtocounter{framenumber}{-1}
+%%%%%\begin{frame}
+%%%%%  \frametitle{We distinguish 2 possible hierarchies.}
+%%%%%  \tikzstyle{blockgr} = [draw, text width=32em, fill=FERMILABblue!20, rounded corners, drop shadow, minimum height = 15em, text centered]
+%%%%%  \tikzstyle{blockkl} = [draw, text width=32em, fill=FERMILABblue!20, rounded corners, drop shadow, minimum height = 4em, text centered]
+%%%%%  \vspace*{-1em}
+%%%%%  \begin{center}
+%%%%%    \begin{tikzpicture}
+%%%%%      \draw node (scales) [blockgr] {};
+%%%%%      \draw[->,thick] ($(scales.north west)+(6em,-8em)$) -- ($(scales.north west)+(6em,-2em)$) node [above] {$E$};
+%%%%%      \draw[thick] ($(scales.north west)+(6.5em,-2.5em)$) -- ($(scales.north west)+(12.5em,-2.5em)$) node [right] {$M$}; 
+%%%%%      \draw[thick] ($(scales.north west)+(6.5em,-7.5em)$) -- ($(scales.north west)+(12.5em,-7.5em)$) node [right] {$v$}; 
+%%%%%      \draw[thick] ($(scales.north west)+(6.5em,-6em)$) -- ($(scales.north west)+(12.5em,-6em)$) node [right] {$f$}; 
+%%%%%      \draw[->,thick] ($(scales.north)+(3em,-8em)$) -- ($(scales.north)+(3em,-2em)$) node [above] {$E$};
+%%%%%      \draw[thick] ($(scales.north)+(3.5em,-2.5em)$) -- ($(scales.north)+(9.5em,-2.5em)$) node [right] {$M$}; 
+%%%%%      \draw[thick] ($(scales.north)+(3.5em,-4em)$) -- ($(scales.north)+(9.5em,-4em)$) node [right] {$f$}; 
+%%%%%      \draw[thick] ($(scales.north)+(3.5em,-7.5em)$) -- ($(scales.north)+(9.5em,-7.5em)$) node [right] {$v$};
+%%%%%      \draw node[text centered, anchor = south] at ($(scales.north west)+(9.5em,-1.75em)$) {Case a)};
+%%%%%      \draw node[text centered, anchor = south] at ($(scales.north)+(6.5em,-1.75em)$) {Case b)};
+%%%%%      \draw [decorate,decoration={brace,amplitude=0.25em,raise=0em},yshift=0em,thick] ($(scales.north west)+(14.5em,-2.5em)$) -- ($(scales.north west)+(14.5em,-6em)$) node [black,midway,xshift=1em] {$\lambda$};
+%%%%%      \draw [decorate,decoration={brace,amplitude=0.25em,raise=0em},yshift=0em,thick] ($(scales.north west)+(14.5em,-6em)$) -- ($(scales.north west)+(14.5em,-7.5em)$) node [black,midway,xshift=1.5em] {$\xi^{-1}$};
+%%%%%      \draw [decorate,decoration={brace,amplitude=0.25em,raise=0em},yshift=0em,thick] ($(scales.north)+(11.5em,-2.5em)$) -- ($(scales.north)+(11.5em,-4em)$) node [black,midway,xshift=1em] {$\lambda$};
+%%%%%      \draw [decorate,decoration={brace,amplitude=0.25em,raise=0em},yshift=0em,thick] ($(scales.north)+(11.5em,-4em)$) -- ($(scales.north)+(11.5em,-7.5em)$) node [black,midway,xshift=1.5em] {$\xi^{-1}$};
+%%%%%      \draw node[text width = 12em, anchor = north, text centered] at ($(scales.north west)+(9.5em,-9.5em)$) {$|\lambda_{i}| \lesssim 32\pi^{2},$\\$ \xi, \sin{\chi}=\mathcal{O}(1), $\\$ m\sim v \sim f \ll M$ };
+%%%%%      \draw node[text width = 12em, anchor = north, text centered] at ($(scales.north)+(6.5em,-9.5em)$) {$\lambda_{i}= \mathcal{O}(1), $\\$ \xi, \sin{\chi}\ll 1,$\\$ m\sim v \ll f \sim M$};
+%%%%%      \draw node[text width = 16em, anchor = south east, align=right] at ($(scales.south east)+(0em,-0.5em)$) {\begin{scriptsize} \textcolor[rgb]{.4,.4,.4}{ Buchalla/Cat\`a/Celis/CK [1608.03564,NPB]\\$ $}\\ \end{scriptsize}};
+%%%%%      \path (scales.south)+(0,-1em) node[blockkl, anchor = north] (eom){
+%%%%%        Integrate out $H$: solve equation of motion\\$ $\\
+%%%%%        $H = H_{0} + \frac{H_{1}}{M}+\frac{H_{2}}{M^{2}}+\dots$
+%%%%%      };
+%%%%%    \end{tikzpicture}
+%%%%%  \end{center}
+%%%%%\end{frame}
+%%%%%
+%%%%%
+%%%%%\addtocounter{framenumber}{-1}
+%%%%%\begin{frame}
+%%%%%  \frametitle{Case a), strong coupling, generates the \ewXL.}
+%%%%%  \tikzstyle{block} = [draw, text width=32em, fill=FERMILABblue!20, rounded corners, drop shadow, text centered]
+%%%%%  \tikzstyle{blockkl} = [draw, text width = 15em, fill = FERMILABblue!20, rounded corners, drop shadow]
+%%%%%  \vspace*{-1em}
+%%%%%  \begin{center}
+%%%%%    \begin{tikzpicture}
+%%%%%      \draw node (eom) [block, minimum height = 2em] {$H = H_{0} + \frac{H_{1}}{M}+\frac{H_{2}}{M^{2}}+\dots$};
+%%%%%      \path (eom.south)+(0,-1em) node[block, minimum height = 8em, anchor = north] (hzero){
+%%%%%        \begin{itemize}
+%%%%%        \item[$ $] $H_{0} = H_{0}(h) = H_{0,2}\left(\tfrac{h}{v}\right)^{2}+H_{0,3}\left(\tfrac{h}{v}\right)^{3}+H_{0,4}\left(\tfrac{h}{v}\right)^{4}+\dots$\\ \hspace{8em} (closed-form solution to all orders in $h$)
+%%%%%        \item[$\rightarrow$] No $\frac{1}{M}$ suppression, but arbitrarily high canonical dimension
+%%%%%        \item[$\rightarrow$] Expansion in chiral dimensions $\rightarrow$ \ewXL
+%%%%%        \end{itemize}
+%%%%%      };
+%%%%%      \path (hzero.south west)+(0em,-1em) node[blockkl, minimum height = 8em, anchor = north west]{
+%%%%%        LO:\\ 
+%%%%%        \begin{align}
+%%%%%          \begin{aligned}
+%%%%%            &\mathcal{L}_{\text{LO}} = \mathcal{L}_{\text{kin}} - V(h) + \mathcal{L}_{\text{Yuk}}(h)\nonumber \\
+%%%%%            &+\tfrac{v^{2}}{4} \langle   (D_{\mu}U)(D^{\mu}U^{\dagger})\rangle  \left(1+ F_{U}(h)\right)\nonumber
+%%%%%          \end{aligned}
+%%%%%        \end{align}
+%%%%%      };
+%%%%%      \path (hzero.south east)+(0em,-1em) node[blockkl, minimum height = 8em, anchor = north east]{
+%%%%%        NLO $(1/M^{2})$:\\ $ $\\$ $\\
+%%%%%        $\mathcal{O}_{D1}, \mathcal{O}_{D7}, \mathcal{O}_{D11},\dots$ of \mbox{\textcolor[rgb]{.4,.4,.4}{ Buchalla/Cat\`a/CK [1307.5017,NPB]}}
+%%%%%      };
+%%%%%    \end{tikzpicture}
+%%%%%  \end{center}
+%%%%%\end{frame}
+%%%%%
+%%%%%
+%%%%%\addtocounter{framenumber}{-1}
+%%%%%\begin{frame}
+%%%%%  \frametitle{Case b), weak coupling, generates the SMEFT.}
+%%%%%  \tikzstyle{block} = [draw, text width=32em, fill=FERMILABblue!20, rounded corners, drop shadow, text centered]
+%%%%%  \tikzstyle{blockkl} = [draw, text width = 15em, fill = FERMILABblue!20, rounded corners, drop shadow]
+%%%%%  \vspace*{-1em}
+%%%%%  \begin{center}
+%%%%%    \begin{tikzpicture}
+%%%%%      \draw node (eom) [block, minimum height = 2em] {$H = H_{0} + \frac{H_{1}}{M}+\frac{H_{2}}{M^{2}}+\dots$};
+%%%%%      \path (eom.south)+(0,-1em) node[block, minimum height = 8em, anchor = north] (hzero){
+%%%%%        \begin{itemize}
+%%%%%        \item[$ $] $H_{0} = 0, \qquad H_{1} = -\frac{\lambda_{3}v_{H}}{2M}\phi^{\dagger} \phi$
+%%%%%        \item[$\rightarrow$] Always $\frac{1}{M}$ suppression
+%%%%%        \item[$\rightarrow$] Expansion in canonical dimensions $\rightarrow$ SMEFT
+%%%%%        \end{itemize}
+%%%%%      };
+%%%%%      \path (hzero.south west)+(0em,-1em) node[blockkl, minimum height = 8em, anchor = north west]{
+%%%%%        LO:\\ $ $\\$ $\\
+%%%%%        SM with renormalized couplings\\$ $\\
+%%%%%      };
+%%%%%      \path (hzero.south east)+(0em,-1em) node[blockkl, minimum height = 8em, anchor = north east]{
+%%%%%        NLO $(1/M^{2})$:\\ $ $\\$ $\\
+%%%%%        $\mathcal{L}_{\text{NLO}} = \frac{1}{4}\frac{\lambda_{3}^{2}}{\lambda_{2}M^{2}}\partial^{\mu}(\phi^{\dagger}\phi)\partial_{\mu}(\phi^{\dagger}\phi)$\\$ $\\
+%%%%%      };
+%%%%%    \end{tikzpicture}
+%%%%%  \end{center}
+%%%%%\end{frame}
+%%%%%
+%%%%%
+%%%%%\addtocounter{framenumber}{-1}
+%%%%%\begin{frame}
+%%%%%  \frametitle{The physical picture helps to relate the two EFTs. }
+%%%%%  \tikzstyle{block} = [draw, text width=32em, fill=FERMILABblue!20, rounded corners, drop shadow]
+%%%%%  \vspace*{-1em}
+%%%%%  \begin{center}
+%%%%%    \begin{tikzpicture}
+%%%%%      \node at (0,0) (rahmen) [block, text height = 12em] {};
+%%%%%      \draw[->,thick] ($(rahmen.south west)+(1.5em,5em)$) -- ($(rahmen.north west)+(1.5em,-1.5em)$) node [above] {$E$};
+%%%%%      \draw ($(rahmen.south west)+(1.5em,6em)+(-1pt,0)$) -- ($(rahmen.south west)+(1.5em,6em)+(1pt,0)$) node[left] {$h$};
+%%%%%      \draw ($(rahmen.south west)+(1.5em,10em)+(-1pt,0)$) -- ($(rahmen.south west)+(1.5em,10em)+(1pt,0)$) node[left] {$H$};
+%%%%%      %%% strongly coupled      
+%%%%%      \node at ($(rahmen.south west)+(5em,10em)$) (feld1) [draw,text width = 6em, fill=FERMILABblue!20,rounded corners,anchor = west, minimum height = 1.1em] {};
+%%%%%      \path (feld1.north)+(0em,1em) node {a)};
+%%%%%      \draw ($(feld1.north)+(0em,0em)$) -- ($(feld1.south)+(0em,0em)$);
+%%%%%      \node at ($(rahmen.south west)+(6.5em,10em)$) {$S$};
+%%%%%      \node at ($(rahmen.south west)+(10em,10em)$) {$\phi$};
+%%%%%      \node at ($(rahmen.south west)+(5em,6em)$) (feld2) [draw,text width = 6em, fill=FERMILABblue!20,rounded corners,anchor = west, minimum height = 1.1em] {};
+%%%%%      \draw ($(feld2.north)+(0em,0em)$) -- ($(feld2.south)+(0em,0em)$);
+%%%%%      \node at ($(rahmen.south west)+(6.5em,6em)$) {$S$};
+%%%%%      \node at ($(rahmen.south west)+(10em,6em)$) {$\phi$};
+%%%%%      %%% weakly coupled
+%%%%%      \node at ($(rahmen.south west)+(21.5em,10em)$) (feld3) [draw,text width = 6em, fill=FERMILABblue!20,rounded corners,anchor = west, minimum height = 1.1em] {};
+%%%%%      \path (feld3.north)+(0em,1em) node {b)};
+%%%%%      \draw ($(feld3.north)+(1.5em,0em)$) -- ($(feld3.south)+(1.5em,0em)$);
+%%%%%      \node at ($(rahmen.south west)+(24em,10em)$) {$S$};
+%%%%%      \node at ($(rahmen.south west)+(27.25em,10em)$) {$\phi$};
+%%%%%      \node at ($(rahmen.south west)+(21.5em,6em)$) (feld4) [draw,text width = 6em, fill=FERMILABblue!20,rounded corners,anchor = west, minimum height = 1.1em] {};
+%%%%%      \draw ($(feld4.north)+(-1.5em,0em)$) -- ($(feld4.south)+(-1.5em,0em)$);
+%%%%%      \node at ($(rahmen.south west)+(22.5em,6em)$) {$S$};
+%%%%%      \node at ($(rahmen.south west)+(25.5em,6em)$) {$\phi$};
+%%%%%      %%% text underneath
+%%%%%      \path ($(feld2.south)+(0em,-3em)$) node[text centered, text width = 12em] (strong) {strongly coupled,\\ large mixing\\ $ $\\ $\rightarrow$ EFT in terms of $U,h$ };
+%%%%%      \path ($(feld4.south)+(0em,-3em)$) node[text centered, text width = 12em] (weak) {weakly coupled,\\ small mixing\\ $ $\\ $\rightarrow$ EFT in terms of $\phi$};
+%%%%%      %%% block underneath
+%%%%%        \path (rahmen.south)+(0em,-4em) node [block, text height = 1.5em, text centered] (relation) {
+%%%%%          In the limit $\sin{\chi}\ll 1$, we should recover the decoupling scenario.\\ $ $\\
+%%%%%          \quad $\rightarrow$ \quad Indeed, $\sin{\chi}\ll 1$ corresponds to $\xi\ll 1$ and \qquad \\we do recover the decoupling case.
+%%%%%        };
+%%%%%        \path[->, line width = 1pt] ($(rahmen.south west)+(7.5em,0em)$) edge [] ($(relation.north west)+(7.5em,0em)$);
+%%%%%        \path[->, line width = 1pt] ($(relation.north east)+(-7.5em,0em)$) edge [] ($(rahmen.south east)+(-7.5em,0em)$);
+%%%%%    \end{tikzpicture}
+%%%%%  \end{center}
+%%%%%\end{frame}
+%%%%%
+%%%%%
+%%%%%\addtocounter{framenumber}{-1}
+%%%%%\begin{frame}
+%%%%%  \frametitle{Renormalization of SMEFT, an explicit example}
+%%%%%\vspace*{-1.5em}
+%%%%%  \tikzstyle{breit} = [draw, text width = 32em,align=left, fill = FERMILABblue!20, minimum height = 21em, rounded corners, drop shadow]
+%%%%%  \begin{center}
+%%%%%    \begin{tikzpicture}
+%%%%%      \node [breit] (frame) at (0em,0em) {};
+%%%%%      \node [anchor=north, text width = 32em, align =left] (text1) at ($(frame.north)$) {  Starting from
+%%%%%        $$ \mathcal{Q}_{\phi}= \left(\phi^{\dagger}\phi\right)^{3}=\frac{1}{8}\left(\varphi_{i}\varphi_{i}\right)^{3},$$
+%%%%%        we find\vspace{-1em}
+%%%%%        \begin{align}
+%%%%%          \begin{aligned}
+%%%%%            \nonumber
+%%%%%            a_{ij}^{\mu\nu} = 0, \qquad b_{ij}^{\mu} = 0, \qquad c_{ij}=-\frac{3}{4} (\hat{\varphi}_{a}\hat{\varphi}_{a})^{2}\delta_{ij}-3(\hat{\varphi}_{a}\hat{\varphi}_{a})\hat{\varphi}_{i}\hat{\varphi}_{j},\\
+%%%%%            Y_{ij}=\left(\left(\frac{\lambda}{2}+\frac{g^{2}}{4}\right)\hat{\varphi}_{a}\hat{\varphi}_{a}-m^{2}\right)\delta_{ij}+\left(\lambda-\frac{g^{2}}{4}\right)\hat{\varphi}_{i}\hat{\varphi}_{j}-g^{\prime 2}(t^{3}_{R}\hat{\varphi})_{i}(t^{3}_{R}\hat{\varphi})_{j}.
+%%%%%      \end{aligned}
+%%%%%      \end{align}
+%%%%%      };
+%%%%%\uncover<1->{\node [anchor=south, text width = 32em, align =left] (text2) at ($(frame.south)$) {Therefore
+%%%%%        $$ \tr cY = -\left(54\lambda + \frac{9}{2}g^{2}+\frac{3}{2}g^{\prime 2}\right)\left(\phi^{\dagger}\phi\right)^{3} + 24m^{2}\left(\phi^{\dagger}\phi\right)^{2}.$$
+%%%%%        gives with $K_{(\phi)}=6(3g^{2}+g^{\prime 2}-\gamma_{\phi})$
+%%%%%        $$ \beta_{\phi}\supseteq \left(54\lambda - \frac{27}{2}g^{2}-\frac{9}{2}g^{\prime 2}+6 \gamma_{\phi}\right)C_{\phi}, \qquad \text{and}\qquad \beta_{\lambda}\supseteq 48\frac{m^{2}}{\Lambda^{2}}C_{\phi}.$$
+%%%%%      };}
+%%%%%\end{tikzpicture}
+%%%%%  \end{center}
+%%%%%\end{frame}
+%%%%%
+\end{document}
+
+
+
+
+
+
+
+
+
