@@ -1,5 +1,7 @@
 """ Implement the flow integrator. """
 
+from __future__ import print_function
+
 import numpy as np
 
 import tensorflow as tf
@@ -102,7 +104,7 @@ class Integrator():
 
         return true/test
 
-    @tf.function
+    #@tf.function
     def acceptance_calc(self, accuracy):
         """ Calculate the acceptance using a right tailed confidence interval
         with an accuracy of accuracy. """

@@ -19,6 +19,22 @@ class Divergence:
         return tf.reduce_mean(input_tensor=(tf.stop_gradient(true) - test)**2
                               / test / tf.stop_gradient(test))
 
+    @staticmethod
+    def chi2sym(true, test, logp, logq):
+        """ Implement symmetric chi2 divergence. """
+        del logp, logq
+        return 0.5*(tf.reduce_mean(input_tensor=(tf.stop_gradient(true) - test)**2
+                              / test / tf.stop_gradient(test))
+                    + tf.reduce_mean(input_tensor=(tf.stop_gradient(true) - test)**2
+                              /tf.stop_gradient(true+1e-16)  / tf.stop_gradient(test)))
+    
+    @staticmethod
+    def chi2sym2(true, test, logp, logq):
+        """ Implement chi2 divergence with different normalization. """
+        del logp, logq
+        return tf.reduce_mean(input_tensor=(tf.stop_gradient(true) - test)**2
+                              / ((test+tf.stop_gradient(true))/2.) / tf.stop_gradient(test))
+    
     # pylint: disable=invalid-name
     @staticmethod
     def kl(true, test, logp, logq):
