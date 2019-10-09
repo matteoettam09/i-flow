@@ -66,6 +66,13 @@ class Divergence:
             input_tensor=tf.stop_gradient(true/test)*(
                 tf.stop_gradient(logp) - logq)**2)
 
+    @staticmethod
+    def exponential2(true, test, logp, logq):
+        """ Implement Expoential divergence. """
+        return tf.reduce_mean(
+            input_tensor=tf.stop_gradient(true**2/test)*(
+                tf.stop_gradient(logp) - logq)**2/test)
+
     def ab_product(self, true, test, logp, logq):
         """ Implement (alpha, beta)-product divergence. """
         del logp, logq

@@ -63,7 +63,7 @@ class Integrator():
             samples = tf.stop_gradient(self.dist.sample(nsamples))
             logq = self.dist.log_prob(samples)
             test = self.dist.prob(samples)
-            true = self._func(samples)
+            true = tf.abs(self._func(samples))
             mean, var = tf.nn.moments(x=true/test, axes=[0])
             true = true/mean
             logp = tf.where(true > 1e-16, tf.math.log(true),
@@ -105,7 +105,7 @@ class Integrator():
 
         return true/test
 
-    @tf.function
+#    @tf.function
     def acceptance_calc(self, accuracy):
         """ Calculate the acceptance using a right tailed confidence interval
         with an accuracy of accuracy. """
