@@ -63,7 +63,7 @@ class Integrator():
             samples = tf.stop_gradient(self.dist.sample(nsamples))
             logq = self.dist.log_prob(samples)
             test = self.dist.prob(samples)
-            true = self._func(samples)
+            true = tf.abs(self._func(samples))
             mean, var = tf.nn.moments(x=true/test, axes=[0])
             true = tf.stop_gradient(true/mean + 1e-16)
             logp = tf.where(true > 1e-16, tf.math.log(true),
