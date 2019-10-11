@@ -6,7 +6,7 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 
 from . import divergences
-from . import sinkhorn
+# from . import sinkhorn
 
 # pylint: disable=invalid-name
 tfb = tfp.bijectors
@@ -53,7 +53,7 @@ class Integrator():
         self.dist = dist
         self.optimizer = optimizer
         self.divergence = divergences.Divergence(**kwargs)
-        self.loss_func = sinkhorn.sinkhorn_normalized
+        # self.loss_func = sinkhorn.sinkhorn_loss
         self.loss_func = self.divergence(loss_func)
 
     @tf.function
@@ -65,10 +65,10 @@ class Integrator():
             test = self.dist.prob(samples)
             true = self._func(samples)
             mean, var = tf.nn.moments(x=true/test, axes=[0])
-            true = true/mean
+            true = tf.stop_gradient(true/mean + 1e-16)
             logp = tf.where(true > 1e-16, tf.math.log(true),
                             tf.math.log(true+1e-16))
-            # loss = self.loss_func(samples, samples, 1e-2, true, test, 5)
+            # loss = self.loss_func(samples, samples, 1e-1, true, test, 100)
             loss = self.loss_func(true, test, logp, logq)
 
         grads = tape.gradient(loss, self.dist.trainable_variables)
@@ -105,40 +105,39 @@ class Integrator():
 
         return true/test
 
-    @tf.function
-    def acceptance_calc(self, accuracy):
+    def acceptance_calc(self, accuracy, max_samples=50000, min_samples=5000):
         """ Calculate the acceptance using a right tailed confidence interval
         with an accuracy of accuracy. """
 
-        eta = 1
-        eta_0 = 0
-        weights = []
-        tf_weights = tf.zeros(0)
-        while abs(eta - eta_0)/eta > 0.01:
-            nsamples = (tf.cast(tf.math.ceil(accuracy**-2/eta),
-                                dtype=tf.int32)
-                        - len(tf_weights))
-            iterations = tf.ones(nsamples // 10000, dtype=tf.int32)*10000
-            remainder = tf.cast(tf.range(nsamples // 10000) < nsamples % 10000,
-                                tf.int32)
-            iterations += remainder
-            for iteration in iterations:
-                weights.append(self.acceptance(iteration.numpy()))
-            tf_weights = tf.sort(tf.concat(weights, axis=0))
-            cum_weights = tf.cumsum(tf_weights)
+        @tf.function
+        def _calc_efficiency(weights):
+            weights = tf.convert_to_tensor(weights, dtype=tf.float64)
+            weights = tf.sort(weights)
+            cum_weights = tf.cumsum(weights)
             cum_weights /= cum_weights[-1]
             index = tf.cast(
                 tf.searchsorted(cum_weights,
                                 tf.convert_to_tensor([1-accuracy],
-                                                     dtype=cum_weights.dtype)),
+                                                     dtype=tf.float64)),
                 dtype=tf.int32)
-            max_val = tf_weights[index[0]]
-            avg_val = tf.reduce_mean(tf_weights[:index[0]])
-            eta_0 = eta
-            eta = avg_val/max_val
-            tf.print(eta_0, eta)
+            max_val = weights[index[0]]
+            avg_val = tf.reduce_mean(weights[:index[0]])
+            return avg_val, max_val
 
-        return avg_val/max_val
+        eta = 1
+        eta_0 = 0
+        weights = []
+        while abs(eta - eta_0)/eta > 0.01:
+            eta_0 = eta
+            nsamples = np.ceil(accuracy**-2/eta).astype(np.int64)-len(weights)
+            nsamples = np.min([nsamples, max_samples])
+            nsamples = np.max([nsamples, min_samples])
+            weights.extend(self.acceptance(nsamples))
+            avg_val, max_val = _calc_efficiency(weights)
+            eta = avg_val/max_val
+            print(eta_0, eta)
+
+        return avg_val, max_val
 
     def save(self):
         """ Save the network. """
