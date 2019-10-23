@@ -28,6 +28,9 @@ flow.integration.integrator module
    :undoc-members:
    :show-inheritance:
 
+   .. autoclass:: Integrator
+      :members:
+
 flow.integration.sinkhorn module
 --------------------------------
 
