@@ -1,0 +1,764 @@
+\documentclass{beamer}
+\mode<presentation>
+
+\usepackage[utf8]{inputenc}
+\usepackage{etex}
+\usetheme{Warsaw}
+\usepackage{graphicx}
+\usepackage{pictex}
+\usepackage{verbatim}
+\usepackage{mathtools}
+\usepackage{amsmath}
+\usepackage{epsfig}
+\usepackage{multimedia}
+
+\usepackage{tikz}
+\usetikzlibrary{shapes.callouts}
+\usetikzlibrary{decorations.text}
+\usetikzlibrary{decorations.pathreplacing}
+\usetikzlibrary{arrows, shapes, shadows}
+\usetikzlibrary{calc}
+\usetikzlibrary{backgrounds}
+
+\usenavigationsymbolstemplate{}
+\setbeamercovered{invisible}
+\usefonttheme{professionalfonts}
+\setbeamertemplate{headline}{%
+  \begin{beamercolorbox}[colsep=1.5pt]{upper separation line head}
+  \end{beamercolorbox}
+  \begin{beamercolorbox}{section in head/foot}
+    \vskip2pt\insertsectionnavigationhorizontal{\paperwidth}{}{}\vskip2pt
+  \end{beamercolorbox}%
+  \begin{beamercolorbox}[colsep=1.5pt]{lower separation line head}
+  \end{beamercolorbox}
+}
+
+\definecolor{MSUGreen}{RGB}{24,69,59}
+\definecolor{FermilabBlue}{RGB}{0,76,151}
+\definecolor{FermilabGray}{RGB}{99,102,106}
+
+\newcommand\reference[1]{%
+{\tiny \textcolor{blue}{[#1]}}
+}
+
+\setbeamertemplate{footline}
+{
+  \leavevmode%
+  \hbox{%
+  \begin{beamercolorbox}[wd=.125\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}%
+    \usebeamerfont{author in head/foot}\insertshortauthor
+  \end{beamercolorbox}%
+  \begin{beamercolorbox}[wd=.745\paperwidth,ht=2.25ex,dp=1ex]{title in head/foot}%
+    \hspace*{0.5cm}
+    \usebeamerfont{title in head/foot}\insertshorttitle\hspace*{5em}\hfill
+    \insertframenumber{} / \inserttotalframenumber \hspace*{0.5cm}
+  \end{beamercolorbox}}%
+  \begin{beamercolorbox}[wd=.125\paperwidth,ht=2.25ex,dp=1ex,left]{}
+    \hspace{1mm}
+    \includegraphics[scale=0.03, trim=0 15mm 0 -15mm]{fnallogo.png}
+    \usebeamercolor[FermilabBlue]{Fermilab}
+    \hspace{1mm}
+    Fermilab
+  \end{beamercolorbox}
+  \vskip0pt%
+}
+
+\newcommand\Wider[2][3em]{%
+\makebox[\linewidth][c]{%
+  \begin{minipage}{\dimexpr\textwidth+#1\relax}
+  \raggedright#2
+  \end{minipage}%
+  }%
+}
+
+\usecolortheme[named=FermilabBlue]{structure}
+
+\setbeamertemplate{title page}{%
+\vspace{10mm}
+\begin{tikzpicture}[remember picture,overlay]
+    \node[inner sep=0pt] (fnallogo) at (0.5\textwidth,0)
+        {\includegraphics[scale=0.51]{TitlePage.pdf}};
+\end{tikzpicture}
+}
+
+\title[Teaching a Computer to Integrate]{Teaching a Computer to Integrate}
+\subtitle{}
+\author[J. Isaacson]{Joshua Isaacson}
+\institute{Fermilab}
+
+\begin{document}
+
+{
+\setbeamertemplate{footline}{}
+\frame{\titlepage}
+}
+\addtocounter{framenumber}{-1}
+
+\section{Introduction}
+
+\begin{frame}{Motivation}
+\begin{columns}
+\begin{column}{4cm}
+\begin{itemize}
+    \small
+    \item LHC requires large number of Monte Carlo events
+    \item Due to CPU costs, MC statistics will become significant uncertainty
+\end{itemize}
+\end{column}
+\begin{column}{9cm}
+\begin{center}
+\includegraphics[width=0.8\textwidth]{figs/cpuHLLHC_noold.png} \\
+\reference{\href{https://twiki.cern.ch/twiki/bin/view/AtlasPublic/ComputingandSoftwarePublicResults}{ATLAS}}
+\end{center}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Motivation}
+\begin{columns}
+\begin{column}{0.5\textwidth}
+\includegraphics[width=1.1\textwidth]{figs/timing.pdf}
+\end{column}
+\begin{column}{0.5\textwidth}
+\includegraphics[width=1.1\textwidth]{figs/trials.pdf}
+\end{column}
+\end{columns}
+\begin{center}
+\reference{S. H\"oche, S. Prestel, H. Schulz, 1905.05120}
+\end{center}
+
+\begin{itemize}
+    \item Time to generate an event dominated by hard process not shower
+    \item Large computational cost for unweighting at high multiplicity
+\end{itemize}
+    
+\end{frame}
+
+\begin{frame}{Outline}
+\begin{enumerate}
+    \item Review Traditional Approach
+    \item Machine Learning
+    \item Results
+\end{enumerate}
+    
+\end{frame}
+
+\section{VEGAS}
+
+\begin{frame}{Numerical Integration}
+    \begin{columns}
+        \begin{column}{5cm}
+        Deterministic:
+        \begin{itemize}
+            \item Quadrature
+            \item Adaptive Quadrature
+            \item Richardson Extrapolation
+            \item etc.
+        \end{itemize}
+        \includegraphics[width=\textwidth]{figs/midpoint.pdf}
+        \end{column}
+        \begin{column}{5cm}
+        Monte Carlo:
+        \begin{itemize}
+            \item Markov-Chain
+            \item Metropolis-Hastings
+            \item VEGAS
+            \item etc.
+        \end{itemize}
+        \includegraphics[width=\textwidth]{figs/circle.pdf}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+
+\begin{frame}{Curse of Dimensionality}
+
+\begin{center}
+\includegraphics[width=0.65\textwidth]{figs/dimensionality.pdf}
+\end{center}
+
+
+\small
+\begin{itemize}
+    \item One-dimensional integration techniques converge like $\mathcal{O}\left(\frac{1}{N^{x/d}}\right)$
+    \item<2-> Monte Carlo integration converges like $\mathcal{O}\left(\frac{1}{\sqrt{N}}\right)$ independent of dimension
+\end{itemize}
+    
+\end{frame}
+
+\begin{frame}{Improving Sampling}
+    \begin{columns}
+    \begin{column}{5cm}
+    Hard to integrate: \\
+    \includegraphics[width=\textwidth]{figs/hard.pdf}
+    \end{column}
+    \begin{column}{5cm}
+    \uncover<2->{
+    Trivial to integrate: \\
+    \includegraphics[width=\textwidth]{figs/easy.pdf}}
+    \end{column}
+    \end{columns}
+    
+    \vspace{5mm}
+    \uncover<3->{
+    \begin{center}
+    \large
+    \textbf{Question:} How to transform integrand from left to right?
+    \end{center}
+    }
+    
+\end{frame}
+
+\begin{frame}{Transformation Method}
+\begin{block}{Transformation Method}
+\begin{equation*}
+    F(x(r)) = \int_{-\infty}^{x(r)}f(x')dx' = \int_{-\infty}^{r} g(r')dr' = r
+\end{equation*}
+    Solve for $x(r)$ to generate according to $f(x')$
+\end{block}
+
+\uncover<2->{
+For example consider an exponential distribution:
+\begin{exampleblock}{Exponential Distribution}
+\begin{align*}
+    \int_{0}^{x(r)} &= \frac{1}{\xi} e^{-x'/\xi} dx' = r \\
+    \rightarrow x(r) &= -\xi \log(1-r) 
+\end{align*}
+\end{exampleblock}
+In practice not usually possible to solve for $x(r)$. }
+\end{frame}
+
+\begin{frame}{Importance Sampling}
+
+\begin{block}{No Importance Sampling}
+    \begin{equation*}
+        \int_0^{1} f(x) dx \xrightarrow{MC} \frac{1}{N} \sum_{i} f(x_i)\quad \text{iid}\ \mathcal{U}(0,1)
+    \end{equation*}
+\end{block}
+
+\begin{block}{Importance Sampling}
+    \begin{equation*}
+        \int_0^{1} \frac{f(x)}{q(x)} q(x) dx \xrightarrow{MC} \frac{1}{N} \sum_{i} \frac{f(x_i)}{q(x_i)} \quad \text{iid}\ q(x)
+    \end{equation*}
+\end{block}
+
+\uncover<2->{
+\textbf{Goal:} Choose a function $q(x)$ such that $\frac{f(x)}{q(x)} \approx 1$.
+\begin{itemize}
+    \item Best is $q(x) \propto f(x)$, requires analytic inverse of CDF
+    \item Acceptable to get close enough by fitting $f(x)$ to some assumed form
+\end{itemize}
+}
+\end{frame}
+
+\begin{frame}{VEGAS}
+
+\tikzstyle{block} = [draw, text width=11cm, rounded corners, drop shadow, minimum height = 2em, text centered, fill=FermilabBlue!20]
+
+\begin{tikzpicture}
+    \vspace{-2cm}
+    \node (vegas) [block, minimum height = 10em] at (0,0) {The {\tt VEGAS} algorithm\ \reference{P. Lepage 1980} \\
+    \normalsize
+    \begin{itemize}
+        \item<1-> Assumes integrand factorizes; i.e. $f(\vec{x}) = f_0(x_0)\cdots f_n(x_n)$
+        \item<2-> Adapts bin edges such that area of each bin is the same
+        \item<3-> Issues with features aligned along diagonals
+    \end{itemize}
+    };
+    \uncover<2>{
+    \node(plot0) [anchor=south, text width = 3.5cm] at ($(vegas.south) - (3cm, 4cm)$) {\includegraphics[width=\textwidth]{figs/VEGAS_start.pdf}};
+    \node(plot1) [anchor=south, text width = 3.5cm] at ($(vegas.south) - (-3cm, 4cm)$)
+    {\includegraphics[width=\textwidth]{figs/VEGAS_grid.pdf}};
+    \node(arrow) [anchor=south, text width = 3.5cm] at ($(vegas.south) - (-1.5cm, 2.5cm)$)
+    {\begin{Large}$\Longrightarrow$\end{Large}};
+    }
+    \uncover<3>{
+    \node(plot2) [anchor=south, text width = 3.5cm] at ($(vegas.south) - (0cm, 4cm)$)
+    {\includegraphics[width=\textwidth]{figs/VEGAS_camel.pdf}};
+    }
+\end{tikzpicture}
+    
+\end{frame}
+
+\section{Machine Learning}
+
+\begin{frame}{Overview of Machine Learning}
+\begin{columns}
+    \begin{column}{5cm}
+    \begin{center}
+    \includegraphics[width=\textwidth]{figs/machine_learning.png} \\
+    \reference{https://xkcd.com/1838/}
+    \end{center}
+    \end{column}
+    \begin{column}{5cm}
+    Machine Learning:
+    \begin{itemize}
+        \item A complex function with inputs and outputs
+        \item Train parameters by minimizing a ``loss function"
+        \item Tools like TensorFlow, PyTorch, Keras, etc. make more like black box
+    \end{itemize}
+    \end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Previous Approaches}
+
+\begin{columns}
+    \begin{column}{5cm}
+    Generate From Events:
+    \begin{itemize}
+        \item Pros:
+        \begin{itemize}
+            \item Fast evaluation of events
+            \item Easy to train using existing frameworks
+        \end{itemize}
+        \item Cons:
+        \begin{itemize}
+            \item Requires large sample of events to train
+            \item Under-trained $\rightarrow$ Wrong cross-sections
+        \end{itemize}
+    \end{itemize}
+    \end{column}
+    \begin{column}{5cm}
+    Generate Events from Scratch:
+    \begin{itemize}
+        \item Pros:
+        \begin{itemize}
+            \item No events required to train
+            \item Under-trained $\rightarrow$ Still correct cross-section
+        \end{itemize}
+        \item Cons:
+        \begin{itemize}
+            \item Requires Jacobian of Neural Network in inference
+        \end{itemize}
+    \end{itemize}
+    \end{column}
+\end{columns} 
+
+    \vfill
+    \reference{1707.00028} \reference{1810.11509} \reference{1901.00875} \reference{1901.05282}
+    \reference{1903.02433} \reference{1907.03784} \reference{1909.01359}
+    
+\end{frame}
+
+\begin{frame}{Jacobain Cost}
+    \tikzstyle{block} = [draw, text width=11cm, rounded corners, drop shadow, minimum height = 2em, text centered, fill=FermilabBlue!20]
+
+\begin{tikzpicture}
+    \vspace{-2cm}
+    \node (block) [block, minimum height = 10em] at (0,0) {Use GAN or Dense network as tranformation: \\
+    \begin{itemize}
+        \item Network contains $n_{\text{dim}}$ nodes in input and output layers mapping from $x$ to $q(x)$
+        \item Requires Jacobian from transformation of variables:
+        $q(y) = q(y(x)) = |\frac{\partial y}{\partial x}|^{-1}$
+    \end{itemize}
+    };
+    \node (plot0) [anchor=south, text width = 3.5cm] at ($(block.south) - (3cm, 3cm)$) {\includegraphics[width=\textwidth]{figs/func.pdf}};
+    \node (plot1) [anchor=south, text width = 3.5cm] at ($(block.south) - (-3cm, 3cm)$) {\includegraphics[width=\textwidth]{figs/jac.pdf}};
+    \node(arrow) [anchor=south, text width = 3.5cm] at ($(block.south) - (-1cm, 1.75cm)$)
+    {\begin{Large}$\xrightarrow{\text{Jacobian}}$\end{Large}};
+    \uncover<2->{
+    \node (block2) [block, anchor=north] at ($(block.south) - (0cm, 3cm)$) {
+    \begin{itemize}
+        \item Jacobian takes $\mathcal{O}\left(n^3\right)$ time to calculate, prohibitive at large n
+    \end{itemize}
+    };
+    }
+\end{tikzpicture}
+\end{frame}
+
+\begin{frame}{Normalizing Flows}
+\textbf{Goal:} Develop a network architecture with analytic Jacobian.
+\uncover<2->{
+\textbf{Requirements:}
+}
+\begin{itemize}
+    \item<2-> Bijective 
+    \item<3-> Continuous 
+    \item<4-> Flexible 
+\end{itemize}
+
+\uncover<5->{
+\textbf{Answer:} Normalizing Flows!
+\begin{itemize}
+    \item First introduced in "Nonlinear Independent Component Estimation" (NICE) \reference{1410.8516}
+    \item More complex transformations using splines in \reference{1808.03856} and \reference{1906.04032}
+    \item Easy to implement using TensorFlow-Probability
+\end{itemize}
+}
+    
+\end{frame}
+
+\begin{frame}{Normalizing Flows: Basic Building Block}
+
+
+\tikzstyle{block} = [draw, text width=11cm, rounded corners, drop shadow, minimum height = 2em, text centered, fill=FermilabBlue!20]
+
+\begin{block}{}
+\begin{center}
+\includegraphics[width=0.75\textwidth]{figs/CL.png}
+\end{center}
+\end{block} \vspace{0.25cm}
+\small
+
+
+\uncover<1>{
+\begin{tikzpicture}
+    \node (block1) [block, minimum height = 3em] at (0,0)  {\begin{columns}
+\begin{column}{4.5cm}
+Forward Transform:
+ \begin{align*}
+     y_A &= x_A \\
+     y_{B,i} &= C(x_{B,i}; m(x_A))
+ \end{align*}
+Inverse Transform:
+\begin{align*}
+     x_A &= y_A \\
+ x_{B,i} &= C^{-1}(y_{B,i}; m(y_A))
+ \end{align*}
+\end{column}
+\begin{column}{5.5cm}
+The $C$ function: numerically cheap, easily invertible, and separable. \\ \vspace{0.5cm}
+Jacobain:
+\begin{equation*}
+    \begin{vmatrix}\frac{\partial y}{\partial x}\end{vmatrix} = \begin{vmatrix}1 & \frac{\partial C}{\partial x_A} \\
+                                           0 & \frac{\partial C}{\partial x_B}\end{vmatrix} = \frac{\partial C(x_{B}; m(x_A))}{\partial x_B}
+\end{equation*}
+\end{column}
+\end{columns}};
+\end{tikzpicture}
+}
+
+
+\uncover<2->{
+\vspace{-2cm}
+\begin{tikzpicture}
+    \node (block) [block, minimum height = 3em] at (0,0) {\textbf{Jacobian is $\mathbf{\mathcal{O}\left(n\right)}$}};
+\end{tikzpicture}
+}
+
+\end{frame}
+
+\begin{frame}{Normalizing Flows: Piecewise CDF}
+
+\tikzstyle{block} = [draw, text width=11cm, rounded corners, drop shadow, minimum height = 2em, text centered, fill=FermilabBlue!20]
+
+\begin{tikzpicture}
+    \node (pwlin) [block, align=left] at (0,0) {Piecewise Linear CDF: \reference{M\"uller et al. 1808.03856} \\ \vspace*{2mm}
+    \includegraphics[width=2.5cm]{figs/pdf-pwlin.pdf} \hspace*{1cm} \alt<1>{\includegraphics[width=2.5cm]{figs/cdf-pwlin.pdf}}{\includegraphics[width=2.5cm]{figs/cdf-pwlin-pt.pdf}} \\
+    \scriptsize The NN predicts the pdf bin heights $Q_i$.
+    };
+    \node (label) [anchor=north west, text width=4cm] at ($(pwlin.north west) + (1.8cm,-0.75cm)$) {
+    \begin{scriptsize}pdf \hspace*{1.5cm} cdf\end{scriptsize}
+    };
+    \uncover<2->{
+    \node (text1) [anchor = north east, align = left] at ($(pwlin.north east)$) {
+    $\begin{aligned}
+        C & = \sum_{k=1}^{b-1} Q_k + \alpha Q_b \\
+        \alpha &= \frac{x-(b-1) w}{w} \\
+        \begin{vmatrix} \frac{\partial C}{\partial x_B} \end{vmatrix} & = \prod_{i} \frac{Q_{b_i}}{w}
+    \end{aligned}$
+    };
+    }
+    \uncover<3->{
+    \node (pwrqs) [block, align=left, anchor=north] at ($(pwlin.south) - (0, 0.25cm)$) {
+    Rational Quadratic CDF: \reference{Durkan et. al. 1906.04032} \\ \vspace*{2mm}
+    \includegraphics[width=2.5cm]{figs/cdf-pwrqs-pt.pdf} \\
+    \scriptsize
+    Predict widths $(w^{(k)})$, heights $(y^{(k)})$, and derivatives $(d^{(k)})$ of the knots of spline.
+    };
+    \node (text2) [anchor = north east, align = left] at ($(pwrqs.north east) - (0, 5mm)$) {
+    \begin{small}
+        $\begin{aligned}
+C & = y^{(k)} + \frac{(y^{(k+1)}-y^{(k)})[s^{(k)}\alpha^2+d^{(k)}\alpha(1-\alpha)]}{s^{(k)}+[d^{(k+1)}+d^{(k)}-2s^{(k)}]\alpha(1-\alpha)} \\ \\
+    \alpha &= \frac{x-x^{(k)}}{w^{(k)}} \quad \quad
+        s^{(k)} = \frac{y^{(k+1)} - y^{(k)}}{w^{(k)}}
+    \end{aligned}$
+    \end{small}
+    };
+    }
+\end{tikzpicture}
+    
+\end{frame}
+
+\begin{frame}{Number of Layers}
+
+\begin{columns}
+    \begin{column}{5cm}
+        \textbf{Requirements:}
+        \begin{itemize}
+            \item Learn all correlations
+            \item Minimize for speed
+            \item Still flexible enough
+            \item Keep $\text{len}(x_A) \approx \text{len}(x_B)$
+        \end{itemize}
+        \uncover<2->{
+        \textbf{Solution:}
+        \begin{itemize}
+            \item Minimum: 4 layers
+            \item Maximum: $2 \log_2 n_{dim}$
+        \end{itemize}
+        }
+    \end{column}
+    \begin{column}{5cm}
+    \uncover<3->{
+        \begin{align*}
+            \begin{pmatrix}
+                0 & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 \\
+                \hline
+                0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 1 \\
+                0 & 0 & 0 & 0 & 1 & 1 & 1 & 1 & 0 \\
+                0 & 0 & 1 & 1 & 0 & 0 & 1 & 1 & 0 \\
+                0 & 1 & 0 & 1 & 0 & 1 & 0 & 1 & 0 \\
+            \end{pmatrix}
+        \end{align*}
+        \textbf{Note:} One means transform, zero means pass through. The transpose of the matrix and its binary negation give the max layers required.
+    }
+    \end{column}
+\end{columns}
+    
+\end{frame}
+
+\begin{frame}{Structure of $m(x_A)$: Unet}
+
+\begin{center}
+  \includegraphics[width=0.8\textwidth]{figs/UNN.pdf}  
+\end{center}
+    
+\end{frame}
+
+\begin{frame}{Network Setup}
+\begin{small}
+\begin{block}{Loss Functions:}
+\begin{itemize}
+    \item KL-divergence: $D_{KL} = \int p(x) \log\frac{p(x)}{q(x)}dx$
+    \item $\chi^2$-divergence: $D_{\chi^2} = \int \frac{\left(p(x)-q(x)\right)^2}{q(x)} dx$
+    \item Exponential-divergence: $D_{\exp} = \int p(x)\left(\log\frac{p(x)}{q(x)}\right)^2 dx$
+    \item Other $f$-divergences: $D_{f} = \int p(x) f\left(\frac{q(x)}{p(x)}\right) dx$ 
+\end{itemize}
+    \begin{flushright}\reference{Nielsen et. al. 1309.3029}\end{flushright}
+\end{block}
+
+\uncover<2->{
+\begin{block}{Optimizer}
+\begin{itemize}
+    \item ADAM optimizer \hfill \reference{Kingma and Ba 1412.6980}
+    \item Decay learning rate exponentially
+    \item Gradient with respect to trainable parameters ($\theta$) in $q(x)$, i.e. $\nabla_{\theta} D_{f}$
+\end{itemize}
+\end{block}
+}
+\end{small}
+\end{frame}
+
+\section{Results}
+
+\begin{frame}{Test Functions: 4-d Camel}
+\tikzstyle{block} = [draw, text width=11cm, rounded corners, drop shadow, minimum height = 2em, text centered, fill=FermilabBlue!20]
+
+    \begin{tikzpicture}
+    \node (main) [block] at (0,0) {
+        \begin{columns}
+        \begin{column}{5cm}
+        \begin{center}
+        \textbf{Target Distribution:} \\
+        \includegraphics[width=0.75\textwidth]{figs/matrix.png} \\
+        \end{center}
+        \end{column}
+        \begin{column}{5cm}
+        \begin{center}
+        \only<1>{
+            \textbf{Before Training:} \\
+            \includegraphics[width=0.75\textwidth]{figs/fig-0000.png}
+        }
+        \only<2>{
+            \textbf{Training:} \\
+            \movie[width=0.75\textwidth, height=0.75\textwidth, poster]{}{figs/4d_Camel_train.mp4}
+        }
+        \only<3>{
+            \textbf{Final:} \\
+            \includegraphics[width=0.75\textwidth]{figs/fig-0199.png}
+        }
+        \end{center}
+        \end{column}
+    \end{columns}
+    };
+    \end{tikzpicture}
+    
+    \begin{itemize}
+        \item Final Integral: 0.0063339(41)
+        \item {\tt VEGAS}: 0.0063349(92)
+    \end{itemize}
+    
+\end{frame}
+
+\begin{frame}{Acceptance}
+
+\begin{columns}
+    \begin{column}{5cm}
+    \textbf{Unweighting Efficiency:}
+    \begin{itemize}
+        \item Traditional Definition:
+        \begin{itemize}
+            \item Sensitive to number of events
+            \item Sensitive to outliers
+        \end{itemize}
+        \item New Definition Requirements:
+        \begin{itemize}
+            \item Determined by desired accuracy on cross-section
+            \item Not sensitive to outliers
+            \item $1-A = \int_0^{w_{max}} f(w) dw$
+        \end{itemize}
+    \end{itemize}
+    \end{column}
+    \begin{column}{5cm}
+        \textbf{Traditional Efficiency:}
+        \begin{equation*}
+            \varepsilon = \frac{\frac{1}{N} \sum_i w_i}{\max(w_i)}
+        \end{equation*}
+        \textbf{Bad Efficiency due to outlier}
+        \includegraphics[width=\textwidth]{figs/efficiency_badexample.png}
+    \end{column}
+\end{columns}
+    
+\end{frame}
+
+\begin{frame}{Sherpa Implementation}
+    \begin{block}{SHERPA}
+        SHERPA is a MC generator for the \textbf{S}imulation of \textbf{H}igh-\textbf{E}nergy \textbf{R}eactions of \textbf{PA}rticles.
+        \begin{itemize}
+            \item Developed interface between our integrator and SHERPA
+            \item Map unit-hypercube into momenta and channels: $n_{dim} = \underbrace{3n_{final}-4}_{\text{kinematics}} + \underbrace{n_{final}-1}_{\text{multichannel}} + \underbrace{n_{ihadrons}}_{\text{inital state}}$
+            \item Compute matrix element using {\tt COMIX++}, color sampling allowing for high multiplicity events
+            \item Can integrate over color configurations adding $2 n_{color} -1$ additional dimensions
+        \end{itemize}
+        \begin{flushright}\reference{https://sherpa-team.gitlab.io}\end{flushright}
+    \end{block}
+\end{frame}
+
+\begin{frame}{Sherpa Results: $e^+ e^- \rightarrow 3j$}
+\tikzstyle{block} = [draw, text width=11cm, rounded corners, drop shadow, minimum height = 2em, text centered, fill=FermilabBlue!20]
+
+    \begin{tikzpicture}
+    \node (main) [block] at (0,0) {
+        \begin{columns}
+        \begin{column}{5cm}
+        \begin{center}
+        \textbf{Target Distribution:} \\
+        \includegraphics[width=\textwidth]{figs/3j-matrix.png} \\
+        \end{center}
+        \end{column}
+        \begin{column}{5cm}
+        \begin{center}
+            \textbf{Trained:} \\
+            \includegraphics[width=\textwidth]{figs/3j-matrix-learned.png}
+        \end{center}
+        \end{column}
+    \end{columns}
+    };
+    \end{tikzpicture}
+\end{frame}
+
+\begin{frame}{Sherpa Results: $e^+ e^- \rightarrow 3j$}
+    \begin{block}{Weight Distribution}
+    \begin{center}
+    \includegraphics[width=0.8\textwidth]{figs/weights.pdf}
+    \end{center}
+    \end{block}
+    $\sigma_{\text{NN}} = 4887.1 \pm 4.6$ pb \hfill $\sigma_{\text{SHERPA}} = 4887.0 \pm 17.7$ pb
+\end{frame}
+
+\begin{frame}{Sherpa Results: $pp \rightarrow W + 1j$}
+\tikzstyle{block} = [draw, text width=11cm, rounded corners, drop shadow, minimum height = 2em, text centered, fill=FermilabBlue!20]
+
+    \begin{tikzpicture}
+    \node (main) [block] at (0,0) {
+        \begin{columns}
+        \begin{column}{5cm}
+        \begin{center}
+            \textbf{Trained:} \\
+            \includegraphics[width=\textwidth]{figs/final_corner_w1j.png}
+        \end{center}
+        \end{column}
+        \begin{column}{5cm}
+        \begin{center}
+        \textbf{Weight Distribution:} \\
+        \includegraphics[width=\textwidth]{figs/efficiency_w1j.png} \\
+        \end{center}
+        \end{column}
+
+    \end{columns}
+    };
+    \end{tikzpicture}
+
+    \vfill
+
+    Efficiency NN: 22.5 \% \hfill Efficiency SHERPA: 5.2 \%
+\end{frame}
+
+\begin{frame}{Sherpa Results: $pp \rightarrow W + 2j$ \textbf{PRELIMINARY}}
+\tikzstyle{block} = [draw, text width=11cm, rounded corners, drop shadow, minimum height = 2em, text centered, fill=FermilabBlue!20]
+
+    \begin{tikzpicture}
+    \node (main) [block] at (0,0) {
+        \begin{columns}
+        \begin{column}{5cm}
+        \begin{center}
+            \textbf{Trained:} \\
+            \includegraphics[width=\textwidth]{figs/final_corner_w2j.png}
+        \end{center}
+        \end{column}
+        \begin{column}{5cm}
+        \begin{center}
+        \textbf{Weight Distribution:} \\
+        \includegraphics[width=\textwidth]{figs/efficiency_w2j.png} \\
+        \end{center}
+        \end{column}
+
+    \end{columns}
+    };
+    \end{tikzpicture}
+\end{frame}
+
+\begin{frame}{Conclusions}
+
+\begin{scriptsize}
+\begin{block}{Traditional Integration}
+\begin{itemize}
+    \item Numerical integration and the need for Monte Carlo
+    \item VEGAS algorithm and its deficiencies
+\end{itemize}
+\end{block}
+
+\uncover<2->{
+\begin{block}{Normalizing Flows}
+\begin{itemize}
+    \item Avoid computational difficulty of Jacobian
+    \item Using splines to approximate CDF
+\end{itemize}
+\end{block}
+}
+
+\uncover<3->{
+\begin{block}{Results}
+\begin{itemize}
+    \item Better than SHERPA in $e^+e^- \rightarrow 3j$
+    \item Results from NN approach up to $W+4j$
+    \item Need better acceptance definition
+\end{itemize}
+\end{block}
+}
+
+\uncover<4->{
+\begin{block}{Outlook}
+\begin{itemize}
+    \item Optimize hyper-parameters using NERSC
+    \item Push to high multiplicity ($W+7j$)
+\end{itemize}
+\end{block}
+}
+\end{scriptsize}
+
+\end{frame}
+
+\end{document}
