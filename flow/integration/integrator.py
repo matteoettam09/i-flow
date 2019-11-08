@@ -39,11 +39,12 @@ def ewma(data, window):
 class Integrator():
     """ Class implementing a normalizing flow integrator.
 
-    Metrics:
-    -------
-        - KL-Divergence
-        - Chi2-Divergence
-
+    Args:
+        - func: Function to be integrated
+        - dist: Distribution to be trained to match the function
+        - optimizer: An optimizer from tensorflow used to train the network
+        - loss_func: The loss function to be minimized
+        - kwargs: Additional arguments that need to be passed to the loss
     """
 
     def __init__(self, func, dist, optimizer, loss_func='chi2', **kwargs):
@@ -58,7 +59,18 @@ class Integrator():
 
     @tf.function
     def train_one_step(self, nsamples, integral=False):
-        """ Preform one step of integration and improve the sampling. """
+        """ Preform one step of integration and improve the sampling.
+
+        Args:
+            - nsamples: Number of samples to be taken in a training step
+            - integral: Flag for returning the integral value of not.
+
+        Returns:
+            - loss: Value of the loss function for this step
+            - integral (optional): Estimate of the integral value
+            - uncertainty (optional): Integral statistical uncertainty
+
+        """
         with tf.GradientTape() as tape:
             samples = tf.stop_gradient(self.dist.sample(nsamples))
             logq = self.dist.log_prob(samples)
@@ -140,8 +152,20 @@ class Integrator():
 
     def acceptance_calc(self, accuracy, max_samples=50000, min_samples=5000):
         """ Calculate the acceptance using a right tailed confidence interval
-        with an accuracy of accuracy. """
-        # tf.random.set_seed(-1)
+        with an accuracy of accuracy.
+
+        Args:
+            accuracy (float): Desired accuracy for total cross-section
+            max_samples (int): Max number of samples per iteration
+            min_samples (int): Min number of samples per iteration
+
+        Returns:
+            (tuple): tuple containing:
+
+                avg_val (float): Average weight value from all iterations
+                max_val (float): Maximum value to use in unweighting
+
+        """
 
         # @tf.function
         def _calc_efficiency(weights):
@@ -163,6 +187,8 @@ class Integrator():
             avg_val, max_val = _calc_efficiency(weights)
             eta = avg_val/max_val
             print(eta, nsamples, len(weights), NSAMP)
+
+        del weights
 
         return avg_val, max_val
         # weights = []
