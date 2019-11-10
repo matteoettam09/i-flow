@@ -116,6 +116,39 @@ class Integrator():
             return true/test, samples
 
         return true/test
+    # def acceptance_calc(self, accuracy, max_samples=50000, min_samples=5000):
+        # """ Calculate the acceptance using a right tailed confidence interval
+        # with an accuracy of accuracy. """
+
+        # # @tf.function
+        # def _calc_efficiency(weights):
+            # weights = tf.convert_to_tensor(weights, dtype=tf.float64)
+            # weights = tf.sort(weights)
+            # cum_weights = tf.cumsum(weights)
+            # cum_weights /= cum_weights[-1]
+            # index = tf.cast(
+                # tf.searchsorted(cum_weights,
+                                # tf.convert_to_tensor([1-accuracy],
+                                                     # dtype=tf.float64)),
+                # dtype=tf.int32)
+            # max_val = weights[index[0]]
+            # avg_val = tf.reduce_mean(weights[:index[0]])
+            # return avg_val, max_val
+
+        # eta = 1
+        # eta_0 = 0
+        # weights = []
+        # while abs(eta - eta_0)/eta > 0.01:
+            # eta_0 = eta
+            # nsamples = np.ceil(accuracy**-2/eta).astype(np.int64)-len(weights)
+            # nsamples = np.min([nsamples, max_samples])
+            # nsamples = np.max([nsamples, min_samples])
+            # weights.extend(self.acceptance(nsamples))
+            # avg_val, max_val = _calc_efficiency(weights)
+            # eta = avg_val/max_val
+            # print(eta_0, eta)
+
+        # return avg_val, max_val
 
     def acceptance_calc(self, accuracy, max_samples=50000, min_samples=5000):
         """ Calculate the acceptance using a right tailed confidence interval
@@ -138,33 +171,38 @@ class Integrator():
         def _calc_efficiency(weights):
             weights = tf.convert_to_tensor(weights, dtype=tf.float64)
             weights = tf.sort(weights)
-            cum_weights = tf.cumsum(weights)
-            cum_weights /= cum_weights[-1]
-            index = tf.cast(
-                tf.searchsorted(cum_weights,
-                                tf.convert_to_tensor([1-accuracy],
-                                                     dtype=tf.float64)),
-                dtype=tf.int32)
-            max_val = weights[index[0]]
-            avg_val = tf.reduce_mean(weights[:index[0]])
+            i_max = tf.convert_to_tensor([ int(np.ceil(len(weights)*(1-accuracy)))], dtype=tf.int32)
+            max_val = weights[i_max[0]]
+            avg_val = tf.reduce_mean(weights[:i_max[0]])
             return avg_val, max_val
 
-        eta = 1
-        eta_0 = 0
         weights = []
-        while abs(eta - eta_0)/eta > 0.01:
-            eta_0 = eta
-            nsamples = np.ceil(accuracy**-2/eta).astype(np.int64)-len(weights)
-            nsamples = np.min([nsamples, max_samples])
-            nsamples = np.max([nsamples, min_samples])
-            weights.extend(self.acceptance(nsamples))
+        precision=0.1
+        NSAMP = (1./precision)**2 / accuracy
+
+        while len(weights) < NSAMP:
+            nsamples = min_samples
+            _w = self.acceptance(nsamples)
+            weights.extend([w for w in _w if w !=0])
             avg_val, max_val = _calc_efficiency(weights)
             eta = avg_val/max_val
-            print(eta_0, eta)
+            print(eta, nsamples, len(weights), NSAMP)
 
         del weights
 
         return avg_val, max_val
+        # weights = []
+        # while abs(eta - eta_0)/eta > 0.01:
+            # eta_0 = eta
+            # nsamples = np.ceil(accuracy**-2/eta).astype(np.int64)-len(weights)
+            # nsamples = np.min([nsamples, max_samples])
+            # nsamples = np.max([nsamples, min_samples])
+            # weights.extend(self.acceptance(nsamples))
+            # avg_val, max_val = _calc_efficiency(weights)
+            # eta = avg_val/max_val
+            # print(eta_0, eta, nsamples, len(weights))
+
+        # return avg_val, max_val
 
     def save(self):
         """ Save the network. """
