@@ -750,9 +750,12 @@ double Foam::Loss(const Foam_Channel *c,const size_t &dim,
   const Foam_Channel::Point_Vector &points(c->GetPoints());
   if (points.empty()) THROW(fatal_error,"No data points");
   if (end==start) end=points.size();
-  double s2(0.0), w(c->Weight());
-  for (size_t i(start);i<end;++i) s2+=sqr(points[i].second*w);
-  s2/=end-start;
+  double n(0.0), s2(0.0), w(c->Weight());
+  for (size_t i(start);i<end;++i) {
+    s2+=sqr(points[i].second*w);
+    n+=1.0;
+  }
+  if (n) s2/=n;
   return s2;
 }
 
