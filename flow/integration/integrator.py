@@ -24,7 +24,7 @@ def ewma(data, window):
         window (int64): The decay window.
 
     Returns:
-        int64: The EWMA for the last point in the data array
+        float64: The EWMA for the last point in the data array
     """
     if len(data) <= window:
         return data[-1]
