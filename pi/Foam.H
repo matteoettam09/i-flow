@@ -376,7 +376,7 @@ namespace FOAM {
 
     long unsigned int m_nopt, m_nmax, m_ndiced;
 
-    double m_error, m_scale, m_apweight;
+    double m_error, m_scale, m_apweight, m_cutfac;
     double m_sum, m_sum2, m_max, m_np, m_nvp;
 
     std::deque<double> m_smax;
@@ -578,6 +578,11 @@ namespace FOAM {
     /*!
       \fn inline void SetShuffleMode(const size_t shuffle)
       \brief Sets the shuffle mode. If set to 0 weights will not be shuffled.
+    */
+    inline void SetCutFactor(const double cutfac) { m_cutfac=cutfac; }
+    /*!
+      \fn inline void SetCutFactor(const double cutfac)
+      \brief Sets the cut weight factor.
     */
 
     inline void SetFunction(Foam_Integrand *const function)

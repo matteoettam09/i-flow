@@ -313,7 +313,8 @@ void Foam_Channel::CreateRoot(Foam *const integrator,
 
 Foam::Foam():
   m_nopt(10000), m_nmax(1000000), m_error(0.01), m_scale (1.0),
-  m_apweight(1.0), m_sum(0.0), m_sum2(0.0), m_max(0.0), 
+  m_apweight(1.0), m_cutfac(2.0),
+  m_sum(0.0), m_sum2(0.0), m_max(0.0),
   m_np(0.0), m_nvp(0.0),
   m_smax(std::deque<double>(3,0.0)), 
   m_ncells(1000), m_split(1), m_shuffle(1), m_last(0), 
@@ -750,12 +751,17 @@ double Foam::Loss(const Foam_Channel *c,const size_t &dim,
   const Foam_Channel::Point_Vector &points(c->GetPoints());
   if (points.empty()) THROW(fatal_error,"No data points");
   if (end==start) end=points.size();
-  double n(0.0), s2(0.0), w(c->Weight());
+  double m(0.0), avg(0.0);
   for (size_t i(start);i<end;++i) {
-    s2+=sqr(points[i].second*w);
-    n+=1.0;
+    if (points[i].second) ++m;
+    avg+=dabs(points[i].second);
   }
-  if (n) s2/=n;
+  if (m) avg/=m;
+  double n(0.0), s2(0.0), w(c->Weight());
+  for (size_t i(start);i<end;++i)
+    if (points[i].second) s2+=sqr(points[i].second*w);
+    else s2+=sqr(m_cutfac*avg*w);
+  s2/=end-start;
   return s2;
 }
 

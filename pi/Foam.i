@@ -78,6 +78,7 @@ namespace FOAM {
     }
     inline void SetSplitMode(const size_t split) { m_split=split; }
     inline void SetShuffleMode(const size_t shuffle) { m_shuffle=shuffle; }
+    inline void SetCutFactor(const double cutfac) { m_cutfac=cutfac; }
     inline void SetFunction(Foam_Integrand *const function)
     { p_function=function; }
     inline Foam_Integrand *const Function() const
