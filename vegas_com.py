@@ -5,6 +5,7 @@
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
 import tensorflow as tf
 import tensorflow_probability as tfp
 
@@ -97,7 +98,95 @@ class TestFunctions:
         res = np.power(x[...,1],ee)*np.exp(-w1*np.abs((x[...,1]-dy1)**2+(x[...,0]-dx1)**2-rr**2))+\
             np.power(1.0-x[...,1],ee)*np.exp(-w1*np.abs((x[...,1]-1.0+dy1)**2+(x[...,0]-1.0+dx1)**2-rr**2))
         return res
+    
+    
+def run_vegas(func, ndims, ptspepoch, epochs):
+    """ running VEGAS for integral + stddev vs. training
+    
+    Args:
+    func:            integrand
+    ndims (int):     dimensionality of the integrand
+    ptspepoch (int): number of points per epoch in training
+    epochs (int):    number of epochs for training
+    ptsint (int):    number of points used to plot integral and uncertainty 
+    """
+    
 
+    integ = vegas.Integrator(ndims*[[0.,1.]])
+
+    x_values = []
+    means = []
+    stddevs = []
+
+    mean, stddev = evaluate(func, integ, ptspepoch)
+    print("Result = {:.3f} +/- {:.3f} ".format(mean, stddev))
+    means.append(mean)
+    stddevs.append(stddev)
+
+    results = integ(func, nitn=epochs, neval=ptspepoch, adapt=True)#, max_nhcube = 1)
+    print(results.summary())
+
+    for number in results.itn_results:
+        value, err = floatize(number)
+        means.append(value)
+        stddevs.append(err)
+        #print("value = {} +/- {} ".format(value, err))
+
+    #mean, stddev = evaluate(func, integ, ptsint)
+    means = np.array(means)
+    stddevs = np.array(stddevs)
+    
+    #print("Result = {:.3f} +/- {:.3f} ".format(mean, stddev))
+
+    """
+    for epoch in range(epochs):
+        integ(func, nitn=1, neval=ptspepoch, adapt=True, max_nhcube = 1)
+        mean, stddev = evaluate(func, integ, ptsint)
+        x_values.append((epoch+1)*ptspepoch)
+        means.append(mean)
+        stddevs.append(stddev)
+        print("Epoch {:d} of {:d} done".format(epoch+1, epochs))
+    x_values = np.array(x_values)
+    means = np.array(means)
+    stddevs = np.array(stddevs)
+    """
+    return means, stddevs
+
+def floatize(number):
+    value = ""
+    err = ""
+    fullerr = ""
+    switch = False
+    for i in str(number):
+        if not switch:
+            value += i
+            if i == ".":
+                fullerr += "."
+            else:
+                fullerr += "0"
+        else:
+            err += i
+        if i == "(":
+            switch = True
+            value = value[:-1]
+        if i == ")":
+            err = err[:-1]
+    fullerr = fullerr[:-len(err)-1]+err
+    return float(value), float(fullerr)
+
+    
+def evaluate(func, integ, ptsint=100000):
+    """
+    Takes an instance of Vegas and evaluates the integral
+    without further adaptation
+
+    Args:
+    func:   Integrand to be integrated
+    integ:  An instance of vegas.Integrator
+    ptsint: Number of points used for evaluation
+    """
+    result = integ(func, nitn=1, neval=ptsint, adapt=False, max_nhcube = 1)
+    return result.mean, result.sdev
 
 def main(argv):
     # tf.random.set_seed(1236)
@@ -112,36 +201,47 @@ def main(argv):
     """
     del argv
 
-    ndims1 = 8
-    ndims2 = 2
+    ndims = 6
     alpha = .1
 
-    npts = 10000
-    pts1 = np.random.rand(npts, ndims1)
-    pts2 = np.random.rand(npts, ndims2)
-    
-    func1 = TestFunctions(ndims1, alpha)
-    func2 = TestFunctions(ndims2, alpha)
+    npts = 100000
+    pts = np.random.rand(npts, ndims)
 
-    value1 = func1.gauss(pts1)
-    value2 = func1.camel(pts1)
-    value3 = func1.tsuda(pts1)
-    value4 = func1.line(pts1)
-    value5 = func2.gauss(pts2)
-    value6 = func2.camel(pts2)
-    value7 = func2.circle(pts2)
-    value8 = func2.line(pts2)
-    
-    format_string = '{} function in {:d} dimensions: {:.3f} +/- {:.3f}'
-    print(format_string.format('Gauss', ndims1, np.mean(value1), np.std(value1)/np.sqrt(npts)))
-    print(format_string.format('Camel', ndims1, np.mean(value2), np.std(value2)/np.sqrt(npts)))
-    print(format_string.format('Tsuda', ndims1, np.mean(value3), np.std(value3)/np.sqrt(npts)))
-    print(format_string.format('Line', ndims1, np.mean(value4), np.std(value4)/np.sqrt(npts)))
-    print(format_string.format('Gauss', ndims2, np.mean(value5), np.std(value5)/np.sqrt(npts)))
-    print(format_string.format('Camel', ndims2, np.mean(value6), np.std(value6)/np.sqrt(npts)))
-    print(format_string.format('Circle', ndims2, np.mean(value7), np.std(value7)/np.sqrt(npts)))
-    print(format_string.format('Line', ndims2, np.mean(value8), np.std(value8)/np.sqrt(npts)))
+    # select function:
+    func = TestFunctions(ndims, alpha)
 
+    value = func.camel(pts)
+    
+    format_string = 'Crude MC of {} function in {:d} dimensions: {:.3f} +/- {:.3f}'
+    print(format_string.format('Camel', ndims, np.mean(value), np.std(value)/np.sqrt(npts)))
+
+    epochs = 50
+    ptspepoch = 10000
+    x_values = np.arange(0, (epochs + 1) * ptspepoch, ptspepoch)
+
+    vegas_mean, vegas_err = run_vegas(func.camel, ndims, ptspepoch, epochs)
+    plt.figure(dpi=150, figsize=[5., 4.])
+    plt.xlim(0., epochs * ptspepoch)
+    plt.xlabel('Evaluations in training')
+    plt.ylim(0., 2.)
+    plt.ylabel('Integral value')
+    #plt.yscale('log')
+    plt.plot(x_values, vegas_mean, color = 'b')
+    plt.fill_between(x_values, vegas_mean + vegas_err, vegas_mean - vegas_err, color='b',alpha=0.5)
+    plt.plot([0., epochs * ptspepoch], [1., 1.], ls = '--', color = 'k')
+    plt.title('VEGAS integral')
+    plt.show()
+
+    plt.figure(dpi=150, figsize=[5., 4.])
+    plt.xlim(0., epochs * ptspepoch)
+    plt.xlabel('Evaluations in training')
+    plt.ylim(1e-4, 1e1)
+    plt.ylabel('Integral uncertainty')
+    plt.yscale('log')
+    plt.plot(x_values, vegas_err, color = 'b')
+    plt.title('VEGAS uncertainty')
+    plt.show()
+    
 
 if __name__ == '__main__':
     app.run(main)
