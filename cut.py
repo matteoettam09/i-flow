@@ -4,6 +4,8 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
 import matplotlib.pyplot as plt
+from shapely.geometry import Polygon, Point
+from descartes.patch import PolygonPatch
 
 from flow.integration import integrator
 from flow.integration import couplings
@@ -13,12 +15,112 @@ from flow.splines.spline import _gather_squeeze
 tfd = tfp.distributions  # pylint: disable=invalid-name
 tf.keras.backend.set_floatx('float64')
 
+CUT_VALUE = 0.05
+ALPHA = 1.0
+COLOR = ['red', 'magenta', 'green', 'blue', 'black']
+
 
 def func(pts_x):
     """ Calculate function for testing. """
-    alpha = 1.0
-    cut_value = 0.05
-    return tf.where(pts_x[:, 0] > cut_value, tf.pow(pts_x[:, 0], -alpha), 0)
+    return tf.where(pts_x[:, 0] > CUT_VALUE, tf.pow(pts_x[:, 0], -ALPHA), 0)
+
+
+class Cheese:
+    """ Class to store the cheese function. """
+
+    def __init__(self, nholes):
+        """ Init cheese function holes. """
+
+        # Create random holes
+        self.position = np.random.random((nholes, 2))
+        self.radius = 0.1*np.random.random(nholes)+0.05
+
+        # Create shape
+        holes = Point(self.position[0]).buffer(self.radius[0])
+        for i in range(1, nholes):
+            circle = Point(self.position[i]).buffer(self.radius[i])
+            holes = holes.union(circle)
+
+        self.cheese = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+        self.cheese = self.cheese.symmetric_difference(holes)
+
+    def __call__(self, pts):
+        """ Calculate a swiss cheese like function. """
+        mask = np.zeros_like(pts[:, 0], dtype=np.float64)
+        for i, position in enumerate(pts):
+            point = Point(position[0], position[1])
+            mask[i] = float(self.cheese.contains(point))
+
+        return mask
+
+    def plot(self, pts=None, filename=None):
+        """ Plot the cheese. """
+        patch = PolygonPatch(self.cheese, facecolor='yellow',
+                             alpha=0.5, zorder=1)
+        fig = plt.figure()
+        axis = fig.add_subplot(111)
+        if pts is not None:
+            plt.scatter(pts[:, 0], pts[:, 1], s=5, zorder=2)
+        axis.add_patch(patch)
+        plt.xlim([0, 1])
+        plt.ylim([0, 1])
+        if filename is not None:
+            plt.savefig('{}.png'.format(filename))
+        plt.show()
+
+    @property
+    def area(self):
+        """ Get the area of cheese surface. """
+        return self.cheese.area
+
+
+class Ring:
+    """ Class to store the ring function. """
+
+    def __init__(self, radius1, radius2):
+        """ Init ring function. """
+
+        # Ensure raidus1 is the large one
+        if radius1 < radius2:
+            radius1, radius2 = radius2, radius1
+
+        # Create shape
+        self.ring = Point((0.5, 0.5)).buffer(radius1)
+        hole = Point((0.5, 0.5)).buffer(radius2)
+        self.ring = self.ring.symmetric_difference(hole)
+
+    def __call__(self, pts):
+        """ Calculate a swiss ring like function. """
+        mask = np.zeros_like(pts[:, 0], dtype=np.float64)
+        for i, position in enumerate(pts):
+            point = Point(position[0], position[1])
+            mask[i] = float(self.ring.contains(point))
+
+        return mask
+
+    def plot(self, pts=None, filename=None, lines=None):
+        """ Plot the ring. """
+        patch = PolygonPatch(self.ring, facecolor='red',
+                             alpha=0.5, zorder=1)
+        fig = plt.figure()
+        axis = fig.add_subplot(111)
+        if pts is not None:
+            plt.scatter(pts[:, 0], pts[:, 1], s=5, zorder=2)
+        if lines is not None:
+            for i in range(5):
+                position = float(i)/10.0 + 0.1
+                plt.axvline(x=position, color=COLOR[i])
+        axis.add_patch(patch)
+        plt.xlim([0, 1])
+        plt.ylim([0, 1])
+        if filename is not None:
+            plt.savefig('{}.png'.format(filename))
+        plt.show()
+
+    @property
+    def area(self):
+        """ Get the area of ring surface. """
+        return self.ring.area
 
 
 def get_spline(inputs, widths, heights, derivatives):
@@ -70,7 +172,7 @@ def get_spline(inputs, widths, heights, derivatives):
     return outputs, cumwidths, cumheights
 
 
-def plot_spline(widths, heights, derivatives):
+def plot_spline(widths, heights, derivatives, color):
     """ Plot the spline. """
     nsamples = 10000
     # nodes = 5
@@ -82,8 +184,10 @@ def plot_spline(widths, heights, derivatives):
 
     outputs, widths, heights = get_spline(pts_x, widths, heights, derivatives)
 
-    plt.plot(pts_x, outputs, zorder=1)
+    plt.plot(pts_x, outputs, zorder=1, color=color)
     plt.scatter(widths.numpy(), heights.numpy(), s=20, color='red', zorder=2)
+    # plt.axhline(y=CUT_VALUE)
+    # plt.axvline(x=CUT_VALUE)
 
 
 def build(in_features, out_features, options):
@@ -95,14 +199,33 @@ def build(in_features, out_features, options):
     hidden = tf.keras.layers.Dense(128, activation='relu')(hidden)
     hidden = tf.keras.layers.Dense(128, activation='relu')(hidden)
     hidden = tf.keras.layers.Dense(128, activation='relu')(hidden)
-    outputs = tf.keras.layers.Dense(out_features, activation='relu')(hidden)
+    outputs = tf.keras.layers.Dense(out_features, bias_initializer='zeros',
+                                    kernel_initializer='zeros')(hidden)
     model = tf.keras.models.Model(invals, outputs)
     model.summary()
     return model
 
 
+def one_blob(xd, nbins_in):
+    """ Perform one_blob encoding. """
+    num_identity_features = xd.shape[-1]
+    y = tf.tile(((0.5/nbins_in) + tf.range(0., 1.,
+                                           delta=1./nbins_in)),
+                [tf.size(xd)])
+    y = tf.cast(tf.reshape(y, (-1, num_identity_features,
+                               nbins_in)),
+                dtype=tf.float64)
+    res = tf.exp(((-nbins_in*nbins_in)/2.)
+                 * (y-xd[..., tf.newaxis])**2)
+    res = tf.reshape(res, (-1, num_identity_features*nbins_in))
+    return res
+
+
 def main():
     """ Main function """
+    tf.config.experimental_run_functions_eagerly(True)
+    cheese = Ring(0.5, 0.2)
+    print(cheese.area)
     bijector = couplings.PiecewiseRationalQuadratic([1, 0], build,
                                                     num_bins=10,
                                                     blob=None,
@@ -117,35 +240,41 @@ def main():
         distribution=dist,
         bijector=bijector)
 
-    optimizer = tf.keras.optimizers.Adam(1e-3, clipnorm=10.0)
-    integrate = integrator.Integrator(func, dist, optimizer,
+    optimizer = tf.keras.optimizers.Adam(5e-4, clipnorm=10.0)
+    integrate = integrator.Integrator(cheese, dist, optimizer,
                                       loss_func='exponential')
 
-    for i in range(10):
-        point = float(i)/10.0
+    for i in range(5):
+        point = float(i)/10.0 + 0.1
+        # transform_params = bijector.transform_net(
+        #     one_blob(np.array([[point]]), 16))
         transform_params = bijector.transform_net(np.array([[point]]))
         widths = transform_params[..., :10]
         heights = transform_params[..., 10:20]
         derivatives = transform_params[..., 20:]
-        plot_spline(widths, heights, derivatives)
+        plot_spline(widths, heights, derivatives, COLOR[i])
 
     plt.savefig('pretraining.png')
     plt.show()
 
-    for epoch in range(500):
-        loss, integral, error = integrate.train_one_step(10000,
+    cheese.plot(filename='cheese', lines=True)
+
+    for epoch in range(400):
+        loss, integral, error = integrate.train_one_step(8000,
                                                          integral=True)
         if epoch % 10 == 0:
             print('Epoch: {:3d} Loss = {:8e} Integral = '
                   '{:8e} +/- {:8e}'.format(epoch, loss, integral, error))
 
-    for i in range(10):
-        point = float(i)/10.0
+    for i in range(5):
+        point = float(i)/10.0 + 0.1
+        # transform_params = bijector.transform_net(
+        #     one_blob(np.array([[point]]), 16))
         transform_params = bijector.transform_net(np.array([[point]]))
         widths = transform_params[..., :10]
         heights = transform_params[..., 10:20]
         derivatives = transform_params[..., 20:]
-        plot_spline(widths, heights, derivatives)
+        plot_spline(widths, heights, derivatives, COLOR[i])
 
     plt.savefig('posttraining.png')
     plt.show()
