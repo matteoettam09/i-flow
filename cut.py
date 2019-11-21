@@ -6,6 +6,7 @@ import tensorflow_probability as tfp
 import matplotlib.pyplot as plt
 from shapely.geometry import Polygon, Point
 from descartes.patch import PolygonPatch
+import corner
 
 from flow.integration import integrator
 from flow.integration import couplings
@@ -225,12 +226,24 @@ def main():
     """ Main function """
     tf.config.experimental_run_functions_eagerly(True)
     cheese = Ring(0.5, 0.2)
-    print(cheese.area)
+    print("Actual area is {}".format(cheese.area))
+    bijectors = []
+    """
     bijector = couplings.PiecewiseRationalQuadratic([1, 0], build,
                                                     num_bins=10,
                                                     blob=None,
                                                     options=None)
+    """
+    bijectors.append(couplings.PiecewiseRationalQuadratic([1, 0], build,
+                                                    num_bins=10,
+                                                    blob=None,
+                                                    options=None))
+    bijectors.append(couplings.PiecewiseRationalQuadratic([0, 1], build,
+                                                    num_bins=10,
+                                                    blob=None,
+                                                    options=None))    
 
+    bijector = tfp.bijectors.Chain(list(reversed(bijectors)))
     low = np.array([0, 0], dtype=np.float64)
     high = np.array([1, 1], dtype=np.float64)
     dist = tfd.Uniform(low=low, high=high)
@@ -239,46 +252,74 @@ def main():
     dist = tfd.TransformedDistribution(
         distribution=dist,
         bijector=bijector)
-
-    optimizer = tf.keras.optimizers.Adam(5e-4, clipnorm=10.0)
+    lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
+        2e-3, decay_steps=75, decay_rate=0.5)
+    optimizer = tf.keras.optimizers.Adam(lr_schedule, clipnorm=10.0)
     integrate = integrator.Integrator(cheese, dist, optimizer,
                                       loss_func='exponential')
+    
+    num = 0
+    for elem in dist.bijector.bijectors:
+        
+        for i in range(5):
+            point = float(i)/10.0 + 0.1
+            # transform_params = bijector.transform_net(
+            #     one_blob(np.array([[point]]), 16))
+            #transform_params = bijector.transform_net(np.array([[point]]))
+            transform_params = elem.transform_net(np.array([[point]]))
+            
+            widths = transform_params[..., :10]
+            heights = transform_params[..., 10:20]
+            derivatives = transform_params[..., 20:]
+            plot_spline(widths, heights, derivatives, COLOR[i])
 
-    for i in range(5):
-        point = float(i)/10.0 + 0.1
-        # transform_params = bijector.transform_net(
-        #     one_blob(np.array([[point]]), 16))
-        transform_params = bijector.transform_net(np.array([[point]]))
-        widths = transform_params[..., :10]
-        heights = transform_params[..., 10:20]
-        derivatives = transform_params[..., 20:]
-        plot_spline(widths, heights, derivatives, COLOR[i])
-
-    plt.savefig('pretraining.png')
-    plt.show()
-
+        plt.savefig('pretraining_{}.png'.format(num))
+        plt.show()
+        num += 1
+    
     cheese.plot(filename='cheese', lines=True)
 
-    for epoch in range(400):
+    for epoch in range(300):
         loss, integral, error = integrate.train_one_step(8000,
                                                          integral=True)
         if epoch % 10 == 0:
             print('Epoch: {:3d} Loss = {:8e} Integral = '
                   '{:8e} +/- {:8e}'.format(epoch, loss, integral, error))
+    
+    num = 0    
+    for elem in dist.bijector.bijectors:
+        for i in range(5):
+            point = float(i)/10.0 + 0.1
+            # transform_params = bijector.transform_net(
+            #     one_blob(np.array([[point]]), 16))
+            #transform_params = bijector.transform_net(np.array([[point]]))
+            transform_params = elem.transform_net(np.array([[point]]))
+            widths = transform_params[..., :10]
+            heights = transform_params[..., 10:20]
+            derivatives = transform_params[..., 20:]
+            plot_spline(widths, heights, derivatives, COLOR[i])
 
-    for i in range(5):
-        point = float(i)/10.0 + 0.1
-        # transform_params = bijector.transform_net(
-        #     one_blob(np.array([[point]]), 16))
-        transform_params = bijector.transform_net(np.array([[point]]))
-        widths = transform_params[..., :10]
-        heights = transform_params[..., 10:20]
-        derivatives = transform_params[..., 20:]
-        plot_spline(widths, heights, derivatives, COLOR[i])
-
-    plt.savefig('posttraining.png')
+        plt.savefig('posttraining_{}.png'.format(num))
+        num += 1
+        plt.show()
+    
+    nsamples = 50000
+    hist2d_kwargs = {'smooth': 2, 'plot_datapoints': False}
+    pts = integrate.sample(nsamples)
+    figure = corner.corner(pts, labels=[r'$x_{{{}}}$'.format(x)
+                                        for x in range(2)],
+                           show_titles=True,
+                           title_kwargs={'fontsize': 12},
+                           range=2*[[0, 1]],
+                           **hist2d_kwargs)
+    plt.savefig('ring_corner.png')
     plt.show()
+    plt.close()
 
+    # todo:
+    # second dim
+    # corner visualization
+    # check quadratic
 
 if __name__ == '__main__':
     main()
