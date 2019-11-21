@@ -224,6 +224,7 @@ def one_blob(xd, nbins_in):
 
 def main():
     """ Main function """
+    quadratic = False
     tf.config.experimental_run_functions_eagerly(True)
     cheese = Ring(0.5, 0.2)
     print("Actual area is {}".format(cheese.area))
@@ -234,14 +235,24 @@ def main():
                                                     blob=None,
                                                     options=None)
     """
-    bijectors.append(couplings.PiecewiseRationalQuadratic([1, 0], build,
+    if quadratic:
+        bijectors.append(couplings.PiecewiseQuadratic([1, 0], build,
                                                     num_bins=10,
                                                     blob=None,
                                                     options=None))
-    bijectors.append(couplings.PiecewiseRationalQuadratic([0, 1], build,
+        bijectors.append(couplings.PiecewiseQuadratic([0, 1], build,
                                                     num_bins=10,
                                                     blob=None,
-                                                    options=None))    
+                                                    options=None))
+    else:
+        bijectors.append(couplings.PiecewiseRationalQuadratic([1, 0], build,
+                                                    num_bins=10,
+                                                    blob=None,
+                                                    options=None))
+        bijectors.append(couplings.PiecewiseRationalQuadratic([0, 1], build,
+                                                    num_bins=10,
+                                                    blob=None,
+                                                    options=None))
 
     bijector = tfp.bijectors.Chain(list(reversed(bijectors)))
     low = np.array([0, 0], dtype=np.float64)
@@ -257,51 +268,51 @@ def main():
     optimizer = tf.keras.optimizers.Adam(lr_schedule, clipnorm=10.0)
     integrate = integrator.Integrator(cheese, dist, optimizer,
                                       loss_func='exponential')
-    
-    num = 0
-    for elem in dist.bijector.bijectors:
+    if not quadratic:
+        num = 0
+        for elem in dist.bijector.bijectors:
         
-        for i in range(5):
-            point = float(i)/10.0 + 0.1
-            # transform_params = bijector.transform_net(
-            #     one_blob(np.array([[point]]), 16))
-            #transform_params = bijector.transform_net(np.array([[point]]))
-            transform_params = elem.transform_net(np.array([[point]]))
+            for i in range(5):
+                point = float(i)/10.0 + 0.1
+                # transform_params = bijector.transform_net(
+                #     one_blob(np.array([[point]]), 16))
+                #transform_params = bijector.transform_net(np.array([[point]]))
+                transform_params = elem.transform_net(np.array([[point]]))
             
-            widths = transform_params[..., :10]
-            heights = transform_params[..., 10:20]
-            derivatives = transform_params[..., 20:]
-            plot_spline(widths, heights, derivatives, COLOR[i])
+                widths = transform_params[..., :10]
+                heights = transform_params[..., 10:20]
+                derivatives = transform_params[..., 20:]
+                plot_spline(widths, heights, derivatives, COLOR[i])
 
-        plt.savefig('pretraining_{}.png'.format(num))
-        plt.show()
-        num += 1
+            plt.savefig('pretraining_{}.png'.format(num))
+            plt.show()
+            num += 1
     
     cheese.plot(filename='cheese', lines=True)
 
     for epoch in range(300):
         loss, integral, error = integrate.train_one_step(8000,
                                                          integral=True)
-        if epoch % 10 == 0:
+        if epoch % 1 == 0:
             print('Epoch: {:3d} Loss = {:8e} Integral = '
                   '{:8e} +/- {:8e}'.format(epoch, loss, integral, error))
-    
-    num = 0    
-    for elem in dist.bijector.bijectors:
-        for i in range(5):
-            point = float(i)/10.0 + 0.1
-            # transform_params = bijector.transform_net(
-            #     one_blob(np.array([[point]]), 16))
-            #transform_params = bijector.transform_net(np.array([[point]]))
-            transform_params = elem.transform_net(np.array([[point]]))
-            widths = transform_params[..., :10]
-            heights = transform_params[..., 10:20]
-            derivatives = transform_params[..., 20:]
-            plot_spline(widths, heights, derivatives, COLOR[i])
+    if not quadratic:
+        num = 0    
+        for elem in dist.bijector.bijectors:
+            for i in range(5):
+                point = float(i)/10.0 + 0.1
+                # transform_params = bijector.transform_net(
+                #     one_blob(np.array([[point]]), 16))
+                #transform_params = bijector.transform_net(np.array([[point]]))
+                transform_params = elem.transform_net(np.array([[point]]))
+                widths = transform_params[..., :10]
+                heights = transform_params[..., 10:20]
+                derivatives = transform_params[..., 20:]
+                plot_spline(widths, heights, derivatives, COLOR[i])
 
-        plt.savefig('posttraining_{}.png'.format(num))
-        num += 1
-        plt.show()
+            plt.savefig('posttraining_{}.png'.format(num))
+            num += 1
+            plt.show()
     
     nsamples = 50000
     hist2d_kwargs = {'smooth': 2, 'plot_datapoints': False}
