@@ -86,21 +86,21 @@ class Ring:
             radius1, radius2 = radius2, radius1
 
         # Create shape
-        self.ring = Point((0.5, 0.5)).buffer(radius1)
-        hole = Point((0.5, 0.5)).buffer(radius2)
-        self.ring = self.ring.symmetric_difference(hole)
+        # self.ring = Point((0.5, 0.5)).buffer(radius1)
+        # hole = Point((0.5, 0.5)).buffer(radius2)
+        # self.ring = self.ring.symmetric_difference(hole)
+        self.radius12 = radius1**2
+        self.radius22 = radius2**2
 
     def __call__(self, pts):
-        """ Calculate a swiss ring like function. """
-        mask = np.zeros_like(pts[:, 0], dtype=np.float64)
-        for i, position in enumerate(pts):
-            point = Point(position[0], position[1])
-            mask[i] = float(self.ring.contains(point))
-
-        return mask
+        """ Calculate a ring like function. """
+        radius = tf.reduce_sum((pts-0.5)**2, axis=-1)
+        out_of_bounds = (radius < self.radius22) | (radius > self.radius12)
+        return tf.where(out_of_bounds, tf.zeros_like(radius), tf.ones_like(radius))
 
     def plot(self, pts=None, filename=None, lines=None):
         """ Plot the ring. """
+        return
         patch = PolygonPatch(self.ring, facecolor='red',
                              alpha=0.5, zorder=1)
         fig = plt.figure()
@@ -121,7 +121,7 @@ class Ring:
     @property
     def area(self):
         """ Get the area of ring surface. """
-        return self.ring.area
+        return np.pi*(self.radius12 - self.radius22)
 
 
 def get_spline(inputs, widths, heights, derivatives):
@@ -224,35 +224,30 @@ def one_blob(xd, nbins_in):
 
 def main():
     """ Main function """
-    quadratic = False
-    tf.config.experimental_run_functions_eagerly(True)
+    quadratic = True
+    # tf.config.experimental_run_functions_eagerly(True)
     cheese = Ring(0.5, 0.2)
     print("Actual area is {}".format(cheese.area))
     bijectors = []
-    """
-    bijector = couplings.PiecewiseRationalQuadratic([1, 0], build,
-                                                    num_bins=10,
-                                                    blob=None,
-                                                    options=None)
-    """
+
     if quadratic:
         bijectors.append(couplings.PiecewiseQuadratic([1, 0], build,
-                                                    num_bins=10,
-                                                    blob=None,
-                                                    options=None))
+                                                      num_bins=10,
+                                                      blob=None,
+                                                      options=None))
         bijectors.append(couplings.PiecewiseQuadratic([0, 1], build,
-                                                    num_bins=10,
-                                                    blob=None,
-                                                    options=None))
+                                                      num_bins=10,
+                                                      blob=None,
+                                                      options=None))
     else:
         bijectors.append(couplings.PiecewiseRationalQuadratic([1, 0], build,
-                                                    num_bins=10,
-                                                    blob=None,
-                                                    options=None))
+                                                              num_bins=10,
+                                                              blob=None,
+                                                              options=None))
         bijectors.append(couplings.PiecewiseRationalQuadratic([0, 1], build,
-                                                    num_bins=10,
-                                                    blob=None,
-                                                    options=None))
+                                                              num_bins=10,
+                                                              blob=None,
+                                                              options=None))
 
     bijector = tfp.bijectors.Chain(list(reversed(bijectors)))
     low = np.array([0, 0], dtype=np.float64)
@@ -271,14 +266,14 @@ def main():
     if not quadratic:
         num = 0
         for elem in dist.bijector.bijectors:
-        
+
             for i in range(5):
                 point = float(i)/10.0 + 0.1
                 # transform_params = bijector.transform_net(
                 #     one_blob(np.array([[point]]), 16))
                 #transform_params = bijector.transform_net(np.array([[point]]))
                 transform_params = elem.transform_net(np.array([[point]]))
-            
+
                 widths = transform_params[..., :10]
                 heights = transform_params[..., 10:20]
                 derivatives = transform_params[..., 20:]
@@ -287,7 +282,7 @@ def main():
             plt.savefig('pretraining_{}.png'.format(num))
             plt.show()
             num += 1
-    
+
     cheese.plot(filename='cheese', lines=True)
 
     for epoch in range(300):
@@ -297,7 +292,7 @@ def main():
             print('Epoch: {:3d} Loss = {:8e} Integral = '
                   '{:8e} +/- {:8e}'.format(epoch, loss, integral, error))
     if not quadratic:
-        num = 0    
+        num = 0
         for elem in dist.bijector.bijectors:
             for i in range(5):
                 point = float(i)/10.0 + 0.1
@@ -313,9 +308,9 @@ def main():
             plt.savefig('posttraining_{}.png'.format(num))
             num += 1
             plt.show()
-    
+
     nsamples = 50000
-    hist2d_kwargs = {'smooth': 2, 'plot_datapoints': False}
+    hist2d_kwargs = {'smooth': 2, 'plot_datapoints': True, 'plot_contours': False, 'plot_density': False}
     pts = integrate.sample(nsamples)
     figure = corner.corner(pts, labels=[r'$x_{{{}}}$'.format(x)
                                         for x in range(2)],
