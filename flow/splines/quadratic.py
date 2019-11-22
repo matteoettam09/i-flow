@@ -96,8 +96,7 @@ def quadratic_spline(inputs,
 
     if inverse:
         c_ = c - inputs
-        alpha = tf.where(tf.abs(a) > 1e-16,
-                         (-b + tf.sqrt(b**2 - 4*a*c_)) / (2*a), -c_/b)
+        alpha = 2*c_/(-b-tf.sqrt(b**2 - 4*a*c_))
         outputs = alpha * input_bin_widths + input_bin_locations
     else:
         alpha = (inputs - input_bin_locations) / input_bin_widths
