@@ -313,7 +313,7 @@ void Foam_Channel::CreateRoot(Foam *const integrator,
 
 Foam::Foam():
   m_nopt(10000), m_nmax(1000000), m_error(0.01), m_scale (1.0),
-  m_apweight(1.0), m_cutfac(2.0),
+  m_apweight(1.0), m_cutfac(0.5),
   m_sum(0.0), m_sum2(0.0), m_max(0.0),
   m_np(0.0), m_nvp(0.0),
   m_smax(std::deque<double>(3,0.0)), 
