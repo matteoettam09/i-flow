@@ -96,7 +96,8 @@ class Ring:
         """ Calculate a ring like function. """
         radius = tf.reduce_sum((pts-0.5)**2, axis=-1)
         out_of_bounds = (radius < self.radius22) | (radius > self.radius12)
-        return tf.where(out_of_bounds, tf.zeros_like(radius), tf.ones_like(radius))
+        ret = tf.where(out_of_bounds, tf.zeros_like(radius), tf.ones_like(radius))
+        return ret
 
     def plot(self, pts=None, filename=None, lines=None):
         """ Plot the ring. """
@@ -197,7 +198,7 @@ def build(in_features, out_features, options):
 
     invals = tf.keras.layers.Input(in_features, dtype=tf.float64)
     hidden = tf.keras.layers.Dense(128, activation='relu')(invals)
-    hidden = tf.keras.layers.Dense(128, activation='relu')(hidden)
+    #hidden = tf.keras.layers.Dense(128, activation='relu')(hidden)
     hidden = tf.keras.layers.Dense(128, activation='relu')(hidden)
     hidden = tf.keras.layers.Dense(128, activation='relu')(hidden)
     outputs = tf.keras.layers.Dense(out_features, bias_initializer='zeros',
@@ -224,28 +225,38 @@ def one_blob(xd, nbins_in):
 
 def main():
     """ Main function """
-    quadratic = True
+    quadratic = False
     # tf.config.experimental_run_functions_eagerly(True)
-    cheese = Ring(0.5, 0.2)
+
+    outer, inner = 0.45, 0.2
+    cheese = Ring(outer, inner)
     print("Actual area is {}".format(cheese.area))
     bijectors = []
-
+    num_bins = 6
     if quadratic:
         bijectors.append(couplings.PiecewiseQuadratic([1, 0], build,
-                                                      num_bins=10,
+                                                      num_bins=num_bins,
                                                       blob=None,
                                                       options=None))
         bijectors.append(couplings.PiecewiseQuadratic([0, 1], build,
-                                                      num_bins=10,
+                                                      num_bins=num_bins,
                                                       blob=None,
                                                       options=None))
     else:
         bijectors.append(couplings.PiecewiseRationalQuadratic([1, 0], build,
-                                                              num_bins=10,
+                                                              num_bins=num_bins,
                                                               blob=None,
                                                               options=None))
         bijectors.append(couplings.PiecewiseRationalQuadratic([0, 1], build,
-                                                              num_bins=10,
+                                                              num_bins=num_bins,
+                                                              blob=None,
+                                                              options=None))
+        bijectors.append(couplings.PiecewiseRationalQuadratic([1, 0], build,
+                                                              num_bins=num_bins,
+                                                              blob=None,
+                                                              options=None))
+        bijectors.append(couplings.PiecewiseRationalQuadratic([0, 1], build,
+                                                              num_bins=num_bins,
                                                               blob=None,
                                                               options=None))
 
@@ -259,7 +270,7 @@ def main():
         distribution=dist,
         bijector=bijector)
     lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
-        2e-3, decay_steps=75, decay_rate=0.5)
+        2e-3, decay_steps=100, decay_rate=0.5)
     optimizer = tf.keras.optimizers.Adam(lr_schedule, clipnorm=10.0)
     integrate = integrator.Integrator(cheese, dist, optimizer,
                                       loss_func='exponential')
@@ -274,9 +285,9 @@ def main():
                 #transform_params = bijector.transform_net(np.array([[point]]))
                 transform_params = elem.transform_net(np.array([[point]]))
 
-                widths = transform_params[..., :10]
-                heights = transform_params[..., 10:20]
-                derivatives = transform_params[..., 20:]
+                widths = transform_params[..., :num_bins]
+                heights = transform_params[..., num_bins:2*num_bins]
+                derivatives = transform_params[..., 2*num_bins:]
                 plot_spline(widths, heights, derivatives, COLOR[i])
 
             plt.savefig('pretraining_{}.png'.format(num))
@@ -286,7 +297,7 @@ def main():
     cheese.plot(filename='cheese', lines=True)
 
     for epoch in range(300):
-        loss, integral, error = integrate.train_one_step(8000,
+        loss, integral, error = integrate.train_one_step(10000,
                                                          integral=True)
         if epoch % 1 == 0:
             print('Epoch: {:3d} Loss = {:8e} Integral = '
@@ -300,26 +311,42 @@ def main():
                 #     one_blob(np.array([[point]]), 16))
                 #transform_params = bijector.transform_net(np.array([[point]]))
                 transform_params = elem.transform_net(np.array([[point]]))
-                widths = transform_params[..., :10]
-                heights = transform_params[..., 10:20]
-                derivatives = transform_params[..., 20:]
+                widths = transform_params[..., :num_bins]
+                heights = transform_params[..., num_bins:2*num_bins]
+                derivatives = transform_params[..., 2*num_bins:]
                 plot_spline(widths, heights, derivatives, COLOR[i])
 
             plt.savefig('posttraining_{}.png'.format(num))
             num += 1
             plt.show()
 
-    nsamples = 50000
-    hist2d_kwargs = {'smooth': 2, 'plot_datapoints': True, 'plot_contours': False, 'plot_density': False}
+    nsamples = 7500
+    #hist2d_kwargs = {'smooth': 2, 'plot_datapoints': True, 'plot_contours': False, 'plot_density': False}
     pts = integrate.sample(nsamples)
-    figure = corner.corner(pts, labels=[r'$x_{{{}}}$'.format(x)
-                                        for x in range(2)],
-                           show_titles=True,
-                           title_kwargs={'fontsize': 12},
-                           range=2*[[0, 1]],
-                           **hist2d_kwargs)
-    plt.savefig('ring_corner.png')
+    #figure = corner.corner(pts, labels=[r'$x_{{{}}}$'.format(x)
+    #                                    for x in range(2)],
+    #                       show_titles=True,
+    #                       title_kwargs={'fontsize': 12},
+    #                       range=2*[[0, 1]],
+    #                       **hist2d_kwargs)
+    #plt.savefig('ring_corner.png')
+    #plt.show()
+    fig = plt.figure(dpi=150,figsize=[4.,4.])
+    axis = fig.add_subplot(111)
+    radius = np.sqrt((pts[:, 0]-0.5)**2 + (pts[:, 1]-0.5)**2)
+    in_ring = np.logical_and(radius > inner, radius < outer)
+    print(np.unique(in_ring, return_counts=True))
+    color_ring = np.where(in_ring, 'blue', 'red')
+    inner_circle = plt.Circle((0.5, 0.5), inner, color='k', fill=False)
+    outer_circle = plt.Circle((0.5, 0.5), outer, color='k', fill=False)
+    plt.scatter(pts[:, 0], pts[:, 1], s=1, c=color_ring)#, zorder=2)
+    axis.add_artist(inner_circle)
+    axis.add_artist(outer_circle)
+    plt.xlim([0, 1])
+    plt.ylim([0, 1])
+    plt.savefig('ring.png')
     plt.show()
+
     plt.close()
 
     # todo:
