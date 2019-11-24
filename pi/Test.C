@@ -8,8 +8,6 @@ using namespace FOAM;
 
 class Camel: public Foam_Integrand {
 public:
-  bool m_fill;
-  Camel(): m_fill(false) {}
   double operator()(const std::vector<double> &point)
   {
     const double dx1=0.25, dy1=0.25, w1=1./0.004;
@@ -24,8 +22,6 @@ public:
 
 class Line: public Foam_Integrand {
 public:
-  bool m_fill;
-  Line(): m_fill(false) {}
   double operator()(const std::vector<double> &point)
   {
     const double w1=1./0.004, mm=0.01;
@@ -38,8 +34,6 @@ public:
 
 class Circle: public Foam_Integrand {
 public:
-  bool m_fill;
-  Circle(): m_fill(false) {}
   double operator()(const std::vector<double> &point)
   {
     const double dx1=0.4, dy1=0.6, rr=0.25, w1=1./0.004, ee=3.0;
