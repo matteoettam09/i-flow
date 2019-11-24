@@ -147,7 +147,7 @@ int main(int argc,char **argv)
   // set dimension
   integrator.SetDimension(2);
   // set max cell number
-  integrator.SetNCells(500);
+  integrator.SetNCells(10000);
   // set point number between optimization steps
   integrator.SetNOpt(1000);
   // set max point number
@@ -156,6 +156,13 @@ int main(int argc,char **argv)
   integrator.SetError(5.0e-4);
   // integrate
   integrator.Initialize();
+  int type(0);
+  if (argc>1) {
+    if (strcmp(argv[1],"camel")==0) type=0;
+    if (strcmp(argv[1],"line")==0) type=1;
+    if (strcmp(argv[1],"circle")==0) type=2;
+  }
+  if (type==0) {
   PRINT_INFO("Integrate camel");
   Camel camel;
   integrator.Integrate(&camel);
@@ -163,8 +170,8 @@ int main(int argc,char **argv)
   camel.m_fill=true;
   for (size_t i(0);i<1000000;++i) integrator.Point();
 #endif
-  /*
-  integrator.Initialize();
+  }
+  if (type==1) {
   PRINT_INFO("Integrate line");
   Line line;
   integrator.Integrate(&line);
@@ -172,7 +179,8 @@ int main(int argc,char **argv)
   line.m_fill=true;
   for (size_t i(0);i<1000000;++i) integrator.Point();
 #endif
-  integrator.Initialize();
+  }
+  if (type==2) {
   PRINT_INFO("Integrate circle");
   Circle circle;
   integrator.Integrate(&circle);
@@ -180,7 +188,7 @@ int main(int argc,char **argv)
   circle.m_fill=true;
   for (size_t i(0);i<1000000;++i) integrator.Point();
 #endif
-  */
+  }
 #ifdef USING__ROOT
   for (size_t i(0);i<s_objects.size();++i) {
     new TCanvas((s_objects[i].first+"_c").c_str(),

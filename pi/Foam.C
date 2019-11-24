@@ -236,7 +236,7 @@ void Foam_Channel::SelectSplitDimension(const std::vector<int> &nosplit)
     if (m_split<0) THROW(fatal_error,"No phase space points.");
     return;
   }
-  m_loss=0.0;
+  m_loss=Loss(0,0,0);
   double diff(0.0);
   size_t nbins(p_integrator->NBins());
   for (size_t dim(0);dim<m_this.size();++dim) {
