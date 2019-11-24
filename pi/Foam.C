@@ -181,7 +181,7 @@ void Foam_Channel::Reset()
     m_sum*=m_weight;
     m_sum2*=sqr(m_weight);
     m_max*=m_weight;
-    m_loss=p_integrator->Loss(this);
+    SelectSplitDimension(p_integrator->NoSplit());
   }
 }
 
@@ -219,22 +219,35 @@ void Foam_Channel::Store()
   m_ssum2+=m_sum2;
 }
 
+double Foam_Channel::Loss
+(const size_t &dim,size_t start,size_t end) const
+{
+  if (m_points.empty()) THROW(fatal_error,"No data points");
+  if (end==start) end=m_points.size();
+  double n(0.0), s2(0.0), w(m_weight);
+  for (size_t i(start);i<end;++i) s2+=sqr(m_points[i].second*w);
+  s2/=end-start;
+  return s2;
+}
+
 void Foam_Channel::SelectSplitDimension(const std::vector<int> &nosplit)
 {
   if (m_points.empty()) {
     if (m_split<0) THROW(fatal_error,"No phase space points.");
     return;
   }
+  m_loss=0.0;
   double diff(0.0);
+  size_t nbins(p_integrator->NBins());
   for (size_t dim(0);dim<m_this.size();++dim) {
     if (nosplit.at(dim)) continue;
     std::sort(m_points.begin(),m_points.end(),Order_X(dim));
-    size_t nbins(10), nstep(m_points.size()/nbins);
-    int nrem(m_points.size()%nbins);
+    int nstep(m_points.size()/nbins), nrem(m_points.size()%nbins);
     if (nrem) ++nstep;
     double sum(0.0), sum2(0.0); 
     for (size_t i(0);i<m_points.size();) {
-      double s2(p_integrator->Loss(this,dim,i,i+nstep));
+      double s2(Loss(dim,i,i+nstep));
+      if (s2>m_loss) m_loss=s2;
       sum+=s2;
       sum2+=s2*s2;
       i+=nstep;
@@ -246,7 +259,6 @@ void Foam_Channel::SelectSplitDimension(const std::vector<int> &nosplit)
       m_split=dim;
     }
   }
-  m_loss=p_integrator->Loss(this);
   if (!p_integrator->StorePoints()) DeletePoints();
 }
 
@@ -313,11 +325,11 @@ void Foam_Channel::CreateRoot(Foam *const integrator,
 
 Foam::Foam():
   m_nopt(10000), m_nmax(1000000), m_error(0.01), m_scale (1.0),
-  m_apweight(1.0), m_cutfac(0.5),
+  m_apweight(1.0),
   m_sum(0.0), m_sum2(0.0), m_max(0.0),
   m_np(0.0), m_nvp(0.0),
   m_smax(std::deque<double>(3,0.0)), 
-  m_ncells(1000), m_split(1), m_shuffle(1), m_last(0), 
+  m_ncells(1000), m_split(1), m_shuffle(1), m_last(0), m_nbins(8), 
   m_store(0),
   m_rmode(rmc::none),
   m_vname("I") {}
@@ -743,26 +755,6 @@ void Foam::Split(const size_t dim,
     m_channels[i]->SetAlpha(alpha);
     m_channels[i]->SaveAlpha();
   }
-}
-
-double Foam::Loss(const Foam_Channel *c,const size_t &dim,
-		  size_t start,size_t end) const
-{
-  const Foam_Channel::Point_Vector &points(c->GetPoints());
-  if (points.empty()) THROW(fatal_error,"No data points");
-  if (end==start) end=points.size();
-  double m(0.0), avg(0.0);
-  for (size_t i(start);i<end;++i) {
-    if (points[i].second) ++m;
-    avg+=dabs(points[i].second);
-  }
-  if (m) avg/=m;
-  double n(0.0), s2(0.0), w(c->Weight());
-  for (size_t i(start);i<end;++i)
-    if (points[i].second) s2+=sqr(points[i].second*w);
-    else s2+=sqr(m_cutfac*avg*w);
-  s2/=end-start;
-  return s2;
 }
 
 void Foam::SetMin(const std::vector<double> &min) 

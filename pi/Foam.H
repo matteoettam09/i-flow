@@ -93,14 +93,16 @@ namespace FOAM {
     friend std::ostream &
     operator<<(std::ostream &str,const Foam_Channel &channel);
 
+    double Loss(const size_t &dim,size_t start,size_t end) const;
+
     Foam_Channel(Foam *const integrator);
     
   public:
     
     // constructor
     Foam_Channel(Foam *const integrator,
-		      Foam_Channel *const prev,const size_t i,
-		      const double &pos=std::numeric_limits<double>::max());
+		 Foam_Channel *const prev,const size_t i,
+		 const double &pos=std::numeric_limits<double>::max());
     /*!
       \fn Foam_Channel(Foam_Channel *const prev,const size_t i,
       const double &pos=std::numeric_limits<double>::max())
@@ -376,7 +378,7 @@ namespace FOAM {
 
     long unsigned int m_nopt, m_nmax, m_ndiced;
 
-    double m_error, m_scale, m_apweight, m_cutfac;
+    double m_error, m_scale, m_apweight;
     double m_sum, m_sum2, m_max, m_np, m_nvp;
 
     std::deque<double> m_smax;
@@ -388,7 +390,7 @@ namespace FOAM {
 
     Foam_Integrand *p_function;
 
-    size_t m_ncells, m_split, m_shuffle, m_last;
+    size_t m_ncells, m_split, m_shuffle, m_last, m_nbins;
 
     int       m_store;
     rmc::code m_rmode;
@@ -521,10 +523,18 @@ namespace FOAM {
       determines, whether the integration domain is allowed to be split again.
     */
 
-    double Loss(const Foam_Channel *c,const size_t &dim=0,
-		size_t start=0,size_t end=0) const;
-
     // inline functions
+    inline const std::vector<int> &NoSplit() const { return m_nosplit; }
+    /*!
+      \fn const std::vector<int> &NoSplit() const
+      \brief Returns the dimensions not to be split
+    */
+    inline size_t NBins() const { return m_nbins; }
+    /*!
+      \fn size_t NBins() const
+      \brief Returns the number of bins for the loss analysis.
+    */
+
     inline void SetNOpt(const long unsigned int &nopt) { m_nopt=nopt; }
     /*!
       \fn inline void SetNOpt(const long unsigned int &nopt)
@@ -579,10 +589,10 @@ namespace FOAM {
       \fn inline void SetShuffleMode(const size_t shuffle)
       \brief Sets the shuffle mode. If set to 0 weights will not be shuffled.
     */
-    inline void SetCutFactor(const double cutfac) { m_cutfac=cutfac; }
+    inline void SetNBins(const size_t nbins) { m_nbins=nbins; }
     /*!
-      \fn inline void SetCutFactor(const double cutfac)
-      \brief Sets the cut weight factor.
+      \fn inline void SetNBins(const size_t nbins)
+      \brief Sets the number of bins for the loss analysis.
     */
 
     inline void SetFunction(Foam_Integrand *const function)
