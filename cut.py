@@ -233,31 +233,32 @@ def main():
     print("Actual area is {}".format(cheese.area))
     bijectors = []
     num_bins = 6
+    num_blob = None
     if quadratic:
         bijectors.append(couplings.PiecewiseQuadratic([1, 0], build,
                                                       num_bins=num_bins,
-                                                      blob=None,
+                                                      blob=num_blob,
                                                       options=None))
         bijectors.append(couplings.PiecewiseQuadratic([0, 1], build,
                                                       num_bins=num_bins,
-                                                      blob=None,
+                                                      blob=num_blob,
                                                       options=None))
     else:
         bijectors.append(couplings.PiecewiseRationalQuadratic([1, 0], build,
                                                               num_bins=num_bins,
-                                                              blob=None,
+                                                              blob=num_blob,
                                                               options=None))
         bijectors.append(couplings.PiecewiseRationalQuadratic([0, 1], build,
                                                               num_bins=num_bins,
-                                                              blob=None,
+                                                              blob=num_blob,
                                                               options=None))
         bijectors.append(couplings.PiecewiseRationalQuadratic([1, 0], build,
                                                               num_bins=num_bins,
-                                                              blob=None,
+                                                              blob=num_blob,
                                                               options=None))
         bijectors.append(couplings.PiecewiseRationalQuadratic([0, 1], build,
                                                               num_bins=num_bins,
-                                                              blob=None,
+                                                              blob=num_blob,
                                                               options=None))
 
     bijector = tfp.bijectors.Chain(list(reversed(bijectors)))
@@ -337,22 +338,28 @@ def main():
     in_ring = np.logical_and(radius > inner, radius < outer)
     print(np.unique(in_ring, return_counts=True))
     color_ring = np.where(in_ring, 'blue', 'red')
+    print(color_ring)
     inner_circle = plt.Circle((0.5, 0.5), inner, color='k', fill=False)
     outer_circle = plt.Circle((0.5, 0.5), outer, color='k', fill=False)
-    plt.scatter(pts[:, 0], pts[:, 1], s=1, c=color_ring)#, zorder=2)
+    plt.scatter(pts[:, 0], pts[:, 1], s=1, color=color_ring)#, zorder=2)
     axis.add_artist(inner_circle)
     axis.add_artist(outer_circle)
     plt.xlim([0, 1])
     plt.ylim([0, 1])
     plt.savefig('ring.png')
     plt.show()
-
     plt.close()
 
-    # todo:
-    # second dim
-    # corner visualization
-    # check quadratic
+    fig = plt.figure(dpi=150,figsize=[4.,4.])
+    axis = fig.add_subplot(111)
+
+    pts = np.random.rand(nsamples, 2)
+    pvalue = cheese(pts)
+    qvalue = integrate.dist.prob(pts)
+    plt.scatter(qvalue.numpy(), pvalue.numpy(), s=1, color=color_ring)
+    plt.savefig('pq_scatter.png')
+    plt.show()
+    plt.close()
 
 if __name__ == '__main__':
     main()
