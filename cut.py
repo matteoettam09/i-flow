@@ -17,7 +17,7 @@ tfd = tfp.distributions  # pylint: disable=invalid-name
 tf.keras.backend.set_floatx('float64')
 
 CUT_VALUE = 0.05
-ALPHA = 1.0
+ALPHA = -1.0
 COLOR = ['red', 'magenta', 'green', 'blue', 'black']
 
 
@@ -273,7 +273,7 @@ def main():
     lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
         2e-3, decay_steps=100, decay_rate=0.5)
     optimizer = tf.keras.optimizers.Adam(lr_schedule, clipnorm=10.0)
-    integrate = integrator.Integrator(cheese, dist, optimizer,
+    integrate = integrator.Integrator(func, dist, optimizer,
                                       loss_func='exponential')
     if not quadratic:
         num = 0
@@ -332,31 +332,31 @@ def main():
     #                       **hist2d_kwargs)
     #plt.savefig('ring_corner.png')
     #plt.show()
-    fig = plt.figure(dpi=150,figsize=[4.,4.])
-    axis = fig.add_subplot(111)
-    radius = np.sqrt((pts[:, 0]-0.5)**2 + (pts[:, 1]-0.5)**2)
-    in_ring = np.logical_and(radius > inner, radius < outer)
-    print(np.unique(in_ring, return_counts=True))
-    color_ring = np.where(in_ring, 'blue', 'red')
-    print(color_ring)
-    inner_circle = plt.Circle((0.5, 0.5), inner, color='k', fill=False)
-    outer_circle = plt.Circle((0.5, 0.5), outer, color='k', fill=False)
-    plt.scatter(pts[:, 0], pts[:, 1], s=1, color=color_ring)#, zorder=2)
-    axis.add_artist(inner_circle)
-    axis.add_artist(outer_circle)
-    plt.xlim([0, 1])
-    plt.ylim([0, 1])
-    plt.savefig('ring.png')
-    plt.show()
-    plt.close()
+    # fig = plt.figure(dpi=150,figsize=[4.,4.])
+    # axis = fig.add_subplot(111)
+    # radius = np.sqrt((pts[:, 0]-0.5)**2 + (pts[:, 1]-0.5)**2)
+    # in_ring = np.logical_and(radius > inner, radius < outer)
+    # print(np.unique(in_ring, return_counts=True))
+    # color_ring = np.where(in_ring, 'blue', 'red')
+    # print(color_ring)
+    # inner_circle = plt.Circle((0.5, 0.5), inner, color='k', fill=False)
+    # outer_circle = plt.Circle((0.5, 0.5), outer, color='k', fill=False)
+    # plt.scatter(pts[:, 0], pts[:, 1], s=1, color=color_ring)#, zorder=2)
+    # axis.add_artist(inner_circle)
+    # axis.add_artist(outer_circle)
+    # plt.xlim([0, 1])
+    # plt.ylim([0, 1])
+    # plt.savefig('ring.png')
+    # plt.show()
+    # plt.close()
 
     fig = plt.figure(dpi=150,figsize=[4.,4.])
     axis = fig.add_subplot(111)
 
     pts = np.random.rand(nsamples, 2)
-    pvalue = cheese(pts)
+    pvalue = func(pts)
     qvalue = integrate.dist.prob(pts)
-    plt.scatter(qvalue.numpy(), pvalue.numpy(), s=1, color=color_ring)
+    plt.scatter(qvalue.numpy(), pvalue.numpy(), s=1)#, color=color_ring)
     plt.savefig('pq_scatter.png')
     plt.show()
     plt.close()

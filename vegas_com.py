@@ -122,38 +122,74 @@ class TestFunctions:
                                    + (x[..., 0]-1.0+dx1)**2-rr**2)))
         return res
 
-    def box_integral(self, x):
-        def dot2(mom):
-            return mom[..., 0]**2 - (mom[..., 1]**2 
-                                     + mom[..., 2]**2 
-                                     + mom[..., 3]**2)
+    class triangle_integral:
 
-        if self.ndims != 4:
-            raise "ndims must be equal to 6 for the box integral!"
-        energy = np.sqrt(self.variables['s'])/2.0
-        theta = self.variables['angle']
-        mom1 = np.array([energy, 0, 0, energy])
-        mom2 = np.array([energy, 0, 0, -energy])
-        mom3 = np.array([energy, energy*np.sin(theta),
-                         0, energy*np.cos(theta)])
-        mom4 = np.array([energy, -energy*np.sin(theta),
-                         0, -energy*np.cos(theta)])
+        def __init__(self, mass_ext=None, mass_int=None):
+            if len(mass_ext) != 3:
+                raise ValueError('Triangle requires 3 external masses')
+            if len(mass_int) != 3:
+                raise ValueError('Triangle requires 3 external masses')
+            self.mass_ext = np.array(mass_ext)**2
+            self.mass_int = np.array(mass_int)**2
 
-        mag = x[..., 0]/(1 - x[..., 0])
-        theta = 2*np.pi*x[..., 1]
-        cphi = 2*x[..., 2] - 1.0
-        sphi = np.sqrt(1 - cphi**2)
-        comega = 2*x[..., 3] - 1.0
-        somega = np.sqrt(1 - comega**2)
-        dps = 8*np.pi/(1 - x[..., 0])**2
-        loop_mom = np.array([mag*np.cos(theta),
-                             mag*np.sin(theta)*sphi*comega,
-                             mag*np.sin(theta)*sphi*somega,
-                             mag*np.sin(theta)*cphi]).T
+        def FTri(self, t1, t2, perm):
+            return (-self.mass_ext[perm[0]]*t1
+                    -self.mass_ext[perm[1]]*t1*t2
+                    -self.mass_ext[perm[2]]*t2
+                    + (1 + t1 + t2)
+                    * (t1*self.mass_int[perm[0]]
+                       + t2*self.mass_int[perm[1]]
+                       + self.mass_int[perm[2]]))
 
-        denominator = (dot2(loop_mom)*dot2(loop_mom+mom1)
-                       * dot2(loop_mom+mom1+mom2)*dot2(loop_mom+mom4))
-        return dps/denominator
+        def __call__(self, x):
+            numerator = (1 + x[..., 0] + x[..., 1])**-1.0
+            denominator1 = self.FTri(x[..., 0], x[..., 1], [1, 2, 0])
+            denominator2 = self.FTri(x[..., 0], x[..., 1], [2, 0, 1])
+            denominator3 = self.FTri(x[..., 0], x[..., 1], [0, 1, 2])
+
+            return -numerator/denominator1-numerator/denominator2-numerator/denominator3
+
+    class box_integral:
+
+        def __init__(self, s12, s23, mass_ext=None, mass_int=None):
+            if len(mass_ext) != 4:
+                raise ValueError('Box requires 4 external masses')
+            if len(mass_int) != 4:
+                raise ValueError('Box requires 4 external masses')
+            self.mass_ext = np.array(mass_ext)**2
+            self.mass_int = np.array(mass_int)**2
+            self.s12 = s12
+            self.s23 = s23
+
+        def FBox(self, s12, s23, t1, t2, t3, perm):
+            return (-s12*t2
+                    -s23*t1*t3
+                    -self.mass_ext[perm[0]]*t1
+                    -self.mass_ext[perm[1]]*t1*t2
+                    -self.mass_ext[perm[2]]*t2*t3
+                    -self.mass_ext[perm[3]]*t3
+                    +(1+t1+t2+t3)
+                    *(t1*self.mass_int[perm[0]]+t2*self.mass_int[perm[1]]
+                      +t3*self.mass_int[perm[2]]+self.mass_int[perm[3]]))
+
+        def __call__(self, x):
+            denominator1 = self.FBox(self.s23, self.s12,
+                                     x[..., 0], x[..., 1], x[..., 2],
+                                     [1, 2, 3, 0])
+            denominator2 = self.FBox(self.s12, self.s23,
+                                     x[..., 0], x[..., 1], x[..., 2],
+                                     [2, 3, 0, 1])
+            denominator3 = self.FBox(self.s23, self.s12,
+                                     x[..., 0], x[..., 1], x[..., 2],
+                                     [3, 0, 1, 2])
+            denominator4 = self.FBox(self.s12, self.s23,
+                                     x[..., 0], x[..., 1], x[..., 2],
+                                     [0, 1, 2, 3])
+
+            return (1.0/denominator1**2
+                    +1.0/denominator2**2
+                    +1.0/denominator3**2
+                    +1.0/denominator4**2)
 
 
 def run_vegas(func, ndims, ptspepoch, epochs):
@@ -174,7 +210,7 @@ def run_vegas(func, ndims, ptspepoch, epochs):
     stddevs = []
 
     mean, stddev = evaluate(func, integ, ptspepoch)
-    print("Result = {:.3f} +/- {:.3f} ".format(mean, stddev))
+    print("Result = {:.3e} +/- {:.3e} ".format(mean, stddev))
     means.append(mean)
     stddevs.append(stddev)
 
@@ -320,19 +356,28 @@ def main(argv):
     del argv
     tf.config.experimental_run_functions_eagerly(True)
 
-    ndims = 4
+    # Box: ndims = 3, Triangle: ndims = 2
+    ndims = 3
     alpha = 0.1
 
-    npts = 100000
+    npts = 10
     pts = np.random.rand(npts, ndims)
 
     # select function:
     func = TestFunctions(ndims, alpha, s=100, angle=np.pi/2.0)
+    # tri_integral = func.triangle_integral([0, 0, 125],
+    #                                       [175, 175, 175])
+    box_integral = func.box_integral(130**2, -130**2/2.0,
+                                     [0, 0, 0, 125],
+                                     [175, 175, 175, 175])
 
-    value = func.box_integral(pts)
+    # value = func.box_integral(pts)
+    value = box_integral(pts)
 
     format_string = ('Crude MC of {} function in {:d} dimensions: '
-                     '{:.3f} +/- {:.3f}')
+                     '{:.3e} +/- {:.3e}')
+    # print(format_string.format('Triangle', ndims, np.mean(value),
+    #                            np.std(value)/np.sqrt(npts)))
     print(format_string.format('Box', ndims, np.mean(value),
                                np.std(value)/np.sqrt(npts)))
 
@@ -340,12 +385,17 @@ def main(argv):
     ptspepoch = 5000
     x_values = np.arange(0, (epochs + 1) * ptspepoch, ptspepoch)
 
-    vegas_mean, vegas_err = run_vegas(func.box_integral, ndims, ptspepoch, epochs)
-    iflow_mean, iflow_err = run_iflow(func.box_integral, ndims, ptspepoch, epochs)
+    # vegas_mean, vegas_err = run_vegas(tri_integral, ndims, ptspepoch, epochs)
+    # iflow_mean, iflow_err = run_iflow(tri_integral, ndims, ptspepoch, epochs)
+    vegas_mean, vegas_err = run_vegas(box_integral, ndims, ptspepoch, epochs)
+    iflow_mean, iflow_err = run_iflow(box_integral, ndims, ptspepoch, epochs)
     plt.figure(dpi=150, figsize=[5., 4.])
     plt.xlim(0., epochs * ptspepoch)
     plt.xlabel('Evaluations in training')
-    plt.ylim(0., 2.)
+    # Limits for triangle
+    # plt.ylim(-2.5e-5, -0.5e-5)
+    # Limits for box
+    plt.ylim(1.8e-10, 2.0e-10)
     plt.ylabel('Integral value')
     # plt.yscale('log')
 
@@ -360,25 +410,32 @@ def main(argv):
                      color='r', alpha=0.5)
 
     # True value
-    plt.plot([0., epochs * ptspepoch], [1., 1.], ls='--', color='k')
+    # Triangle:
+    # true_value = -1.70721682537767509e-5
+    # Box:
+    true_value = 1.93696402386819321e-10
+    plt.plot([0., epochs * ptspepoch], [true_value, true_value],
+             ls='--', color='k')
     # plt.title('VEGAS integral')
-    plt.savefig('camel_{}.png'.format(ndims), bbox_inches='tight')
+    # plt.savefig('triangle.png', bbox_inches='tight')
+    plt.savefig('box.png', bbox_inches='tight')
     plt.show()
 
     plt.figure(dpi=150, figsize=[5., 4.])
     plt.xlim(0., epochs * ptspepoch)
     plt.xlabel('Evaluations in training')
-    plt.ylim(1e-4, 1e1)
+    plt.ylim(1e-5, 1e1)
     plt.ylabel('Integral uncertainty (%)')
     plt.yscale('log')
     # Plot Vegas
-    plt.plot(x_values, vegas_err/vegas_mean, color='b')
+    plt.plot(x_values, vegas_err/np.abs(vegas_mean), color='b')
 
     # Plot iflow
-    plt.plot(x_values, iflow_err/iflow_mean, color='r')
+    plt.plot(x_values, iflow_err/np.abs(iflow_mean), color='r')
 
     # plt.title('VEGAS uncertainty')
-    plt.savefig('camel_{}_unc.png'.format(ndims), bbox_inches='tight')
+    # plt.savefig('triangle_unc.png', bbox_inches='tight')
+    plt.savefig('box_unc.png', bbox_inches='tight')
     plt.show()
 
 
