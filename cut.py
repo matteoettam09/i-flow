@@ -26,6 +26,11 @@ def func(pts_x):
     return tf.where(pts_x[:, 0] > CUT_VALUE, tf.pow(pts_x[:, 0], -ALPHA), 0)
 
 
+def func2(pts_x):
+    """ Calculate exponential function. """
+    return tf.exp(-(2*pts_x[:, 0]-1))
+
+
 class Cheese:
     """ Class to store the cheese function. """
 
@@ -101,18 +106,14 @@ class Ring:
 
     def plot(self, pts=None, filename=None, lines=None):
         """ Plot the ring. """
-        return
-        patch = PolygonPatch(self.ring, facecolor='red',
-                             alpha=0.5, zorder=1)
         fig = plt.figure()
-        axis = fig.add_subplot(111)
+        _ = fig.add_subplot(111)
         if pts is not None:
             plt.scatter(pts[:, 0], pts[:, 1], s=5, zorder=2)
         if lines is not None:
             for i in range(5):
                 position = float(i)/10.0 + 0.1
                 plt.axvline(x=position, color=COLOR[i])
-        axis.add_patch(patch)
         plt.xlim([0, 1])
         plt.ylim([0, 1])
         if filename is not None:
@@ -248,18 +249,18 @@ def main():
                                                               num_bins=num_bins,
                                                               blob=num_blob,
                                                               options=None))
-        bijectors.append(couplings.PiecewiseRationalQuadratic([0, 1], build,
-                                                              num_bins=num_bins,
-                                                              blob=num_blob,
-                                                              options=None))
-        bijectors.append(couplings.PiecewiseRationalQuadratic([1, 0], build,
-                                                              num_bins=num_bins,
-                                                              blob=num_blob,
-                                                              options=None))
-        bijectors.append(couplings.PiecewiseRationalQuadratic([0, 1], build,
-                                                              num_bins=num_bins,
-                                                              blob=num_blob,
-                                                              options=None))
+        # bijectors.append(couplings.PiecewiseRationalQuadratic([0, 1], build,
+        #                                                       num_bins=num_bins,
+        #                                                       blob=num_blob,
+        #                                                       options=None))
+        # bijectors.append(couplings.PiecewiseRationalQuadratic([1, 0], build,
+        #                                                       num_bins=num_bins,
+        #                                                       blob=num_blob,
+        #                                                       options=None))
+        # bijectors.append(couplings.PiecewiseRationalQuadratic([0, 1], build,
+        #                                                       num_bins=num_bins,
+        #                                                       blob=num_blob,
+        #                                                       options=None))
 
     bijector = tfp.bijectors.Chain(list(reversed(bijectors)))
     low = np.array([0, 0], dtype=np.float64)
@@ -273,7 +274,7 @@ def main():
     lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
         2e-3, decay_steps=100, decay_rate=0.5)
     optimizer = tf.keras.optimizers.Adam(lr_schedule, clipnorm=10.0)
-    integrate = integrator.Integrator(func, dist, optimizer,
+    integrate = integrator.Integrator(func2, dist, optimizer,
                                       loss_func='exponential')
     if not quadratic:
         num = 0
@@ -303,6 +304,21 @@ def main():
         if epoch % 1 == 0:
             print('Epoch: {:3d} Loss = {:8e} Integral = '
                   '{:8e} +/- {:8e}'.format(epoch, loss, integral, error))
+
+        if epoch % 10 == 0:
+            fig = plt.figure(dpi=150, figsize=[4., 4.])
+            _ = fig.add_subplot(111)
+
+            nsamples = 10000
+            pts = np.random.rand(nsamples, 2)
+            pvalue = func2(pts)
+            qvalue = integrate.dist.prob(pts)
+            plt.scatter(qvalue.numpy(), pvalue.numpy(), s=1)#, color=color_ring)
+            plt.xlim([0, 3])
+            plt.ylim([0, 3])
+            plt.savefig('pq_scatter_{:04d}.png'.format(epoch))
+            plt.close()
+
     if not quadratic:
         num = 0
         for elem in dist.bijector.bijectors:
@@ -322,16 +338,19 @@ def main():
             plt.show()
 
     nsamples = 7500
-    #hist2d_kwargs = {'smooth': 2, 'plot_datapoints': True, 'plot_contours': False, 'plot_density': False}
+    # hist2d_kwargs = {'smooth': 2,
+    #                  'plot_datapoints': True,
+    #                  'plot_contours': False,
+    #                  'plot_density': False}
     pts = integrate.sample(nsamples)
-    #figure = corner.corner(pts, labels=[r'$x_{{{}}}$'.format(x)
-    #                                    for x in range(2)],
-    #                       show_titles=True,
-    #                       title_kwargs={'fontsize': 12},
-    #                       range=2*[[0, 1]],
-    #                       **hist2d_kwargs)
-    #plt.savefig('ring_corner.png')
-    #plt.show()
+    # figure = corner.corner(pts, labels=[r'$x_{{{}}}$'.format(x)
+    #                                     for x in range(2)],
+    #                        show_titles=True,
+    #                        title_kwargs={'fontsize': 12},
+    #                        range=2*[[0, 1]],
+    #                        **hist2d_kwargs)
+    # plt.savefig('ring_corner.png')
+    # plt.show()
     # fig = plt.figure(dpi=150,figsize=[4.,4.])
     # axis = fig.add_subplot(111)
     # radius = np.sqrt((pts[:, 0]-0.5)**2 + (pts[:, 1]-0.5)**2)
@@ -350,11 +369,11 @@ def main():
     # plt.show()
     # plt.close()
 
-    fig = plt.figure(dpi=150,figsize=[4.,4.])
-    axis = fig.add_subplot(111)
+    fig = plt.figure(dpi=150, figsize=[4., 4.])
+    _ = fig.add_subplot(111)
 
     pts = np.random.rand(nsamples, 2)
-    pvalue = func(pts)
+    pvalue = func2(pts)
     qvalue = integrate.dist.prob(pts)
     plt.scatter(qvalue.numpy(), pvalue.numpy(), s=1)#, color=color_ring)
     plt.savefig('pq_scatter.png')
