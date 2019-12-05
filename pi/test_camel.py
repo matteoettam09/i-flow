@@ -24,7 +24,6 @@ integrator.SetNCells(500)
 integrator.SetNOpt(1000)
 integrator.SetNMax(2000000)
 integrator.SetError(5.0e-4)
-integrator.SetMode(0)
 integrator.Initialize()
 integrator.Integrate(func)
 
