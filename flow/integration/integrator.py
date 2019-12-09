@@ -56,6 +56,12 @@ class Integrator():
         self.divergence = divergences.Divergence(**kwargs)
         # self.loss_func = sinkhorn.sinkhorn_loss
         self.loss_func = self.divergence(loss_func)
+        self.samples = tf.constant(self.dist.sample(1))
+        self.ckpt_manager = None
+
+    def manager(self, ckpt_manager):
+        """ Set the check point manager """ 
+        self.ckpt_manager = ckpt_manager
 
     @tf.function
     def train_one_step(self, nsamples, integral=False):
@@ -71,13 +77,16 @@ class Integrator():
             - uncertainty (optional): Integral statistical uncertainty
 
         """
+        samples = self.dist.sample(nsamples)
+        # self.samples = tf.concat([self.samples, samples], 0)
+        # if self.samples.shape[0] > 5001:
+        #     self.samples = self.samples[nsamples:]
+        true = tf.abs(self._func(samples))
         with tf.GradientTape() as tape:
-            samples = tf.stop_gradient(self.dist.sample(nsamples))
-            logq = self.dist.log_prob(samples)
             test = self.dist.prob(samples)
-            true = tf.abs(self._func(samples))
+            logq = self.dist.log_prob(samples)
             mean, var = tf.nn.moments(x=true/test, axes=[0])
-            true = tf.stop_gradient(true/mean + 1e-16)
+            true = tf.stop_gradient(true/mean)
             logp = tf.where(true > 1e-16, tf.math.log(true),
                             tf.math.log(true+1e-16))
             # loss = self.loss_func(samples, samples, 1e-1, true, test, 100)
@@ -204,15 +213,60 @@ class Integrator():
 
         # return avg_val, max_val
 
-    def save(self):
+    def save_weights(self):
         """ Save the network. """
         for j, bijector in enumerate(self.dist.bijector.bijectors):
             bijector.transform_net.save_weights(
                 './models/model_layer_{:02d}'.format(j))
 
-    def load(self):
+    def load_weights(self):
         """ Load the network. """
         for j, bijector in enumerate(self.dist.bijector.bijectors):
             bijector.transform_net.load_weights(
                 './models/model_layer_{:02d}'.format(j))
         print("Model loaded successfully")
+
+    def save(self):
+        """ Function to save a checkpoint of the model and optimizer,
+            as well as any other trackables in the checkpoint.
+            Note that the network architecture is not saved, so the same
+            network architecture must be used for the same saved and loaded
+            checkpoints (network arch can be saved if required).
+        """
+
+        if self.ckpt_manager is not None:
+            save_path = self.ckpt_manager.save()
+            print("Saved checkpoint at: {}".format(save_path))
+        else:
+            print("There is no checkpoint manager supplied for saving the "
+                  "network weights, optimizer, or other trackables.")
+            print("Therefore these will not be saved and the training will "
+                  "start from default values in the future.")
+            print("Consider using a checkpoint manager to save the network "
+                  "weights and optimizer.")
+
+    def load(self, loadname, checkpoint=None):
+        """ Function to load a checkpoint of the model and optimizer,
+            as well as any other trackables in the checkpoint.
+            Note that the network architecture is not saved, so the same
+            network architecture must be used for the same saved and loaded
+            checkpoints. Network arch can be loaded if it is saved.
+
+        Args:
+            loadname (str) : The postfix of the directory where the checkpoints
+                             are saved, e.g.,
+                             ckpt_dir = "./models/tf_ckpt_" + loadname + "/"
+            checkpoint (object): tf.train.checkpoint instance.
+        Returns:
+            Nothing returned.
+
+        """
+
+        ckpt_dir = "./models/tf_ckpt_" + loadname + "/"
+        if checkpoint is not None:
+            status = checkpoint.restore(tf.train.latest_checkpoint(ckpt_dir))
+            status.assert_consumed()
+            print("Loaded checkpoint")
+        else:
+            print("Not Loading any checkpoint")
+            print("Starting training from initial configuration")
