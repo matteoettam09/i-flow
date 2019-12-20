@@ -227,7 +227,7 @@ def one_blob(xd, nbins_in):
 def main():
     """ Main function """
     quadratic = False
-    # tf.config.experimental_run_functions_eagerly(True)
+    tf.config.experimental_run_functions_eagerly(True)
 
     outer, inner = 0.45, 0.2
     cheese = Ring(outer, inner)
@@ -276,66 +276,67 @@ def main():
     optimizer = tf.keras.optimizers.Adam(lr_schedule, clipnorm=10.0)
     integrate = integrator.Integrator(func2, dist, optimizer,
                                       loss_func='exponential')
-    if not quadratic:
-        num = 0
-        for elem in dist.bijector.bijectors:
+    # if not quadratic:
+    #     num = 0
+    #     for elem in dist.bijector.bijectors:
 
-            for i in range(5):
-                point = float(i)/10.0 + 0.1
-                # transform_params = bijector.transform_net(
-                #     one_blob(np.array([[point]]), 16))
-                #transform_params = bijector.transform_net(np.array([[point]]))
-                transform_params = elem.transform_net(np.array([[point]]))
+    #         for i in range(5):
+    #             point = float(i)/10.0 + 0.1
+    #             # transform_params = bijector.transform_net(
+    #             #     one_blob(np.array([[point]]), 16))
+    #             #transform_params = bijector.transform_net(np.array([[point]]))
+    #             transform_params = elem.transform_net(np.array([[point]]))
 
-                widths = transform_params[..., :num_bins]
-                heights = transform_params[..., num_bins:2*num_bins]
-                derivatives = transform_params[..., 2*num_bins:]
-                plot_spline(widths, heights, derivatives, COLOR[i])
+    #             widths = transform_params[..., :num_bins]
+    #             heights = transform_params[..., num_bins:2*num_bins]
+    #             derivatives = transform_params[..., 2*num_bins:]
+    #             plot_spline(widths, heights, derivatives, COLOR[i])
 
-            plt.savefig('pretraining_{}.png'.format(num))
-            plt.show()
-            num += 1
+    #         plt.savefig('pretraining_{}.png'.format(num))
+    #         plt.show()
+    #         num += 1
 
-    cheese.plot(filename='cheese', lines=True)
+    # cheese.plot(filename='cheese', lines=True)
 
     for epoch in range(300):
-        loss, integral, error = integrate.train_one_step(10000,
+        loss, integral, error = integrate.train_one_step(500,
                                                          integral=True)
         if epoch % 1 == 0:
             print('Epoch: {:3d} Loss = {:8e} Integral = '
                   '{:8e} +/- {:8e}'.format(epoch, loss, integral, error))
 
-        if epoch % 10 == 0:
-            fig = plt.figure(dpi=150, figsize=[4., 4.])
-            _ = fig.add_subplot(111)
+        # if epoch % 10 == 0:
+            # fig = plt.figure(dpi=150, figsize=[4., 4.])
+            # _ = fig.add_subplot(111)
 
-            nsamples = 10000
-            pts = np.random.rand(nsamples, 2)
-            pvalue = func2(pts)
-            qvalue = integrate.dist.prob(pts)
-            plt.scatter(qvalue.numpy(), pvalue.numpy(), s=1)#, color=color_ring)
-            plt.xlim([0, 3])
-            plt.ylim([0, 3])
-            plt.savefig('pq_scatter_{:04d}.png'.format(epoch))
-            plt.close()
+            # nsamples = 10000
+            # pts = np.random.rand(nsamples, 2)
+            # pvalue = func2(pts)
+            # qvalue = integrate.dist.prob(pts)
+            # np.save("pq_{:04d}".format(epoch), [pvalue, qvalue])
+            # plt.scatter(qvalue.numpy(), pvalue.numpy(), s=1)#, color=color_ring)
+            # plt.xlim([0, 3])
+            # plt.ylim([0, 3])
+            # plt.savefig('pq_scatter_{:04d}.png'.format(epoch))
+            # plt.close()
 
-    if not quadratic:
-        num = 0
-        for elem in dist.bijector.bijectors:
-            for i in range(5):
-                point = float(i)/10.0 + 0.1
-                # transform_params = bijector.transform_net(
-                #     one_blob(np.array([[point]]), 16))
-                #transform_params = bijector.transform_net(np.array([[point]]))
-                transform_params = elem.transform_net(np.array([[point]]))
-                widths = transform_params[..., :num_bins]
-                heights = transform_params[..., num_bins:2*num_bins]
-                derivatives = transform_params[..., 2*num_bins:]
-                plot_spline(widths, heights, derivatives, COLOR[i])
+    # if not quadratic:
+    #     num = 0
+    #     for elem in dist.bijector.bijectors:
+    #         for i in range(5):
+    #             point = float(i)/10.0 + 0.1
+    #             # transform_params = bijector.transform_net(
+    #             #     one_blob(np.array([[point]]), 16))
+    #             #transform_params = bijector.transform_net(np.array([[point]]))
+    #             transform_params = elem.transform_net(np.array([[point]]))
+    #             widths = transform_params[..., :num_bins]
+    #             heights = transform_params[..., num_bins:2*num_bins]
+    #             derivatives = transform_params[..., 2*num_bins:]
+    #             plot_spline(widths, heights, derivatives, COLOR[i])
 
-            plt.savefig('posttraining_{}.png'.format(num))
-            num += 1
-            plt.show()
+    #         plt.savefig('posttraining_{}.png'.format(num))
+    #         num += 1
+    #         plt.show()
 
     nsamples = 7500
     # hist2d_kwargs = {'smooth': 2,
@@ -369,16 +370,16 @@ def main():
     # plt.show()
     # plt.close()
 
-    fig = plt.figure(dpi=150, figsize=[4., 4.])
-    _ = fig.add_subplot(111)
+    # fig = plt.figure(dpi=150, figsize=[4., 4.])
+    # _ = fig.add_subplot(111)
 
-    pts = np.random.rand(nsamples, 2)
-    pvalue = func2(pts)
-    qvalue = integrate.dist.prob(pts)
-    plt.scatter(qvalue.numpy(), pvalue.numpy(), s=1)#, color=color_ring)
-    plt.savefig('pq_scatter.png')
-    plt.show()
-    plt.close()
+    # pts = np.random.rand(nsamples, 2)
+    # pvalue = func2(pts)
+    # qvalue = integrate.dist.prob(pts)
+    # plt.scatter(qvalue.numpy(), pvalue.numpy(), s=1)#, color=color_ring)
+    # plt.savefig('pq_scatter.png')
+    # plt.show()
+    # plt.close()
 
 if __name__ == '__main__':
     main()
