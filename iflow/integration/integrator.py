@@ -60,7 +60,7 @@ class Integrator():
         self.ckpt_manager = None
 
     def manager(self, ckpt_manager):
-        """ Set the check point manager """ 
+        """ Set the check point manager """
         self.ckpt_manager = ckpt_manager
 
     @tf.function

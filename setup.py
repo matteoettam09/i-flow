@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-""" Setup file for the flow integrator. """
+""" Setup file for the i-flow integrator. """
 
 from os import path
 
@@ -19,7 +19,7 @@ with open(path.join(HERE, 'README.md'), encoding='utf-8') as f:
     LONG_DESCRIPTION = f.read()
 
 setup(
-    name='flow',
+    name='iflow',
     version='1.0',
     description='Monte-Carlo Integration using Neural Networks',
     long_description=LONG_DESCRIPTION,
