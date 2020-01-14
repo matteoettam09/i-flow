@@ -32,6 +32,10 @@ flags.DEFINE_float('radius1', 0.45, 'The outer radius for the ring integrand',
                    short_name='r1')
 flags.DEFINE_float('radius2', 0.2, 'The inner radius for the ring integrand',
                    short_name='r2')
+flags.DEFINE_integer('epochs', 1000, 'Number of epochs to train',
+                     short_name='e')
+flags.DEFINE_integer('ptspepoch', 5000, 'Number of points to sample per epoch',
+                     short_name='p')
 
 
 class TestFunctions:
@@ -262,16 +266,14 @@ def binary_masks(ndims):
     return masks
 
 
-def run_iflow(func, ndims, ptspepoch, epochs):
-    """ Run the iflow integrator
+def build_iflow(func, ndims):
+    """ Build the iflow integrator
 
     Args:
         func: integrand
         ndims (int): dimensionality of the integrand
-        ptspepoch (int): number of points per epoch in training
-        epochs (int): number of epochs for training
 
-    Returns: (tuple): List of means and standard deviations for each epoch
+    Returns: Integrator: iflow Integrator object
 
     """
     masks = binary_masks(ndims)
@@ -295,6 +297,20 @@ def run_iflow(func, ndims, ptspepoch, epochs):
     integrate = integrator.Integrator(func, dist, optimizer,
                                       loss_func='exponential')
 
+    return integrate
+
+
+def train_iflow(integrate, ptspepoch, epochs):
+    """ Run the iflow integrator
+
+    Args:
+        integrate (Integrator): iflow Integrator class object
+        ptspepoch (int): number of points per epoch in training
+        epochs (int): number of epochs for training
+
+    Returns: (tuple): mean and stddev numpy arrays
+
+    """
     means = np.zeros(epochs+1)
     stddevs = np.zeros(epochs+1)
     for epoch in range(epochs+1):
@@ -306,6 +322,21 @@ def run_iflow(func, ndims, ptspepoch, epochs):
             print('Epoch: {:3d} Loss = {:8e} Integral = '
                   '{:8e} +/- {:8e}'.format(epoch, loss, integral, error))
 
+    return means, stddevs
+
+
+def sample_iflow(integrate, ptspepoch, epochs):
+    """ Sample from the iflow integrator
+
+    Args:
+        integrate (Integrator): iflow Integrator class object
+        ptspepoch (int): number of points per epoch in training
+        epochs (int): number of epochs for training
+
+    Returns: (tuple): mean and stddev numpy arrays
+
+    """
+
     # defining a reduced number of epochs for integral evaluation
     red_epochs = int(epochs/5)
 
@@ -313,11 +344,11 @@ def run_iflow(func, ndims, ptspepoch, epochs):
     print('Estimating integral from trained network')
     means_t = []
     stddevs_t = []
-    for epoch in range(red_epochs+1):
+    for _ in range(red_epochs+1):
         mean, var = integrate.integrate(ptspepoch)
         means_t.append(mean)
         stddevs_t.append(tf.sqrt(var/ptspepoch).numpy())
-    return means, stddevs, np.array(means_t), np.array(stddevs_t)
+    return np.array(means_t), np.array(stddevs_t)
 
 
 def main(argv):
@@ -370,12 +401,13 @@ def main(argv):
     print(format_string.format(FLAGS.function, ndims, npts, np.mean(value),
                                np.std(value)/np.sqrt(npts)))
 
-    epochs = 1000
-    ptspepoch = 5000
+    epochs = FLAGS.epochs
+    ptspepoch = FLAGS.ptspepoch
     x_values = np.arange(0, (epochs + 1) * ptspepoch, ptspepoch)
 
-    mean_t, err_t, mean_e, err_e = run_iflow(integrand, ndims,
-                                             ptspepoch, epochs)
+    integrate = build_iflow(integrand, ndims)
+    mean_t, err_t = train_iflow(integrate, ptspepoch, epochs)
+    mean_e, err_e = sample_iflow(integrate, ptspepoch, epochs)
 
     iflow_mean_wgt = np.sum(mean_e/(err_e**2), axis=-1)
     iflow_err_wgt = np.sum(1./(err_e**2), axis=-1)
@@ -393,7 +425,7 @@ def main(argv):
         ret = ret/sqr
         return ret
 
-    print("Weighted iflow result is {:.3f}".format(
+    print("Relative Uncertainty iflow result is {:.3f}".format(
         rel_unc(iflow_mean_wgt, iflow_err_wgt, target, 0.)))
 
     plt.figure(dpi=150, figsize=[5., 4.])
@@ -408,6 +440,34 @@ def main(argv):
 
     plt.savefig('{}_unc.png'.format(FLAGS.function), bbox_inches='tight')
     plt.show()
+    plt.close()
+
+    if FLAGS.function == 'Ring':
+        pts = integrate.sample(7500)
+         # scatter plot
+        fig = plt.figure(dpi=150, figsize=[4., 4.])
+        axis = fig.add_subplot(111)
+        radius2 = (pts[:, 0]-0.5)**2 + (pts[:, 1]-0.5)**2
+        in_ring = np.logical_and(radius2 > func_ring.radius12,
+                                 radius2 < func_ring.radius22)
+        _, pts_inout = np.unique(in_ring, return_counts=True)
+        print('{:d} points were generated, {:d} of them are on the ring, {:d} '
+              'are outside.'.format(7500, pts_inout[1],
+                                    pts_inout[0]))
+        print('Cut efficiency: {:.4f}'.format(pts_inout[1]/np.sum(pts_inout)))
+        inner = np.sqrt(func_ring.radius12)
+        outer = np.sqrt(func_ring.radius22)
+        color_ring = np.where(in_ring, 'blue', 'red')
+        inner_circle = plt.Circle((0.5, 0.5), inner, color='k', fill=False)
+        outer_circle = plt.Circle((0.5, 0.5), outer, color='k', fill=False)
+        plt.scatter(pts[:, 0], pts[:, 1], s=1, color=color_ring)
+        axis.add_artist(inner_circle)
+        axis.add_artist(outer_circle)
+        plt.xlim([0, 1])
+        plt.ylim([0, 1])
+        plt.savefig('ring_scatter.png')
+        plt.show()
+        plt.close()
 
 
 if __name__ == '__main__':
