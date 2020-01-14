@@ -442,17 +442,18 @@ def main(argv):
     plt.show()
     plt.close()
 
+    # scatter plot for ring
     if FLAGS.function == 'Ring':
         pts = integrate.sample(7500)
-         # scatter plot
         fig = plt.figure(dpi=150, figsize=[4., 4.])
         axis = fig.add_subplot(111)
         radius2 = (pts[:, 0]-0.5)**2 + (pts[:, 1]-0.5)**2
-        in_ring = np.logical_and(radius2 > func_ring.radius12,
-                                 radius2 < func_ring.radius22)
+        in_ring = np.logical_and(radius2 < func_ring.radius12,
+                                 radius2 > func_ring.radius22)
         _, pts_inout = np.unique(in_ring, return_counts=True)
         print('{:d} points were generated, {:d} of them are on the ring, {:d} '
-              'are outside.'.format(7500, pts_inout[1],
+              'are outside.'.format(np.sum(pts_inout),
+                                    pts_inout[1],
                                     pts_inout[0]))
         print('Cut efficiency: {:.4f}'.format(pts_inout[1]/np.sum(pts_inout)))
         inner = np.sqrt(func_ring.radius12)
