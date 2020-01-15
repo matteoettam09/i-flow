@@ -11,3 +11,6 @@ build
 makelibs
 models
 *.txt
+*.nb
+pi/
+notebooks/
