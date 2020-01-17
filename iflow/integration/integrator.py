@@ -56,7 +56,7 @@ class Integrator():
         self.divergence = divergences.Divergence(**kwargs)
         # self.loss_func = sinkhorn.sinkhorn_loss
         self.loss_func = self.divergence(loss_func)
-        self.samples = tf.constant(self.dist.sample(1))
+        # self.samples = tf.constant(self.dist.sample(1))
         self.ckpt_manager = None
 
     def manager(self, ckpt_manager):
@@ -115,8 +115,19 @@ class Integrator():
         return tf.nn.moments(x=true/test, axes=[0])
 
     @tf.function
-    def acceptance(self, nsamples, yield_samples=False):
-        """ Calculate the acceptance for nsamples points. """
+    def sample_weights(self, nsamples, yield_samples=False):
+        """ Sample nsamples points from the trained distribution and
+            calculate their weights.
+
+        Args:
+            nsamples (int): Number of samples to be drawn.
+            yield_samples (bool): Also return samples if true.
+
+        Returns:
+            true/test: Array of sample weights
+            (samples: Array of sampled points)
+        
+        """
         samples = self.dist.sample(nsamples)
         test = self.dist.prob(samples)
         true = self._func(samples)
@@ -125,39 +136,6 @@ class Integrator():
             return true/test, samples
 
         return true/test
-    # def acceptance_calc(self, accuracy, max_samples=50000, min_samples=5000):
-        # """ Calculate the acceptance using a right tailed confidence interval
-        # with an accuracy of accuracy. """
-
-        # # @tf.function
-        # def _calc_efficiency(weights):
-            # weights = tf.convert_to_tensor(weights, dtype=tf.float64)
-            # weights = tf.sort(weights)
-            # cum_weights = tf.cumsum(weights)
-            # cum_weights /= cum_weights[-1]
-            # index = tf.cast(
-                # tf.searchsorted(cum_weights,
-                                # tf.convert_to_tensor([1-accuracy],
-                                                     # dtype=tf.float64)),
-                # dtype=tf.int32)
-            # max_val = weights[index[0]]
-            # avg_val = tf.reduce_mean(weights[:index[0]])
-            # return avg_val, max_val
-
-        # eta = 1
-        # eta_0 = 0
-        # weights = []
-        # while abs(eta - eta_0)/eta > 0.01:
-            # eta_0 = eta
-            # nsamples = np.ceil(accuracy**-2/eta).astype(np.int64)-len(weights)
-            # nsamples = np.min([nsamples, max_samples])
-            # nsamples = np.max([nsamples, min_samples])
-            # weights.extend(self.acceptance(nsamples))
-            # avg_val, max_val = _calc_efficiency(weights)
-            # eta = avg_val/max_val
-            # print(eta_0, eta)
-
-        # return avg_val, max_val
 
     def acceptance_calc(self, accuracy, max_samples=50000, min_samples=5000):
         """ Calculate the acceptance using a right tailed confidence interval
@@ -200,18 +178,6 @@ class Integrator():
         del weights
 
         return avg_val, max_val
-        # weights = []
-        # while abs(eta - eta_0)/eta > 0.01:
-            # eta_0 = eta
-            # nsamples = np.ceil(accuracy**-2/eta).astype(np.int64)-len(weights)
-            # nsamples = np.min([nsamples, max_samples])
-            # nsamples = np.max([nsamples, min_samples])
-            # weights.extend(self.acceptance(nsamples))
-            # avg_val, max_val = _calc_efficiency(weights)
-            # eta = avg_val/max_val
-            # print(eta_0, eta, nsamples, len(weights))
-
-        # return avg_val, max_val
 
     def save_weights(self):
         """ Save the network. """

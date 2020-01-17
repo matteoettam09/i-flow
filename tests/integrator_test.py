@@ -41,10 +41,10 @@ def test_train_one_step():
     assert loss > 0
 
     dist.sample.assert_called_once_with(100)
-    func.assert_called_once()
-    dist.log_prob.assert_called_once()
+    assert func.call_count == 1
+    assert dist.log_prob.call_count == 1
     assert dist.prob.call_count == 2
-    optimizer.apply_gradients.assert_called_once()
+    assert optimizer.apply_gradients.call_count == 1
 
 
 def test_integrate():
@@ -62,12 +62,12 @@ def test_integrate():
     assert abs(mean - 1.0) < var
 
     dist.sample.assert_called_once_with(1000)
-    dist.prob.assert_called_once()
-    func.assert_called_once()
+    assert dist.prob.call_count == 1
+    assert func.call_count == 1
+    
 
-
-def test_acceptance():
-    """ Test the integral acceptance. """
+def test_sample_weights():
+    """ Test the sampling of weights. """
     tf.config.experimental_run_functions_eagerly(True)
     func = unittest.mock.MagicMock(return_value=tf.random.uniform([1000]))
     dist = unittest.mock.MagicMock()
@@ -76,13 +76,13 @@ def test_acceptance():
     dist.prob = unittest.mock.MagicMock(return_value=0.001*tf.ones([1000]))
     optimizer = unittest.mock.MagicMock()
     integral = Integrator(func, dist, optimizer)
-    acceptance = integral.acceptance(1000)
+    weights = integral.sample_weights(1000)
 
-    assert 0 < np.mean(acceptance)/np.max(acceptance) < 1
+    assert 0 < np.mean(weights)/np.max(weights) < 1
 
     dist.sample.assert_called_once_with(1000)
-    dist.prob.assert_called_once()
-    func.assert_called_once()
+    assert dist.prob.call_count == 1
+    assert func.call_count == 1
 
 
 def test_acceptance_calc():
