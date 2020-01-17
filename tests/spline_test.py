@@ -4,11 +4,11 @@ import pytest
 
 import numpy as np
 
-from flow.splines import spline
-from flow.splines import linear_spline
-from flow.splines import quadratic_spline
-from flow.splines import cubic_spline
-from flow.splines import rational_quadratic_spline
+from iflow.splines import spline
+from iflow.splines import linear_spline
+from iflow.splines import quadratic_spline
+from iflow.splines import cubic_spline
+from iflow.splines import rational_quadratic_spline
 
 
 def test_spline_utilities():

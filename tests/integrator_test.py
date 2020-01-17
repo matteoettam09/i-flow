@@ -7,8 +7,8 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
 
-from flow.integration.integrator import Integrator
-from flow.integration.divergences import Divergence
+from iflow.integration.integrator import Integrator
+from iflow.integration.divergences import Divergence
 
 tfd = tfp.distributions  # pylint: disable=invalid-name
 

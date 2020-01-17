@@ -9,7 +9,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
 
-from flow.integration import divergences
+from iflow.integration import divergences
 
 tfd = tfp.distributions
 

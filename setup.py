@@ -26,10 +26,8 @@ setup(
     long_description_content_type='text/markdown',
     url='https://gitlab.com/isaacson/nicephasespace',
     author='Christina Gao, \
-            Stefan Hoeche, \
             Joshua Isaacson, \
-            Claudius Krause, \
-            Holger Schulz',
+            Claudius Krause',
     classifiers=[
         # How mature is this project? Common values are
         #   3 - Alpha

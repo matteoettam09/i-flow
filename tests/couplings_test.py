@@ -8,7 +8,7 @@ import pytest
 import numpy as np
 import tensorflow as tf
 
-from flow.integration import couplings
+from iflow.integration import couplings
 
 
 tf.keras.backend.set_floatx('float64')

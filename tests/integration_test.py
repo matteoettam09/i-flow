@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
 
-from flow.integration.integrator import Integrator
+from iflow.integration.integrator import Integrator
 
 tfd = tfp.distributions
 
