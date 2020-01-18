@@ -175,10 +175,13 @@ def test_rational_quadratic_spline_throws():
 def test_rational_quadratic_spline():
     """ Test rational quadratic spline forward. """
     inputs = np.array(np.random.random((100, 10)), dtype=np.float64)
-    widths = np.ones((100, 10, 10), dtype=np.float64)
-    heights = np.ones((100, 10, 10), dtype=np.float64)
-    derivatives = np.ones((100, 10, 10), dtype=np.float64)
-
+    #widths = np.ones((100, 10, 10), dtype=np.float64)
+    #heights = np.ones((100, 10, 10), dtype=np.float64)
+    #derivatives = np.zeros((100, 10, 10), dtype=np.float64)
+    widths = np.array(np.random.random((100, 10, 10)), dtype=np.float64)
+    heights = np.array(np.random.random((100, 10, 10)), dtype=np.float64)
+    derivatives = np.array(np.random.random((100, 10, 10))-0.5, dtype=np.float64)
+    
     output, logabsdet = rational_quadratic_spline(
         inputs, widths, heights, derivatives)
 
@@ -190,9 +193,12 @@ def test_rational_quadratic_spline():
 def test_rational_quadratic_spline_inverse():
     """ Test rational quadratic spline inverse. """
     inputs = np.array(np.random.random((100, 10)), dtype=np.float64)
-    widths = np.ones((100, 10, 10), dtype=np.float64)/10.0
-    heights = np.ones((100, 10, 10), dtype=np.float64)/10.0
-    derivatives = np.ones((100, 10, 10), dtype=np.float64)
+    #widths = np.ones((100, 10, 10), dtype=np.float64)
+    #heights = np.ones((100, 10, 10), dtype=np.float64)
+    #derivatives = np.zeros((100, 10, 10), dtype=np.float64)
+    widths = np.array(np.random.random((100, 10, 10)), dtype=np.float64)
+    heights = np.array(np.random.random((100, 10, 10)), dtype=np.float64)
+    derivatives = np.array(np.random.random((100, 10, 10))-0.5, dtype=np.float64)
 
     output, logabsdet = rational_quadratic_spline(
         inputs, widths, heights, derivatives, True)
