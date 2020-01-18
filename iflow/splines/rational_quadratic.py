@@ -25,6 +25,9 @@ def rational_quadratic_spline(inputs,
     tf.where(out_of_bounds, tf.cast(left, dtype=inputs.dtype), inputs)
 
     num_bins = unnormalized_widths.shape[-1]
+    # check that number of widths, heights, and derivatives match
+    assert num_bins == unnormalized_heights.shape[-1] \
+            == unnormalized_derivatives.shape[-1]-1
 
     if min_bin_width * num_bins > 1.0:
         raise ValueError('Minimal bin width too large for the number of bins')

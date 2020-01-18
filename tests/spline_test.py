@@ -161,7 +161,7 @@ def test_rational_quadratic_spline_throws():
     inputs = np.array(np.random.random((100, 10)), dtype=np.float64)
     widths = np.ones((100, 10, 10), dtype=np.float64)
     heights = np.ones((100, 10, 10), dtype=np.float64)
-    derivatives = np.ones((100, 10, 10), dtype=np.float64)
+    derivatives = np.ones((100, 10, 11), dtype=np.float64)
 
     with pytest.raises(ValueError):
         rational_quadratic_spline(
