@@ -64,8 +64,8 @@ def test_integrate():
     dist.sample.assert_called_once_with(1000)
     assert dist.prob.call_count == 1
     assert func.call_count == 1
-    
 
+    
 def test_sample_weights():
     """ Test the sampling of weights. """
     tf.config.experimental_run_functions_eagerly(True)
@@ -85,6 +85,22 @@ def test_sample_weights():
     assert func.call_count == 1
 
 
+def test_sample():
+    """ Test the sampling of points. """
+    tf.config.experimental_run_functions_eagerly(True)
+    dist = unittest.mock.MagicMock()
+    dist.sample = unittest.mock.MagicMock(
+        return_value=tf.ones([1000]))
+    func = unittest.mock.MagicMock(return_value=tf.random.uniform([1000]))
+    optimizer = unittest.mock.MagicMock()
+    integral = Integrator(func, dist, optimizer)
+    samples = integral.sample(1000)
+
+    dist.sample.assert_called_once_with(1000)
+    assert dist.prob.call_count == 0
+    assert func.call_count == 0
+
+    
 def test_acceptance():
     """ Test the integral acceptance calculation. """
     tf.config.experimental_run_functions_eagerly(True)
