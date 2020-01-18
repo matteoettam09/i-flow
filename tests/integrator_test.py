@@ -85,17 +85,17 @@ def test_sample_weights():
     assert func.call_count == 1
 
 
-def test_acceptance_calc():
+def test_acceptance():
     """ Test the integral acceptance calculation. """
     tf.config.experimental_run_functions_eagerly(True)
-    func = unittest.mock.MagicMock(return_value=0.0001*tf.ones([10000]))
+    func = unittest.mock.MagicMock(return_value=0.0002*tf.ones([5000]))
     dist = unittest.mock.MagicMock()
+    dist.prob = unittest.mock.MagicMock(return_value=0.0002*tf.ones([5000]))
     optimizer = unittest.mock.MagicMock()
     integral = Integrator(func, dist, optimizer)
-    integral.acceptance = unittest.mock.MagicMock(
-        return_value=tf.ones([10000]))
-    acceptance_calc = integral.acceptance_calc(10000.**-0.5)
+    eff = integral.acceptance(5000, npool=10)
 
-    assert acceptance_calc == 1
+    assert 0 < eff <= 1
 
-    integral.acceptance.assert_called_once_with(10000)
+    assert func.call_count == 10
+    assert dist.prob.call_count == 10

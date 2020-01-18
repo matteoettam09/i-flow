@@ -159,9 +159,9 @@ class Integrator():
             weights.append(wgt)
         weights = np.concatenate(weights)
 
-        samples = np.random.choice(weights, (nreplica, nopt))
-        s_max = np.max(samples, axis=1)
-        s_mean = np.mean(samples, axis=1)
+        sample = np.random.choice(weights, (nreplica, nopt))
+        s_max = np.max(sample, axis=1)
+        s_mean = np.mean(sample, axis=1)
         s_acc = np.mean(s_mean) / np.median(s_max)
 
         return s_acc
