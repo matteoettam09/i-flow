@@ -1,18 +1,18 @@
-flow package
-============
+i-flow package
+==============
 
 Subpackages
 -----------
 
 .. toctree::
 
-   flow.integration
-   flow.splines
+   iflow.integration
+   iflow.splines
 
 Module contents
 ---------------
 
-.. automodule:: flow
+.. automodule:: iflow
    :members:
    :undoc-members:
    :show-inheritance:
