@@ -126,7 +126,7 @@ class Integrator():
         Returns:
             true/test: Array of sample weights
             (samples: Array of sampled points)
-        
+
         """
         samples = self.dist.sample(nsamples)
         test = self.dist.prob(samples)
@@ -138,16 +138,16 @@ class Integrator():
         return true/test
 
     def acceptance(self, nopt, npool=50, nreplica=1000):
-        """ Calculate the acceptance, i.e. the unweighting 
+        """ Calculate the acceptance, i.e. the unweighting
             efficiency as discussed in
             "Event Generation with Normalizing Flows"
             by C. Gao, S. Hoeche, J. Isaacson, C. Krause and H. Schulz
-        
+
         Args:
             nopt (int): Number of points on which the optimization was based on.
             npool (int): called n in the reference
             nreplica (int): called m in the reference
-        
+
         Returns:
             (float): unweighting efficiency
 
@@ -165,7 +165,7 @@ class Integrator():
         s_acc = np.mean(s_mean) / np.median(s_max)
 
         return s_acc
-    
+
 #    def acceptance_calc(self, accuracy, max_samples=50000, min_samples=5000):
 #        """ Calculate the acceptance using a right tailed confidence interval
 #        with an accuracy of accuracy.
@@ -187,7 +187,8 @@ class Integrator():
 #        def _calc_efficiency(weights):
 #            weights = tf.convert_to_tensor(weights, dtype=tf.float64)
 #            weights = tf.sort(weights)
-#            i_max = tf.convert_to_tensor([ int(np.ceil(len(weights)*(1-accuracy)))], dtype=tf.int32)
+#            i_max = tf.convert_to_tensor([
+#                int(np.ceil(len(weights)*(1-accuracy)))], dtype=tf.int32)
 #            max_val = weights[i_max[0]]
 #            avg_val = tf.reduce_mean(weights[:i_max[0]])
 #            return avg_val, max_val

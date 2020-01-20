@@ -4,7 +4,17 @@ import tensorflow as tf
 
 
 class Divergence:
-    """ Implement divergence class conatiner. """
+    """Implement divergence class conatiner.
+
+    This class contains a list of f-divergences that
+    can serve as loss functions in i-flow.
+
+    Attributes:
+        alpha (float): attribute needed for (alpha, beta)-product divergence
+        beta (float): attribute needed for (alpha, beta)-product divergence
+
+    """
+
     def __init__(self, alpha=None, beta=None):
         self.alpha = alpha
         self.beta = beta
@@ -14,7 +24,25 @@ class Divergence:
 
     @staticmethod
     def chi2(true, test, logp, logq):
-        """ Implement chi2 divergence. """
+        """ Implement Neyman chi2 divergence.
+
+        This function returns the Neyman chi2 divergence for two given sets
+        of probabilities, true and test. It uses importance sampling, i.e. the
+        estimator is divided by an additional factor of 'test'.
+
+        tf.stop_gradient is used such that the correct gradient is returned
+        when the chi2 is used as loss function.
+
+        Arguments:
+            true (tf.tensor or array(nbatch) of floats): true probability of points.
+            test (tf.tensor or array(nbatch) of floats): estimated probability of points
+            logp (tf.tensor or array(nbatch) of floats): not used in chi2
+            logq (tf.tensor or array(nbatch) of floats): not used in chi2
+
+        Returns:
+            tf.tensor(float): computed Neyman chi2 divergence
+
+        """
         del logp, logq
         return tf.reduce_mean(input_tensor=(tf.stop_gradient(true) - test)**2
                               / test / tf.stop_gradient(test))
@@ -22,7 +50,25 @@ class Divergence:
     # pylint: disable=invalid-name
     @staticmethod
     def kl(true, test, logp, logq):
-        """ Implement kl divergence. """
+        """ Implement Kullback-Leibler (KL) divergence.
+
+        This function returns the Kullback-Leibler divergence for two given sets
+        of probabilities, true and test. It uses importance sampling, i.e. the
+        estimator is divided by an additional factor of 'test'.
+
+        tf.stop_gradient is used such that the correct gradient is returned
+        when the KL is used as loss function.
+
+        Arguments:
+            true (tf.tensor or array(nbatch) of floats): true probability of points.
+            test (tf.tensor or array(nbatch) of floats): estimated probability of points
+            logp (tf.tensor or array(nbatch) of floats): logarithm of the true probability
+            logq (tf.tensor or array(nbatch) of floats): logarithm of the estimated probability
+
+        Returns:
+            tf.tensor(float): computed KL divergence
+
+        """
         return tf.reduce_mean(input_tensor=tf.stop_gradient(true/test)
                               * (tf.stop_gradient(logp) - logq))
     # pylint: enable=invalid-name
@@ -99,7 +145,7 @@ class Divergence:
     # pylint: disable=invalid-name
     @staticmethod
     def js(true, test, logp, logq):
-        """ Implement Jensen–Shannon divergence. """
+        """ Implement Jensen-Shannon divergence. """
         logm = tf.math.log(0.5*(test+tf.stop_gradient(true)))
         return tf.reduce_mean(input_tensor=(
             tf.stop_gradient(0.5/test) * ((tf.stop_gradient(true)
