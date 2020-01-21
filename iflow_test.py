@@ -3,7 +3,7 @@
     [1] i-flow: High-dimensional Integration
         and Sampling with Normalizing Flows
     by: Christina Gao, Joshua Isaacson, and Claudius Krause
-    arXiv: 2001.xxxxx
+    arXiv: 2001.05486
 """
 
 import numpy as np

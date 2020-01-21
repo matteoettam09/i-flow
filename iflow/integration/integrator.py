@@ -273,7 +273,8 @@ class Integrator():
             print("Consider using a checkpoint manager to save the network "
                   "weights and optimizer.")
 
-    def load(self, loadname, checkpoint=None):
+    @staticmethod
+    def load(loadname, checkpoint=None):
         """ Function to load a checkpoint of the model, optimizer,
             and any other trackables in the checkpoint.
 

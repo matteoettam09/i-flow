@@ -280,7 +280,7 @@ class Divergence:
         Arguments:
             true (tf.tensor or array(nbatch) of floats): true probability of points.
             test (tf.tensor or array(nbatch) of floats): estimated probability of points
-                        logp (tf.tensor or array(nbatch) of floats): logarithm of the true probability
+            logp (tf.tensor or array(nbatch) of floats): logarithm of the true probability
             logq (tf.tensor or array(nbatch) of floats): logarithm of the estimated probability
 
         Returns:
