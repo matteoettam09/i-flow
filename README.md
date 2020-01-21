@@ -5,3 +5,8 @@
 
 This project implements normalizing flows using TensorFlow for the purpose of multi-dimensional integration and
 sampling.
+
+If you use i-flow for your research, please cite:\\
+*"i-flow: High-dimensional Integration and Sampling with Normalizing Flows"*,\\
+By Christina Gao, Joshua Isaaacson, Claudius Krause.\\
+[arXiv:2001.05486](https://arxiv.org/abs/2001.05486).
