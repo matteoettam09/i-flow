@@ -97,7 +97,7 @@ class Integrator():
             zip(grads, self.dist.trainable_variables))
 
         if integral:
-            return loss, mean, tf.sqrt(var/nsamples)
+            return loss, mean, tf.sqrt(var/(nsamples-1.))
 
         return loss
 

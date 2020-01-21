@@ -39,21 +39,29 @@ flags.DEFINE_integer('ptspepoch', 5000, 'Number of points to sample per epoch',
 
 
 class TestFunctions:
-    """ Contains the functions discussed in the reference above """
+    """ Contains the functions discussed in the reference above.
 
+    Attributes:
+        ndims (int): dimensionality of the function to be integrated
+        alpha (float): width of the Gaussians in the test functions
+                       gauss and camel
+        kwargs: additional parameters for the functions (not used at the moment)
+
+    """
     def __init__(self, ndims, alpha, **kwargs):
         self.ndims = ndims
         self.alpha = alpha
         self.variables = kwargs
 
     def gauss(self, x):
-        """ Based on eq. 10 of [1]
-            Integral equals erf(1/(2*alpha)) ** ndims
+        """ Based on eq. 10 of [1], Gaussian function.
+
+        Integral equals erf(1/(2*alpha)) ** ndims
 
         Args:
             x (tf.Tensor): Tensor with batch of points to evaluate
 
-        Returns: tf.Tensor: functional values the given points
+        Returns: tf.Tensor: functional values at the given points
 
         """
         pre = tf.cast(1.0/(self.alpha * tf.sqrt(np.pi))**self.ndims,
@@ -62,14 +70,18 @@ class TestFunctions:
         return pre * tf.exp(exponent)
 
     def camel(self, x):
-        """ Based on eq. 12 of [1]
-            Integral equals
+        """ Based on eq. 12 of [1], Camel function.
+
+        The Camel function consists of two Gaussians, centered at
+        (1/3, 2/3) in each dimension.
+
+        Integral equals
             (0.5*(erf(1/(3*alpha)) + erf(2/(3*alpha)) ))** ndims
 
         Args:
             x (tf.Tensor): Tensor with batch of points to evaluate
 
-        Returns: tf.Tensor: functional values the given points
+        Returns: tf.Tensor: functional values at the given points
 
         """
         pre = tf.cast(1./(self.alpha*tf.sqrt(np.pi))**self.ndims,
@@ -79,18 +91,24 @@ class TestFunctions:
         return 0.5*pre*(tf.exp(exponent1)+tf.exp(exponent2))
 
     def circle(self, x):
-        """ Based on eq. 14 of [1]
-            Integral equals 0.0136848(1)
+        """ Based on eq. 14 of [1], two overlapping circles.
+
+        Thickness and height change along the circles.
+
+        Integral equals 0.0136848(1)
 
         Args:
             x (tf.Tensor): Tensor with batch of points to evaluate
 
-        Returns: tf.Tensor: functional values the given points
+        Returns:
+            tf.Tensor: functional values at the given points.
 
+        Raises:
+            ValueError: If ndims is not equal to 2.
 
         """
         if self.ndims != 2:
-            raise "ndims must be equal to 2 for circle function!"
+            raise ValueError("ndims must be equal to 2 for circle function!")
         dx1, dy1, rr, w1, ee = 0.4, 0.6, 0.25, 1./0.004, 3.0
         res = (x[..., 1]**ee
                * tf.exp(-w1*tf.abs((x[..., 1]-dy1)**2
@@ -101,8 +119,13 @@ class TestFunctions:
         return res
 
     class Ring:
-        """ Class to store the ring function. """
+        """ Class to store the ring function.
 
+        Attributes:
+            radius1 (float): Outer radius of the Ring.
+            radius2 (float): Inner radius of the Ring.
+
+        """
         def __init__(self, radius1, radius2):
             """ Init ring function. """
 
@@ -117,9 +140,10 @@ class TestFunctions:
             """ Calculate a ring like function.
 
             Args:
-                x (tf.Tensor): Numpy array with batch of points to evaluate
+                x (tf.Tensor): Tensor with batch of points to evaluate
 
-            Returns: np.ndarray: functional values the given points
+            Returns:
+                tf.Tensor: 1. if on Ring, 0. otherwise
 
             """
             radius = tf.reduce_sum((pts-0.5)**2, axis=-1)
@@ -226,7 +250,17 @@ class TestFunctions:
 
 
 def build(in_features, out_features, options):
-    " Build the NN. """
+    """ Builds a dense NN.
+
+    Arguments:
+        in_features (int): dimensionality of the inputs space
+        out_features (int): dimensionality of the output space
+        options: additional arguments, not used at the moment
+
+    Returns:
+        A tf.keras.models.Model instance
+
+    """
     del options
 
     invals = tf.keras.layers.Input(in_features, dtype=tf.float64)
@@ -308,7 +342,8 @@ def train_iflow(integrate, ptspepoch, epochs):
         ptspepoch (int): number of points per epoch in training
         epochs (int): number of epochs for training
 
-    Returns: (tuple): mean and stddev numpy arrays
+    Returns:
+        numpy.ndarray(float): value of loss (mean) and its uncertainty (standard deviation)
 
     """
     means = np.zeros(epochs+1)
@@ -333,10 +368,10 @@ def sample_iflow(integrate, ptspepoch, epochs):
         ptspepoch (int): number of points per epoch in training
         epochs (int): number of epochs for training
 
-    Returns: (tuple): mean and stddev numpy arrays
+    Returns:
+        (tuple): mean and stddev numpy arrays
 
     """
-
     # defining a reduced number of epochs for integral evaluation
     red_epochs = int(epochs/5)
 
@@ -347,7 +382,7 @@ def sample_iflow(integrate, ptspepoch, epochs):
     for _ in range(red_epochs+1):
         mean, var = integrate.integrate(ptspepoch)
         means_t.append(mean)
-        stddevs_t.append(tf.sqrt(var/ptspepoch).numpy())
+        stddevs_t.append(tf.sqrt(var/(ptspepoch-1.)).numpy())
     return np.array(means_t), np.array(stddevs_t)
 
 
@@ -363,7 +398,7 @@ def main(argv):
     ndims = FLAGS.ndims
     alpha = FLAGS.alpha
 
-    func = TestFunctions(ndims, alpha, s=100, angle=np.pi/2.0)
+    func = TestFunctions(ndims, alpha)
 
     # select function:
     if FLAGS.function == 'Gauss':
