@@ -116,7 +116,7 @@ class Divergence:
         estimator is divided by an additional factor of 'test'.
 
         tf.stop_gradient is used such that the correct gradient is returned
-        when the KL is used as loss function.
+        when the Jeffreys is used as loss function.
 
         Arguments:
             true (tf.tensor or array(nbatch) of floats): true probability of points.
@@ -141,7 +141,7 @@ class Divergence:
         estimator is divided by an additional factor of 'test'.
 
         tf.stop_gradient is used such that the correct gradient is returned
-        when the Hellinger is used as loss function.
+        when the Chernoff is used as loss function.
 
         Arguments:
             true (tf.tensor or array(nbatch) of floats): true probability of points.
@@ -178,7 +178,7 @@ class Divergence:
         estimator is divided by an additional factor of 'test'.
 
         tf.stop_gradient is used such that the correct gradient is returned
-        when the KL is used as loss function.
+        when the Exponential is used as loss function.
 
         Arguments:
             true (tf.tensor or array(nbatch) of floats): true probability of points.
@@ -204,7 +204,7 @@ class Divergence:
         sampling, i.e. the estimator is divided by an additional factor of 'test'.
 
         tf.stop_gradient is used such that the correct gradient is returned
-        when the KL is used as loss function.
+        when the Exponential2 is used as loss function.
 
         Arguments:
             true (tf.tensor or array(nbatch) of floats): true probability of points.
@@ -228,7 +228,7 @@ class Divergence:
         i.e. the estimator is divided by an additional factor of 'test'.
 
         tf.stop_gradient is used such that the correct gradient is returned
-        when the KL is used as loss function.
+        when the ab_product is used as loss function.
 
         Arguments:
             true (tf.tensor or array(nbatch) of floats): true probability of points.
@@ -275,7 +275,7 @@ class Divergence:
         i.e. the estimator is divided by an additional factor of 'test'.
 
         tf.stop_gradient is used such that the correct gradient is returned
-        when the KL is used as loss function.
+        when the Jenson-Shannon is used as loss function.
 
         Arguments:
             true (tf.tensor or array(nbatch) of floats): true probability of points.
