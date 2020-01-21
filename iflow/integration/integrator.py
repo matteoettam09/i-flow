@@ -45,8 +45,8 @@ class Integrator():
         - optimizer: An optimizer from tensorflow used to train the network
         - loss_func: The loss function to be minimized
         - kwargs: Additional arguments that need to be passed to the loss
-    """
 
+    """
     def __init__(self, func, dist, optimizer, loss_func='chi2', **kwargs):
         """ Initialize the normalizing flow integrator. """
         self._func = func
@@ -65,11 +65,11 @@ class Integrator():
 
     @tf.function
     def train_one_step(self, nsamples, integral=False):
-        """ Preform one step of integration and improve the sampling.
+        """ Perform one step of integration and improve the sampling.
 
         Args:
-            - nsamples: Number of samples to be taken in a training step
-            - integral: Flag for returning the integral value of not.
+            - nsamples(int): Number of samples to be taken in a training step
+            - integral(bool): Flag for returning the integral value or not.
 
         Returns:
             - loss: Value of the loss function for this step
@@ -103,12 +103,35 @@ class Integrator():
 
     @tf.function
     def sample(self, nsamples):
-        """ Sample from the trained distribution. """
+        """ Sample from the trained distribution.
+
+        Args:
+            nsamples(int): Number of points to be sampled.
+
+        Returns:
+            tf.tensor of size (nsamples, ndim) of sampled points.
+
+        """
         return self.dist.sample(nsamples)
 
     @tf.function
     def integrate(self, nsamples):
-        """ Integrate the function with trained distribution. """
+        """ Integrate the function with trained distribution.
+
+        This method estimates the value of the integral based on
+        Monte Carlo importance sampling. It returns a tuple of two
+        tf.tensors. The first one is the mean, i.e. the estimate of
+        the integral. The second one gives the variance of the integrand.
+        To get the variance of the estimated mean, the returned variance
+        needs to be divided by (nsamples -1).
+
+        Args:
+            nsamples(int): Number of points on which the estimate is based on.
+
+        Returns:
+            tuple of 2 tf.tensors: mean and variance
+
+        """
         samples = self.dist.sample(nsamples)
         test = self.dist.prob(samples)
         true = self._func(samples)
@@ -116,16 +139,22 @@ class Integrator():
 
     @tf.function
     def sample_weights(self, nsamples, yield_samples=False):
-        """ Sample nsamples points from the trained distribution and
-            calculate their weights.
+        """ Sample from the trained distribution and return their weights.
+
+        This method samples 'nsamples' points from the trained distribution
+        and computes their weights, defined as the functional value of the
+        point divided by the probability of the trained distribution of
+        that point.
+
+        Optionally, the drawn samples can be returned, too.
 
         Args:
             nsamples (int): Number of samples to be drawn.
             yield_samples (bool): Also return samples if true.
 
         Returns:
-            true/test: Array of sample weights
-            (samples: Array of sampled points)
+            true/test: tf.tensor of size (nsamples, 1) of sampled weights
+            (samples: tf.tensor of size (nsamples, ndims) of sampled points)
 
         """
         samples = self.dist.sample(nsamples)
@@ -169,6 +198,9 @@ class Integrator():
 #    def acceptance_calc(self, accuracy, max_samples=50000, min_samples=5000):
 #        """ Calculate the acceptance using a right tailed confidence interval
 #        with an accuracy of accuracy.
+#
+#        This method is deprecated and will be removed in the future.
+#
 #
 #        Args:
 #            accuracy (float): Desired accuracy for total cross-section
@@ -242,8 +274,9 @@ class Integrator():
                   "weights and optimizer.")
 
     def load(self, loadname, checkpoint=None):
-        """ Function to load a checkpoint of the model and optimizer,
-            as well as any other trackables in the checkpoint.
+        """ Function to load a checkpoint of the model, optimizer,
+            and any other trackables in the checkpoint.
+
             Note that the network architecture is not saved, so the same
             network architecture must be used for the same saved and loaded
             checkpoints. Network arch can be loaded if it is saved.
@@ -257,7 +290,6 @@ class Integrator():
             Nothing returned.
 
         """
-
         ckpt_dir = "./models/tf_ckpt_" + loadname + "/"
         if checkpoint is not None:
             status = checkpoint.restore(tf.train.latest_checkpoint(ckpt_dir))
