@@ -344,6 +344,7 @@ class PiecewiseRationalQuadratic(PiecewiseBijector):
             min_derivative=self.min_derivative
         )
 
-class PiecewiseRationalLinear(PiecewiseBijector):
-    """ Define Piecewise Rational Linear Bijector. """
-    raise NotImplementedError()
+#class PiecewiseRationalLinear(PiecewiseBijector):
+#    """ Define Piecewise Rational Linear Bijector. """
+#    raise NotImplementedError()
+#
