@@ -56,6 +56,7 @@ class CouplingBijector(tfb.Bijector):
         return len(self.transform_features)
 
     def _one_blob(self, xd):
+        """ Return input vector with one-blob encoding. """
         y = tf.tile(((0.5/self.nbins_in) + tf.range(0., 1.,
                                                     delta=1./self.nbins_in)),
                     [tf.size(xd)])
@@ -68,6 +69,7 @@ class CouplingBijector(tfb.Bijector):
         return res
 
     def _forward(self, inputs, context=None):
+        """ Forward pass through Coupling Layer. """
         identity_split = tf.gather(inputs, self.identity_features, axis=-1)
         transform_split = tf.gather(inputs, self.transform_features, axis=-1)
 
@@ -90,6 +92,7 @@ class CouplingBijector(tfb.Bijector):
         return outputs
 
     def _inverse(self, inputs, context=None):
+        """ Inverse pass through Coupling Layer. """
 
         identity_split = tf.gather(inputs, self.identity_features, axis=-1)
         transform_split = tf.gather(inputs, self.transform_features, axis=-1)
@@ -113,6 +116,7 @@ class CouplingBijector(tfb.Bijector):
         return outputs
 
     def _forward_log_det_jacobian(self, inputs, context=None):
+        """ Compute forward log det Jacobian. """
         identity_split = tf.gather(inputs, self.identity_features, axis=-1)
         transform_split = tf.gather(inputs, self.transform_features, axis=-1)
 
@@ -130,6 +134,8 @@ class CouplingBijector(tfb.Bijector):
         return logabsdet
 
     def _inverse_log_det_jacobian(self, inputs, context=None):
+        """ Compute Inverse log det Jacobian. """
+
         identity_split = tf.gather(inputs, self.identity_features, axis=-1)
         transform_split = tf.gather(inputs, self.transform_features, axis=-1)
 
