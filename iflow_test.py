@@ -252,6 +252,9 @@ class TestFunctions:
 def build(in_features, out_features, options):
     """ Builds a dense NN.
 
+    The output layer is initialized to 0, so the first pass
+    before training gives the identity transformation.
+
     Arguments:
         in_features (int): dimensionality of the inputs space
         out_features (int): dimensionality of the output space
@@ -268,7 +271,8 @@ def build(in_features, out_features, options):
     hidden = tf.keras.layers.Dense(32, activation='relu')(hidden)
     hidden = tf.keras.layers.Dense(32, activation='relu')(hidden)
     hidden = tf.keras.layers.Dense(32, activation='relu')(hidden)
-    outputs = tf.keras.layers.Dense(out_features)(hidden)
+    outputs = tf.keras.layers.Dense(out_features, bias_initializer='zeros',
+                                    kernel_initializer='zeros')(hidden)
     model = tf.keras.models.Model(invals, outputs)
     model.summary()
     return model
