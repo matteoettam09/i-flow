@@ -10,7 +10,42 @@ from .spline import _check_bounds, _shift_output
 def linear_spline(inputs, unnormalized_pdf,
                   inverse=False,
                   left=0., right=1., bottom=0., top=1.):
-    """ Implementation of linear spline. """
+    r""" Implementation of linear spline.
+
+        Calculates a set of input points given an unnormalized pdf distribution.
+        The forward pass through the linear spline is defined as:
+
+        .. math::
+
+            y &= \frac{x - x_i}{m_i}, \\
+            \log\left(\frac{dy}{dx}\right) &= -\log(x) + \log(w),
+
+        where :math:`x` is the input value, :math:`x_i\ (m_i)` is the left bin edge
+        (slope) for the bin the given input falls within, and :math:`w` is the width
+        of the bins of the spline. While the inverse pass is defined as:
+
+        .. math::
+
+            x &= N\cdot y - b_i + \sum_{j=1}^{i-1} y_j, \\
+            \log\left(\frac{dx}{dy}\right) &= \log(x) - \log(w),
+
+        where :math:`y` is the input value, :math:`b_i` is the bin in which :math:`y`
+        falls, :math:`N` is the number of bins, and :math:`y_j` is the height of the
+        :math:`j^{\text{th}}` bin.
+
+        Args:
+            inputs (tf.Tensor): An array of inputs to be transformed by the spline.
+            unnormalized_pdf (tf.Tensor): An unnormalized pdf describing the
+                                          transformation function.
+            inverse (bool): Whether to calculate the forward or inverse pass
+            left (float64): Left edge of the valid spline region
+            right (float64): Right edge of the valid spline region
+            bottom (float64): Bottom edge of the valid spline region
+            top (float64): Top edge of the valid spline region
+
+        Returns:
+            tuple: The transformation and the associated log jacobian
+    """
 
     inputs = _check_bounds(inputs, left, right, top, bottom, inverse)
 

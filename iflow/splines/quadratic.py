@@ -17,7 +17,50 @@ def quadratic_spline(inputs,
                      left=0., right=1., bottom=0., top=1.,
                      min_bin_width=DEFAULT_MIN_BIN_WIDTH,
                      min_bin_height=DEFAULT_MIN_BIN_HEIGHT):
-    """ Definition of quadratic splines. """
+    r""" Implementation of quadratic spline.
+
+        Calculates a set of input points given an unnormalized widths distribution,
+        and an unnormalized heights distribution. The forward pass through the
+        quadratic spline is defined as:
+
+        .. math::
+
+            a &=\frac{1}{2}\left(V_{i+1} - V_i\right) W_i, \\
+            b &=V_i W_i, \\
+            c &=\sum_j=1^{i-1} V_i, \\
+            \alpha &= \frac{x - x_i}{W_i}, \\
+            y &=a\alpha^2 + b\alpha + c, \\
+            \log\left(\frac{dy}{dx}\right) &= \log\left(\alpha \left(V_{i+1}
+                                               - V_i\right) + V_i\right),
+
+        where :math:`x` is the input value, :math:`x_i, V_i, W_i` are the values of the
+        left edge, the height of the left edge, and the width of the bin respectively.
+        While the inverse pass is defined as:
+
+        .. math::
+
+            \alpha &= \frac{2\left(c-y\right)}{-b-\sqrt{b^2-4a\left(c-y\right)}}, \\
+            x &= \alpha W_i + x_i, \\
+            \log\left(\frac{dx}{dy}\right) &= -\log\left(\alpha \left(V_{i+1}
+                                                - V_i\right) + V_i\right),
+
+        where :math:`y` is the input value, and the rest are the same as the forward pass.
+
+        Args:
+            inputs (tf.Tensor): An array of inputs to be transformed by the spline.
+            unnormalized_widths (tf.Tensor): A set of unnormalized widths for the bins.
+            unnormalized_heights (tf.Tensor): A set of unnormalized heights for the bins.
+            inverse (bool): Whether to calculate the forward or inverse pass
+            left (float64): Left edge of the valid spline region
+            right (float64): Right edge of the valid spline region
+            bottom (float64): Bottom edge of the valid spline region
+            top (float64): Top edge of the valid spline region
+            min_bin_width (float64): The minimum allowed width of a given bin
+            min_bin_height (float64): The minimum allowed height of a given knot
+
+        Returns:
+            tuple: The transformation and the associated log jacobian
+    """
 
     left = tf.cast(left, dtype=tf.float64)
     right = tf.cast(right, dtype=tf.float64)

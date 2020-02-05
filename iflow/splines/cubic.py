@@ -24,7 +24,54 @@ def cubic_spline(inputs,
                  min_bin_height=DEFAULT_MIN_BIN_HEIGHT,
                  eps=DEFAULT_EPS,
                  quadratic_threshold=DEFAULT_QUADRATIC_THRESHOLD):
-    """ Definition of cubic spline. """
+    r""" Implementation of cubic spline.
+
+        Calculates a set of input points given an unnormalized widths distribution,
+        an unnormalized heights distribution, and two unnormalized derivatives distribution
+        (one for the left and one for the right knots). The forward pass through the
+        cubic spline is defined as:
+
+        .. math::
+
+            a &= \frac{d_i + d_{i+1} - 2s_i}{W_i^2}, \\
+            b &= \frac{3s_i-2d_i-d_{i+1}}{W_i}, \\
+            c &= d_i, \\
+            d &= y_i, \\
+            \alpha &= x - x_i, \\
+            y &= a\alpha^3+b\alpha^2+c\alpha+d, \\
+            \log\left(\frac{dy}{dx}\right) &= \log(3a\alpha^2+2b\alpha+c)
+
+        where :math:`x` is the input value, :math:`(x_i, y_i)` is the position of the ith knot,
+        :math:`s_i` is the slope at the ith knot, :math:`d_i` is the derivative of the
+        of the spline at the ith knot, and :math:`W_i` is the width of the ith bin.
+        While the inverse pass is defined as solving the above cubic equation in :math:`y`
+        for the variable :math:`x`. It is not given here due to the complexity of having to
+        deal with the possible cases for a solution to a cubic polynomial. The inverse log
+        jacobian is given by the above equation with a negative sign out front.
+
+        Args:
+            inputs (tf.Tensor): An array of inputs to be transformed by the spline.
+            unnormalized_widths (tf.Tensor): A set of unnormalized widths for the knots.
+            unnormalized_heights (tf.Tensor): A set of unnormalized heights for the knots.
+            unnormalized_derivatives_left (tf.Tensor): A set of unnormalized derivatives for
+                                                       the left side of the bins.
+            unnormalized_derivatives_right (tf.Tensor): A set of unnormalized derivatives for
+                                                        the right side of the bins.
+            inverse (bool): Whether to calculate the forward or inverse pass
+            left (float64): Left edge of the valid spline region
+            right (float64): Right edge of the valid spline region
+            bottom (float64): Bottom edge of the valid spline region
+            top (float64): Top edge of the valid spline region
+            min_bin_width (float64): The minimum allowed width of a given bin
+            min_bin_height (float64): The minimum allowed height of a given knot
+            eps (float64): Minimum value for used for numerical precision in when solving
+                           for the three root case
+            quadratic_threshold (float64): Value used to determine if the cubic should be treated
+                                           as a quadratic polynomial instead
+
+        Returns:
+            tuple: The transformation and the associated log jacobian
+    """
 
     inputs = _check_bounds(inputs, left, right, top, bottom, inverse)
 

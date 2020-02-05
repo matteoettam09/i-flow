@@ -19,7 +19,55 @@ def rational_quadratic_spline(inputs,
                               min_bin_width=DEFAULT_MIN_BIN_WIDTH,
                               min_bin_height=DEFAULT_MIN_BIN_HEIGHT,
                               min_derivative=DEFAULT_MIN_DERIVATIVE):
-    """ Definition of rational quadratic spline. """
+    r""" Implementation of rational quadratic spline.
+
+        Calculates a set of input points given an unnormalized widths distribution,
+        an unnormalized heights distribution, and an unnormalized derivatives distribution.
+        The forward pass through the rational quadratic spline is defined as:
+
+        .. math::
+
+            \theta &= \frac{x - x_i}{W_i}, \\
+            y &= x_i + \frac{(y_{i+1}-y_i)(s_i\theta^2+d_i\theta(1-\theta))}
+                            {s_i + (d_{i+1}+d_{i}-2s_i)\theta(1-\theta)}, \\
+            \log\left(\frac{dy}{dx}\right) &= \log(s_i^2(d_{i+1}\theta^2+2s_i\theta(1-\theta)
+                                                   +d_i(1-\theta)^2)) \\
+                                           &- 2\log(s_i + (d_{i+1}+d_{i}-2s_i)\theta(1-\theta)),
+
+        where :math:`x` is the input value, :math:`(x_i, y_i)` is the position of the ith knot,
+        :math:`s_i` is the slope at the ith knot, and :math:`d_i` is the derivative of the
+        of the spline at the ith knot. While the inverse pass is defined as:
+
+        .. math::
+
+            a &= (y - y_i)(d_i+d_{i+1}-2s_i) + (y_i-y_{i-1})(s_i-d_i), \\
+            b &= (y_i - y_{i-1})d_i-(y-y_i)(d_i+d_{i+1}-2s_i), \\
+            c &= -s_i(y-y_i), \\
+            \theta &= \frac{2c}{-b-\sqrt{b^2-4ac}}, \\
+            x &= \theta W_i + x_i, \\
+            \log\left(\frac{dx}{dy}\right) &= -\log(s_i^2(d_{i+1}\theta^2+2s_i\theta(1-\theta)
+                                                   +d_i(1-\theta)^2)) \\
+                                           &+ 2\log(s_i + (d_{i+1}+d_{i}-2s_i)\theta(1-\theta))
+
+        where :math:`y` is the input value, and the rest are the same as the forward pass.
+
+        Args:
+            inputs (tf.Tensor): An array of inputs to be transformed by the spline.
+            unnormalized_widths (tf.Tensor): A set of unnormalized widths for the knots.
+            unnormalized_heights (tf.Tensor): A set of unnormalized heights for the knots.
+            unnormalized_derivatives (tf.Tensor): A set of unnormalized derivatives for the knots.
+            inverse (bool): Whether to calculate the forward or inverse pass
+            left (float64): Left edge of the valid spline region
+            right (float64): Right edge of the valid spline region
+            bottom (float64): Bottom edge of the valid spline region
+            top (float64): Top edge of the valid spline region
+            min_bin_width (float64): The minimum allowed width of a given bin
+            min_bin_height (float64): The minimum allowed height of a given knot
+            min_derivative (float64): The minimum allowed derivative of a given knot
+
+        Returns:
+            tuple: The transformation and the associated log jacobian
+    """
 
     out_of_bounds = (inputs < left) | (inputs > right)
     tf.where(out_of_bounds, tf.cast(left, dtype=inputs.dtype), inputs)

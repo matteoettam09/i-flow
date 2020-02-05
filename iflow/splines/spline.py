@@ -1,4 +1,11 @@
-""" Utility functions for splines. """
+""" This module implements utility functions for splines.
+
+These utility functions are used in many different spline types. Having them
+all in one location allows for transparency in the code. Some of the common functions
+include the ability to ensure that the inputs are in the correct range, to shift inputs
+from an arbitrary range to be between zero and 1, etc.
+
+"""
 
 # pylint: disable=invalid-name, too-many-arguments
 
