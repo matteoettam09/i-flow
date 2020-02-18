@@ -1,4 +1,6 @@
-""" Implement cubic spline. """
+""" Implement cubic spline. 
+    Based on the pytorch implementation of
+    https://github.com/bayesiains/nsf """
 
 # pylint: disable=too-many-arguments, too-many-locals, too-many-statements
 # pylint: disable=invalid-name

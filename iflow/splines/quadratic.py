@@ -1,4 +1,6 @@
-""" Implement quadratic splines. """
+""" Implement quadratic splines.
+    Based on the pytorch implementation of
+    https://github.com/bayesiains/nsf """
 
 # pylint: disable=too-many-arguments, too-many-locals, too-many-branches
 # pylint: disable=too-many-statements, invalid-name

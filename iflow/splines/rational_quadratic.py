@@ -1,4 +1,6 @@
-""" Implement Rational Quadratic splines. """
+""" Implement Rational Quadratic splines.
+    Based on the pytorch implementation of
+    https://github.com/bayesiains/nsf """
 
 # pylint: disable=too-many-arguments, too-many-locals, invalid-name
 

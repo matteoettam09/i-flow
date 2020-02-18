@@ -1,4 +1,6 @@
-""" Implement linear splines. """
+""" Implement linear splines.
+    Based on the pytorch implementation of
+    https://github.com/bayesiains/nsf """
 
 # pylint: disable=too-many-arguments, too-many-locals
 

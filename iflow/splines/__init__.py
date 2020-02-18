@@ -1,4 +1,4 @@
-""" Imports for flow module. """
+""" Imports for iflow module. """
 
 from .linear import linear_spline
 from .quadratic import quadratic_spline
