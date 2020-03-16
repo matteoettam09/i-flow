@@ -11,6 +11,8 @@ build
 makelibs
 models
 *.txt
+!DensityEstimation/rndbkgout.txt
+!DensityEstimation/rndsigout.txt
 *.nb
 pi/
 notebooks/
