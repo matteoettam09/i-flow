@@ -1,0 +1,270 @@
+\documentclass[10pt]{beamer}
+
+
+\usepackage{amsmath}
+\usepackage{amstext}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{slashed}
+\usepackage{color}
+\usepackage{epstopdf}
+\usepackage{caption}
+\usepackage{multirow}
+\usepackage{overpic}
+\usepackage{tikz}
+\usepackage{animate}
+\usetikzlibrary{shapes.callouts}
+\usetikzlibrary{decorations.text}
+\usetikzlibrary{decorations.pathreplacing}
+\usetikzlibrary{arrows,shapes,shadows}
+\usetikzlibrary{calc}
+\usetikzlibrary{backgrounds}
+
+\DeclareMathOperator{\mean}{mean}
+
+\beamertemplatenavigationsymbolsempty
+\usetheme{Boadilla}
+\definecolor{FERMILABblue}{RGB}{65,182,230}% FERMILAB 
+\usecolortheme[RGB={0,76,151}]{structure} %FERMILAB
+\setbeamertemplate{frametitle}[default][center]
+\usepackage{textcomp}
+
+
+
+
+\author[C. Gao, S. H\"oche, J. Isaacson, C. Krause]{\large C. Gao, S. H\"oche, J. Isaacson, C. Krause}
+\date{\today}
+\institute[Fermilab]{Fermi National Accelerator Laboratory}
+
+\begin{document}
+
+
+% Slide 2 (motivation)
+\begin{frame}
+  \frametitle{Monte Carlo Simulations are increasingly important.}
+  \vspace*{-0.5em}
+  \tikzstyle{blockgr} = [draw, text width=32em, fill=FERMILABblue!20, rounded corners, drop shadow]
+  \begin{center}
+    \begin{tikzpicture}
+      \node (pic) [text width = 0.8\textwidth, text centered] at (0em,0em) {\includegraphics[width=0.925\textwidth]{figures/cpuHLLHC_noold.png}};
+      \node (ref) [text width = 30em,anchor = south, text centered] at ($(pic.south)+(0em,-0.75em)$){\begin{scriptsize}\textcolor[rgb]{.4,.4,.4}{https://twiki.cern.ch/twiki/bin/view/AtlasPublic/ComputingandSoftwarePublicResults}\end{scriptsize}};      
+      \node at ($(pic.south)+(0em,-2.5em)$) (text) [blockgr] {
+        \begin{itemize}
+        \item[$\Rightarrow$] MC event generation is needed for signal and background predictions.
+        \item[$\Rightarrow$] The required CPU time will increase in the next years. 
+        \end{itemize}
+      };
+    \end{tikzpicture}
+  \end{center}
+\end{frame}
+
+
+% Slide 3 (motivation)
+\begin{frame}
+  \frametitle{Monte Carlo Simulations are increasingly important.}
+  \vspace*{-2em}
+  \tikzstyle{blockgr} = [draw, text width=30em, fill=FERMILABblue!20, rounded corners, drop shadow]
+  \begin{center}
+    \begin{tikzpicture}
+      \node (pic) [text width = \textwidth, text centered] at (0em,0em) {\includegraphics[width=0.48\textwidth]{source/1905.05120/fig/timing.pdf}\hfill \includegraphics[width=0.48\textwidth]{source/1905.05120/fig/wpj/trials.pdf}};
+      \node (ref) [text width = 30em,anchor = south, text centered] at ($(pic.south)+(0em,-0.75em)$){\begin{scriptsize}\textcolor[rgb]{.4,.4,.4}{Stefan H\"oche, Stefan Prestel, Holger Schulz [1905.05120;PRD]}\end{scriptsize}};      
+      \node at ($(pic.south)+(0em,-5em)$) (text) [blockgr] {
+        The bottlenecks for evaluating large final state multiplicities are \\
+        $ $ 
+        \begin{itemize}
+        \item a slow evaluation of the matrix element
+        \item a low unweighting efficiency
+        \end{itemize}
+      };
+    \end{tikzpicture}
+  \end{center}
+\end{frame}
+
+
+% Slide 13
+\begin{frame}
+  \frametitle{The Loss function quantifies our goal.}
+  \tikzstyle{block} = [draw, text width=32em, fill=FERMILABblue!20, rounded corners, drop shadow, minimum height = 6em, align=left]
+  \begin{center}
+    \begin{tikzpicture}
+      \node (loss) [block] at (0,0) {We have two choices:
+        \begin{itemize}
+        \item Kullback-Leibler (KL) divergence:\\
+          $D_{KL} = \int p(x) \log \frac{p(x)}{q(x)} dx \qquad \approx \qquad \frac{1}{N} \sum \frac{p(x_{i})}{q(x_{i})} \log \frac{p(x_{i})}{q(x_{i})}, \qquad x_{i}\dots q(x)$
+        \item Pearson $\chi^{2}$ divergence:\\
+          $D_{\chi^{2}} = \int \frac{(p(x)-q(x))^{2}}{q(x)} dx\qquad \approx \qquad \frac{1}{N} \sum \frac{p(x_{i})^{2}}{q(x_{i})^{2}}-1, \qquad x_{i}\dots q(x)$
+        \end{itemize}
+      };
+      \node (gradient) [block,anchor=north] at ($(loss.south)+(0em,-1em)$) {They give the gradient that is needed for the optimization:
+        $$\nabla_{\theta} D_{(KL \text{ or } \chi^{2})} \approx - \frac{1}{N} \sum \left(\frac{p(x_{i})}{q(x_{i})}\right)^{(1  \text{ or } 2)}\nabla_{\theta} \log q(x_{i}), \qquad x_{i}\dots q(x)$$
+      };
+      \node (optimizer) [block,anchor=north] at ($(gradient.south)+(0em,-1em)$) {We use the ADAM optimizer for stochastic gradient descent:
+        \begin{itemize}
+        \item The learning rate for each parameter is adapted separately, but based on previous iterations.
+        \item This is effective for sparse and noisy functions. 
+        \end{itemize}
+      };
+      \node (ref) [text width = 20em,anchor = south east, align=right] at ($(optimizer.south east)+(0em,0em)$){\begin{scriptsize}\textcolor[rgb]{.4,.4,.4}{Kingma/Ba [arXiv:1412.6980]}\end{scriptsize}};
+    \end{tikzpicture}
+  \end{center}
+\end{frame}
+
+
+% Slide 15
+\begin{frame}
+  \frametitle{Using the NN as coordinate transform is too costly.}
+  \tikzstyle{block} = [draw, text width=32em, fill=FERMILABblue!20, rounded corners, drop shadow, minimum height = 6em, align=left]
+  \begin{center}
+    \begin{tikzpicture}
+      \node (direct) [block] at (0,0) {We could use the NN as nonlinear coordinate transform:\vspace*{0.5em}
+        \begin{itemize}
+        \item We use a deep NN with $n_{dim}$ nodes in the first and last layer to map a uniformly distributed $x$ to a target $q(x)$.
+        \item The distribution induced by the map $y(x)$ (=NN) is given by the Jacobian of the map:\\ $q(y) = q(y(x)) = \left|\frac{\partial y}{\partial x}\right|^{-1}$
+        \end{itemize}
+      };
+      \node (plot0) [anchor=north, text width = 6em] at ($(direct.south)+(-5.5em,-0.5em)$) {\includegraphics[width=\textwidth]{figures/x2-map.pdf}};
+      \node (plot1) [anchor=west, text width = 6em] at ($(plot0.east)+(5em,0em)$) {\includegraphics[width=\textwidth]{figures/x2-jac.pdf}};
+      \node (arrow) [anchor = west, text width = 4em, text centered] at ($(plot0.east)+(0em,0em)$) {\begin{Large}$\xrightarrow{\text{Jacobian}}$\end{Large}};
+      \node (ref) [text width = 20em,anchor = south east, align=right] at ($(direct.south east)+(0em,0em)$){\begin{scriptsize}\textcolor[rgb]{.4,.4,.4}{Klimek/Perelstein [arXiv:1810.11509]}\end{scriptsize}};
+      \node (text0) [anchor=north, text width = 5em, text centered] at ($(plot0.south)+(0em,0.5em)$) {$y = x^{2}$};
+      \node (text1) [anchor=north, text width = 6em, text centered] at ($(plot1.south)+(0em,0.5em)$) {$\left|\frac{\partial y}{\partial x}\right|^{-1} = \frac{1}{2x}$};
+      \node (bad) [block,anchor=north, minimum height = 1em] at ($(direct.south)+(0em,-10em)$) {$\Rightarrow$ The Jacobian is needed to evaluate the loss, the integral, and to sample. However, it scales as $\mathcal{O}(n^{3})$ and is too costly for high-dimensional integrals!};
+    \end{tikzpicture}
+  \end{center}
+\end{frame}
+
+
+% Slide 16 
+\begin{frame}
+  \frametitle{Normalizing Flows are numerically cheaper.}
+  \tikzstyle{block} = [draw, text width=32em, fill=FERMILABblue!20, rounded corners, drop shadow, minimum height = 6em, align=left]
+  \begin{center}
+    \begin{tikzpicture}
+      \node (NF) [block] at (0,0) {A Normalizing Flow:\\ \vspace*{0.5em}
+        \begin{itemize}
+        \item is a deterministic, bijective, smooth mapping between two statistical distributions.
+        \item is composed of a series of easy transformations, the {\it ``Coupling Layers''.}
+        \item is still flexible enough to learn complicated distributions. 
+        \end{itemize}
+        \vspace*{0.5em} $\Rightarrow$ The NN does not learn the transformation, but the parameters of a series of easy transformations. 
+      };
+        \node (refs) [block, anchor=north] at ($(NF.south)+(0em,-1em)$) {
+          \begin{itemize}
+          \item The idea was introduced as ``Nonlinear Independent Component Estimation'' (NICE) in \textcolor[rgb]{.4,.4,.4}{Dinh et al. \begin{scriptsize}[arXiv:1410.8516]\end{scriptsize}}.
+          \item In \textcolor[rgb]{.4,.4,.4}{Rezende/Mohamed \begin{scriptsize}[arXiv:1505.05770]\end{scriptsize}}, Normalizing Flows were first discussed with planar and radial flows.
+          \item Our approach follows the ideas of \textcolor[rgb]{.4,.4,.4}{M\"uller et al. \begin{scriptsize}[arXiv:1808.03856]\end{scriptsize}},\\
+            but with the modifications of \textcolor[rgb]{.4,.4,.4}{Durkan et al. \begin{scriptsize}[arXiv:1906.04032]\end{scriptsize}}.
+          \item Our code uses {\tt TensorFlow 2.0}, \textcolor[rgb]{.4,.4,.4}{\begin{scriptsize}{\tt www.tensorflow.org}\end{scriptsize}}.
+          \end{itemize}
+        };
+    \end{tikzpicture}
+  \end{center}
+\end{frame}
+
+
+% Slide 17
+\begin{frame}
+  \frametitle{The Coupling Layer is the fundamental Building Block.}
+  \tikzstyle{block} = [draw, text width=32em, fill=FERMILABblue!20, rounded corners, drop shadow, minimum height = 10em, align=left]
+  \begin{center}
+    \begin{tikzpicture}
+      \node (CL) [block] at (0,0) {
+        \begin{tikzpicture}[background rectangle/.style={fill=white}, show background rectangle]
+          \node (NN) [text width = 2em, minimum height = 7.5em, text centered] at ($(8em,0em)$) {NN};
+          \node (perm) [anchor=south,text width = 5.5em, align=right,minimum height = 1em] at ($(20.5em,-0.75em)$) {permutation};
+          \node (xa) [anchor = west,minimum height = 1em, text width = 1em, align = left] at ($(2em,4em)$) {$x_{A}$};
+          \node (xb) [anchor = west,minimum height = 1em, text width = 1em, align = left] at ($(2em,-4em)$) {$x_{B}$};
+          \node (y) [anchor=south east, minimum height = 1em, text width = 1em, text centered] at ($(17.75em,0em)$) {$y$};
+          \node (x) [anchor=south west, minimum height = 1em, text width = 1em, text centered] at ($(-5em,0em)$) {$x$};
+          \node (C)[anchor=south , minimum height = 1em, text width = 4em, text centered] at ($(NN.south)+(-1.1em,-1.15em)$) {$C(x_{B};m(x_{A}))$};
+          \draw[thick,->] ($(-6em,0em)$) -- ($(-2em,0em)$);
+          \draw[thick] ($(-2em,0em)$) -- ($(2em,4em)$);
+          \draw[thick] ($(-2em,0em)$) -- ($(2em,-4em)$);
+          \draw[thick] ($(4em,-4em)$) -- ($(4.75em,-4em)$);
+          \draw[thick] ($(10.75em,-4em)$) -- ($(12em,-4em)$);
+          \draw[thick] ($(4.75em,-5em)$) rectangle ($(10.75em,-3em)$);
+          \draw[thick] ($(4em,4em)$) -- ($(12em,4em)$);
+          \draw[thick] ($(12em,4em)$) --($(16em,0em)$);
+          \draw[thick] ($(12em,-4em)$) --($(16em,0em)$);
+          \draw[thick] ($(16em,0em)$) --($(18em,0em)$);
+          \draw[thick] ($(18em,-1em)$) rectangle ($(24em,1em)$);
+          \draw[thick,->]($(24em,0em)$) --($(25em,0em)$);
+          \draw[thick] ($(7em,-1em)$) rectangle ($(9em,1em)$);
+          \draw[thick,->] ($(8em,4em)$) -- ($(8em,1em)$);
+          \draw[thick,->] ($(8em,-1em)$) -- ($(8em,-3.75em)$);
+        \end{tikzpicture}
+      };
+      \node (exp) [block,anchor=north] at ($(CL.south)+(0em,-0.5em)$) {};
+      \node (left) [anchor = north west, text width = 10em, align = left] at ($(exp.north west)$) {forward:\vspace*{-0.8em}\begin{align}\begin{aligned}\nonumber y_{A} &= x_{A} \\ y_{B,i}&=C(x_{B,i}; m(x_{A})) \end{aligned}\end{align}
+        inverse:\vspace*{-0.8em}\begin{align}\begin{aligned}\nonumber x_{A} &= y_{A} \\ x_{B,i}&=C^{-1}(y_{B,i}; m(x_{A})) \end{aligned}\end{align}};
+      \node (right) [anchor = north east, text width = 20em, align = left] at ($(exp.north east)$) {The $C$ are numerically cheap, invertible, and separable in $x_{B,i}$. \\ $ $\\
+        Jacobian:\vspace*{-0.8em}\begin{align}\begin{aligned}\nonumber \left|\frac{\partial y}{\partial x}\right| &= \begin{vmatrix}1 & \frac{\partial C}{\partial x_{A}} \\ 0 & \frac{\partial C}{\partial x_{B}}\end{vmatrix} = \Pi_{i}\frac{\partial C(x_{B,i}; m(x_{A}))}{\partial x_{B,i}} \end{aligned}\end{align}
+        \qquad \qquad$\Rightarrow \mathcal{O}(n)$
+      };
+    \end{tikzpicture}
+  \end{center}
+\end{frame}
+
+
+% Slide 22
+\begin{frame}
+  \frametitle{The 4-d Camel function illustrates the learning of the NN.}
+  \tikzstyle{block} = [draw, text width=32em, fill=FERMILABblue!20, rounded corners, drop shadow, minimum height = 4em, align=left]
+  \begin{center}
+    \begin{tikzpicture}
+      \node (func) [block] at (0,0) {Our test function: 2 Gaussian peaks, randomly placed in a 4d space.\vspace*{0.5em}
+        \begin{columns}\column{0.5\textwidth}\hspace*{1.25em} Target Distribution:\\ \centering\framebox{\includegraphics[width=0.75\textwidth]{code/matrix.png}}\column{0.5\textwidth}
+          \only<1>{Before training: \\ \centering\framebox{\includegraphics[width=0.75\textwidth]{code/fig-0000.png}} \end{columns}}
+        \only<2>{After 5 epochs: \\ \centering\framebox{\includegraphics[width=0.75\textwidth]{code/fig-0005.png}} \end{columns}}
+      \only<3>{After 10 epochs: \\ \centering\framebox{\includegraphics[width=0.75\textwidth]{code/fig-0010.png}} \end{columns}}
+    \only<4>{After 25 epochs: \\ \centering\framebox{\includegraphics[width=0.75\textwidth]{code/fig-0025.png}} \end{columns}}
+  \only<5>{After 100 epochs: \\ \centering\framebox{\includegraphics[width=0.75\textwidth]{code/fig-0100.png}} \end{columns}}
+\only<6>{After 200 epochs: \\ \centering\framebox{\includegraphics[width=0.75\textwidth]{code/fig-0199.png}} \end{columns}}
+};
+\node (gif) [block,anchor=north] at ($(func.south)+(0em,-0.5em)$) {\vspace*{-0.25em}
+  \begin{itemize}
+  \item Final Integral:    0.0063339(41)
+  \item {\tt VEGAS} plain: 0.0063349(92)
+  \item {\tt VEGAS} full:  0.0063326(21)
+  \item Trained efficiency: 14.8 \% \qquad Untrained efficiency: 0.6 \%
+  \end{itemize}
+  % \animategraphics[loop,controls,width=12em]{10}{code/fig-}{0000}{0199}
+};
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+
+% Slide 26
+\begin{frame}
+  \frametitle{Already in $e^{+}e^{-}\to 3j$ we are more effective.}
+  \tikzstyle{block} = [draw, text width=32em, fill=FERMILABblue!20, rounded corners, drop shadow, minimum height = 2em, align=left]
+  \begin{center}
+    \begin{tikzpicture}
+      \node (plot) [block] at (0,0) {
+        \begin{center}
+          \includegraphics[width=0.75\textwidth]{code/weights.pdf}
+        \end{center}
+      };
+      \node (text) [block,anchor=north] at ($(plot.south)+(0em,-1em)$) {\vspace*{-1em}
+        \begin{align}\begin{aligned}\nonumber \sigma_{\text{our code}} = 4887.1 \pm 4.6 \text{pb} \hspace*{6em} \sigma_{\text{Sherpa}} = 4877.0 \pm 17.7 \text{pb} \\ \text{unweighting efficiency} = 12.9 \% \hspace*{4em}\text{unweighting efficiency} = 2.8 \% \end{aligned}\end{align}
+        % xsec = 4887.097353541995 +/- 4.556917423148081 12.9 \%
+        % 4877.01 pb +- ( 17.7023 pb = 0.36 \% ) exp. eff: 2.78364 \%
+      };
+      \node [anchor = north, text width = 22em, align = left] (label) at ($(plot.north)+(0em,-1em)$) {weight distribution};
+    \end{tikzpicture}
+  \end{center}
+\end{frame}
+
+\end{document}
+
+
+
+
+
+
+
+
+
