@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 import tensorflow_probability as tfp
 from scipy.special import erf
+import vegas
 
 from absl import app, flags
 
@@ -28,15 +29,18 @@ flags.DEFINE_integer('ndims', 4, 'The number of dimensions for the integral',
                      short_name='d')
 flags.DEFINE_float('alpha', 0.2, 'The width of the Gaussians',
                    short_name='a')
-flags.DEFINE_float('radius1', 0.45, 'The outer radius for the ring integrand',
+flags.DEFINE_float('radius1', 0.45, 'The outer radius for the annulus integrand',
                    short_name='r1')
-flags.DEFINE_float('radius2', 0.2, 'The inner radius for the ring integrand',
+flags.DEFINE_float('radius2', 0.2, 'The inner radius for the annulus integrand',
                    short_name='r2')
 flags.DEFINE_integer('epochs', 1000, 'Number of epochs to train',
                      short_name='e')
 flags.DEFINE_integer('ptspepoch', 5000, 'Number of points to sample per epoch',
                      short_name='p')
-
+flags.DEFINE_float('precision', 1e-5, 'Target precision in integrator comparison',
+                   short_name='tp')
+flags.DEFINE_bool('targetmode', False, 'Flag to trigger training until target precision is reached',
+                  short_name='t')
 
 class TestFunctions:
     """ Contains the functions discussed in the reference above.
@@ -119,15 +123,15 @@ class TestFunctions:
         return res
 
     class Ring:
-        """ Class to store the ring function.
+        """ Class to store the annulus (ring) function.
 
         Attributes:
-            radius1 (float): Outer radius of the Ring.
-            radius2 (float): Inner radius of the Ring.
+            radius1 (float): Outer radius of the annulus.
+            radius2 (float): Inner radius of the annulus.
 
         """
         def __init__(self, radius1, radius2):
-            """ Init ring function. """
+            """ Init annulus function. """
 
             # Ensure raidus1 is the large one
             if radius1 < radius2:
@@ -137,13 +141,13 @@ class TestFunctions:
             self.radius22 = radius2**2
 
         def __call__(self, pts):
-            """ Calculate a ring like function.
+            """ Calculate annulus function.
 
             Args:
                 x (tf.Tensor): Tensor with batch of points to evaluate
 
             Returns:
-                tf.Tensor: 1. if on Ring, 0. otherwise
+                tf.Tensor: 1. if on annulus, 0. otherwise
 
             """
             radius = tf.reduce_sum((pts-0.5)**2, axis=-1)
@@ -154,7 +158,7 @@ class TestFunctions:
 
         @property
         def area(self):
-            """ Get the area of ring surface. """
+            """ Get the area of annulus surface. """
             return np.pi*(self.radius12 - self.radius22)
 
     class TriangleIntegral:
@@ -363,6 +367,36 @@ def train_iflow(integrate, ptspepoch, epochs):
 
     return means, stddevs
 
+def train_iflow_target(integrate, ptspepoch, target):
+    """ Run the iflow integrator
+
+    Args:
+        integrate (Integrator): iflow Integrator class object
+        ptspepoch (int): number of points per epoch in training
+        target (float): target precision of final integral
+
+    Returns:
+        numpy.ndarray(float): integral estimations and its uncertainty of each epoch
+
+    """
+    # monitor accumulated integral and uncertainty
+    means = []
+    stddevs = []
+    current_precision = 1e99
+    epoch = 0
+    while current_precision > target:
+        loss, integral, error = integrate.train_one_step(ptspepoch,
+                                                         integral=True)
+        means.append(integral)
+        stddevs.append(error)
+        _, current_precision = variance_weighted_result(np.array(means), np.array(stddevs))
+        if epoch % 10 == 0:
+            print('Epoch: {:3d} Loss = {:8e} Integral = '
+                  '{:8e} +/- {:8e} Total uncertainty = {:8e}'.format(epoch, loss,
+                                                                     integral, error,
+                                                                     current_precision))
+        epoch += 1
+    return np.array(means), np.array(stddevs)
 
 def sample_iflow(integrate, ptspepoch, epochs):
     """ Sample from the iflow integrator
@@ -389,6 +423,23 @@ def sample_iflow(integrate, ptspepoch, epochs):
         stddevs_t.append(tf.sqrt(var/(ptspepoch-1.)).numpy())
     return np.array(means_t), np.array(stddevs_t)
 
+def rel_unc(mean_a, unc_a, mean_b, unc_b):
+    """  Relative uncertainty, for Table III """
+    ret = mean_a - mean_b
+    sqr = np.sqrt(unc_a**2 + unc_b**2)
+    ret = ret/sqr
+    return ret
+
+def variance_weighted_result(means, stddevs):
+    """ Computes weighted mean and stddev of given means and
+        stddevs arrays, using Inverse-variance weighting
+    """
+    assert np.size(means) == np.size(stddevs)
+    assert means.shape == stddevs.shape
+    variance = 1./np.sum(1./stddevs**2, axis=-1)
+    mean = np.sum(means/(stddevs**2), axis=-1)
+    mean *= variance
+    return mean, np.sqrt(variance)
 
 def main(argv):
     """ Main function for test runs. """
@@ -397,7 +448,7 @@ def main(argv):
     # gauss: 2, 4, 8, or 16
     # camel: 2, 4, 8, or 16
     # circle: 2
-    # ring: 2
+    # annulus: 2
     # Box: ndims = 3, Triangle: ndims = 2
     ndims = FLAGS.ndims
     alpha = FLAGS.alpha
@@ -442,44 +493,97 @@ def main(argv):
 
     epochs = FLAGS.epochs
     ptspepoch = FLAGS.ptspepoch
-    x_values = np.arange(0, (epochs + 1) * ptspepoch, ptspepoch)
+    target_precision = FLAGS.precision
 
-    integrate = build_iflow(integrand, ndims)
-    mean_t, err_t = train_iflow(integrate, ptspepoch, epochs)
-    mean_e, err_e = sample_iflow(integrate, ptspepoch, epochs)
+    if not FLAGS.targetmode:
+        # epoch mode
+        x_values = np.arange(0, (epochs + 1) * ptspepoch, ptspepoch)
 
-    iflow_mean_wgt = np.sum(mean_e/(err_e**2), axis=-1)
-    iflow_err_wgt = np.sum(1./(err_e**2), axis=-1)
-    iflow_mean_wgt /= iflow_err_wgt
-    iflow_err_wgt = 1. / np.sqrt(iflow_err_wgt)
+        integrate = build_iflow(integrand, ndims)
+        mean_t, err_t = train_iflow(integrate, ptspepoch, epochs)
+        mean_e, err_e = sample_iflow(integrate, ptspepoch, epochs)
 
-    print("Results for {:d} dimensions:".format(ndims))
-    print("Weighted iflow result is {:.5e} +/- {:.5e}".format(
-        iflow_mean_wgt, iflow_err_wgt))
+        #iflow_mean_wgt = np.sum(mean_e/(err_e**2), axis=-1)
+        #iflow_err_wgt = np.sum(1./(err_e**2), axis=-1)
+        #iflow_mean_wgt /= iflow_err_wgt
+        #iflow_err_wgt = 1. / np.sqrt(iflow_err_wgt)
+        iflow_mean_wgt, iflow_err_wgt = variance_weighted_result(mean_e, err_e)
 
-    # numbers for the table III (relative uncertainty):
-    def rel_unc(mean_a, unc_a, mean_b, unc_b):
-        ret = mean_a - mean_b
-        sqr = np.sqrt(unc_a**2 + unc_b**2)
-        ret = ret/sqr
-        return ret
+        print("Results for {:d} dimensions:".format(ndims))
+        print("Weighted iflow result is {:.5e} +/- {:.5e}".format(
+            iflow_mean_wgt, iflow_err_wgt))
 
-    print("Relative Uncertainty iflow result is {:.3f}".format(
-        rel_unc(iflow_mean_wgt, iflow_err_wgt, target, 0.)))
+        print("Relative Uncertainty iflow result is {:.3f}".format(
+            rel_unc(iflow_mean_wgt, iflow_err_wgt, target, 0.)))
 
-    plt.figure(dpi=150, figsize=[5., 4.])
-    plt.xlim(0., epochs * ptspepoch)
-    plt.xlabel('Evaluations in training')
-    plt.ylim(1e-5, 1e1)
-    plt.ylabel('Integral uncertainty (%)')
-    plt.yscale('log')
+        plt.figure(dpi=150, figsize=[5., 4.])
+        plt.xlim(0., epochs * ptspepoch)
+        plt.xlabel('Evaluations in training')
+        plt.ylim(1e-5, 1e1)
+        plt.ylabel('Integral uncertainty (%)')
+        plt.yscale('log')
 
-    # Plot iflow
-    plt.plot(x_values, err_t/np.abs(mean_t), color='r')
+        # Plot iflow
+        plt.plot(x_values, err_t/np.abs(mean_t), color='r')
 
-    plt.savefig('{}_unc.png'.format(FLAGS.function), bbox_inches='tight')
-    plt.show()
-    plt.close()
+        plt.savefig('{}_unc.png'.format(FLAGS.function), bbox_inches='tight')
+        plt.show()
+        plt.close()
+
+    else:
+        # target mode
+        print("In target mode with absolute precision {}".format(target_precision))
+        integrate = build_iflow(integrand, ndims)
+        mean_t, err_t = train_iflow_target(integrate, ptspepoch, target_precision)
+        num_epochs = len(mean_t)
+        x_values = np.arange(ptspepoch, (num_epochs+1) * ptspepoch, ptspepoch)
+        iflow_mean_wgt, iflow_err_wgt = variance_weighted_result(mean_t, err_t)
+
+        print("Results for {:d} dimensions:".format(ndims))
+        print("Weighted iflow result is {:.5e} +/- {:.5e} after {:d} epochs".format(
+            iflow_mean_wgt, iflow_err_wgt, num_epochs))
+        print("Relative Uncertainty iflow result is {:.3f}".format(
+            rel_unc(iflow_mean_wgt, iflow_err_wgt, target, 0.)))
+
+        # plot relative integral uncertainty per epoch
+        plt.figure(dpi=150, figsize=[5., 4.])
+        plt.xlim(0., num_epochs * ptspepoch)
+        plt.xlabel('Evaluations in training')
+        plt.ylim(1e-5, 1e1)
+        plt.ylabel('Integral uncertainty (%)')
+        plt.yscale('log')
+
+        # Plot iflow
+        plt.plot(x_values, err_t/np.abs(mean_t), color='r')
+
+        plt.savefig('{}_unc_target.png'.format(FLAGS.function), bbox_inches='tight')
+        plt.show()
+        plt.close()
+
+        # plot total precision
+        plt.figure(dpi=150, figsize=[5., 4.])
+        plt.yscale('log')
+        plt.xscale('log')
+        plt.xlim(ptspepoch, num_epochs * ptspepoch)
+        plt.xlabel('Evaluations in training')
+        plt.ylim(target_precision, 1e0)
+        plt.ylabel('Total integral uncertainty')
+
+        # Plot iflow
+        total_uncertainty = np.zeros(num_epochs)
+        for i in range(num_epochs):
+            #print(variance_weighted_result(mean_t[:i+1], err_t[:i+1]))
+            _, total_uncertainty[i] = variance_weighted_result(mean_t[:i+1], err_t[:i+1])
+        plt.plot(x_values, total_uncertainty, color='r')
+        # background grid
+        start_values = np.logspace(-2, 4, 7)
+        for start in start_values:
+            plt.plot(x_values, start/np.sqrt(x_values), color='gray', lw=0.5, ls='dashed')
+
+        plt.savefig('{}_total_unc_target.png'.format(FLAGS.function), bbox_inches='tight')
+        plt.show()
+        plt.close()
+
 
     # scatter plot for ring
     if FLAGS.function == 'Ring':
