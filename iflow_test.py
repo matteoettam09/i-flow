@@ -56,6 +56,7 @@ class TestFunctions:
         self.ndims = ndims
         self.alpha = alpha
         self.variables = kwargs
+        self.calls = 0
 
     def gauss(self, x):
         """ Based on eq. 10 of [1], Gaussian function.
@@ -71,7 +72,24 @@ class TestFunctions:
         pre = tf.cast(1.0/(self.alpha * tf.sqrt(np.pi))**self.ndims,
                       dtype=tf.float64)
         exponent = -1.0*tf.reduce_sum(((x-0.5)**2)/self.alpha**2, axis=-1)
+        self.calls += 1
         return pre * tf.exp(exponent)
+
+    def gauss_np(self, x):
+        """ Based on eq. 10 of [1], Gaussian function.
+
+        Integral equals erf(1/(2*alpha)) ** ndims
+
+        Args:
+            x (np.array): point to evaluate
+
+        Returns: np.array: functional values at the given points
+
+        """
+        pre = 1.0/(self.alpha * np.sqrt(np.pi))**self.ndims
+        exponent = -1.0*np.sum(((x-0.5)**2)/self.alpha**2, axis=-1)
+        self.calls += 1
+        return pre * np.exp(exponent)
 
     def camel(self, x):
         """ Based on eq. 12 of [1], Camel function.
@@ -92,6 +110,7 @@ class TestFunctions:
                       dtype=tf.float64)
         exponent1 = -1.*tf.reduce_sum(((x-(1./3.))**2)/self.alpha**2, axis=-1)
         exponent2 = -1.*tf.reduce_sum(((x-(2./3.))**2)/self.alpha**2, axis=-1)
+        self.calls += 1
         return 0.5*pre*(tf.exp(exponent1)+tf.exp(exponent2))
 
     def circle(self, x):
@@ -120,6 +139,7 @@ class TestFunctions:
                + (1.0-x[..., 1]**ee)
                * tf.exp(-w1*tf.abs((x[..., 1]-1.0+dy1)**2
                                    + (x[..., 0]-1.0+dx1)**2-rr**2)))
+        self.calls += 1
         return res
 
     class Ring:
@@ -459,6 +479,7 @@ def main(argv):
     if FLAGS.function == 'Gauss':
         target = erf(1/(2.*alpha))**ndims
         integrand = func.gauss
+        integrand_np = func.gauss_np
     elif FLAGS.function == 'Camel':
         target = (0.5*(erf(1/(3.*alpha))+erf(2/(3.*alpha))))**ndims
         integrand = func.camel
@@ -499,14 +520,11 @@ def main(argv):
         # epoch mode
         x_values = np.arange(0, (epochs + 1) * ptspepoch, ptspepoch)
 
+        # i-flow
         integrate = build_iflow(integrand, ndims)
         mean_t, err_t = train_iflow(integrate, ptspepoch, epochs)
         mean_e, err_e = sample_iflow(integrate, ptspepoch, epochs)
 
-        #iflow_mean_wgt = np.sum(mean_e/(err_e**2), axis=-1)
-        #iflow_err_wgt = np.sum(1./(err_e**2), axis=-1)
-        #iflow_mean_wgt /= iflow_err_wgt
-        #iflow_err_wgt = 1. / np.sqrt(iflow_err_wgt)
         iflow_mean_wgt, iflow_err_wgt = variance_weighted_result(mean_e, err_e)
 
         print("Results for {:d} dimensions:".format(ndims))
@@ -516,6 +534,43 @@ def main(argv):
         print("Relative Uncertainty iflow result is {:.3f}".format(
             rel_unc(iflow_mean_wgt, iflow_err_wgt, target, 0.)))
 
+        # vegas
+        vegas_integ = vegas.Integrator(ndims* [[0, 1]])
+        current_vegas_calls = func.calls
+        vegas_calls = []
+        vegas_results = []
+        vegas_means = []
+        vegas_stddevs = []
+        for i in range(epochs):
+            # using the tf.function makes it slow
+            # using integrand_np is a lot faster, but only
+            # implemented for the Gaussian
+            current_result = vegas_integ(integrand, nitn=1, neval=ptspepoch)
+            vegas_means.append(current_result.mean)
+            vegas_stddevs.append(current_result.sdev)
+            vegas_results.append(current_result)
+            vegas_calls.append(func.calls - current_vegas_calls)
+            current_vegas_calls = func.calls
+
+            _, current_precision = variance_weighted_result(np.array(vegas_means),
+                                                            np.array(vegas_stddevs))
+            if i % 10 == 0:
+                print('Epoch: {:3d} Integral = '
+                      '{:8e} +/- {:8e} Total uncertainty = {:8e}'.format(i, current_result.mean,
+                                                                         current_result.sdev,
+                                                                         current_precision))
+
+        vegas_calls = np.array(vegas_calls)
+        vegas_means = np.array(vegas_means)
+        vegas_stddevs = np.array(vegas_stddevs)
+
+        vegas_mean_wgt, vegas_err_wgt = variance_weighted_result(vegas_means, vegas_stddevs)
+        print("Weighted VEGAS result is {:.5e} +/- {:.5e}".format(
+            vegas_mean_wgt, vegas_err_wgt))
+        print("Relative Uncertainty VEGAS result is {:.3f}".format(
+            rel_unc(vegas_mean_wgt, vegas_err_wgt, target, 0.)))
+
+
         plt.figure(dpi=150, figsize=[5., 4.])
         plt.xlim(0., epochs * ptspepoch)
         plt.xlabel('Evaluations in training')
@@ -523,8 +578,9 @@ def main(argv):
         plt.ylabel('Integral uncertainty (%)')
         plt.yscale('log')
 
-        # Plot iflow
+        # Plot Integral Uncertainty
         plt.plot(x_values, err_t/np.abs(mean_t), color='r')
+        plt.plot(np.cumsum(vegas_calls), vegas_stddevs/np.abs(vegas_means), color='b')
 
         plt.savefig('{}_unc.png'.format(FLAGS.function), bbox_inches='tight')
         plt.show()
@@ -616,3 +672,5 @@ def main(argv):
 
 if __name__ == '__main__':
     app.run(main)
+
+    # TODO: test vegas in notebook, repeat steps as above
