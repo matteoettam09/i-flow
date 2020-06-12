@@ -75,22 +75,6 @@ class TestFunctions:
         self.calls += 1
         return pre * tf.exp(exponent)
 
-    def gauss_np(self, x):
-        """ Based on eq. 10 of [1], Gaussian function.
-
-        Integral equals erf(1/(2*alpha)) ** ndims
-
-        Args:
-            x (np.array): point to evaluate
-
-        Returns: np.array: functional values at the given points
-
-        """
-        pre = 1.0/(self.alpha * np.sqrt(np.pi))**self.ndims
-        exponent = -1.0*np.sum(((x-0.5)**2)/self.alpha**2, axis=-1)
-        self.calls += 1
-        return pre * np.exp(exponent)
-
     def camel(self, x):
         """ Based on eq. 12 of [1], Camel function.
 
@@ -479,7 +463,6 @@ def main(argv):
     if FLAGS.function == 'Gauss':
         target = erf(1/(2.*alpha))**ndims
         integrand = func.gauss
-        integrand_np = func.gauss_np
     elif FLAGS.function == 'Camel':
         target = (0.5*(erf(1/(3.*alpha))+erf(2/(3.*alpha))))**ndims
         integrand = func.camel
@@ -543,8 +526,8 @@ def main(argv):
         vegas_stddevs = []
         for i in range(epochs):
             # using the tf.function makes it slow
-            # using integrand_np is a lot faster, but only
-            # implemented for the Gaussian
+            # using a numpy version would be a lot faster, but is
+            # currently not implemented
             current_result = vegas_integ(integrand, nitn=1, neval=ptspepoch)
             vegas_means.append(current_result.mean)
             vegas_stddevs.append(current_result.sdev)
@@ -579,8 +562,10 @@ def main(argv):
         plt.yscale('log')
 
         # Plot Integral Uncertainty
-        plt.plot(x_values, err_t/np.abs(mean_t), color='r')
-        plt.plot(np.cumsum(vegas_calls), vegas_stddevs/np.abs(vegas_means), color='b')
+        plt.plot(x_values, err_t/np.abs(mean_t), color='r', label='i-flow')
+        plt.plot(np.cumsum(vegas_calls), vegas_stddevs/np.abs(vegas_means), color='b',
+                 label='VEGAS')
+        plt.legend()
 
         plt.savefig('{}_unc.png'.format(FLAGS.function), bbox_inches='tight')
         plt.show()
@@ -601,6 +586,47 @@ def main(argv):
         print("Relative Uncertainty iflow result is {:.3f}".format(
             rel_unc(iflow_mean_wgt, iflow_err_wgt, target, 0.)))
 
+        # vegas
+        vegas_integ = vegas.Integrator(ndims* [[0, 1]])
+        current_vegas_calls = func.calls
+        vegas_calls = []
+        vegas_results = []
+        vegas_means = []
+        vegas_stddevs = []
+
+        first_run = True
+
+        epoch = 0
+        while first_run or current_vegas_calls < num_epochs*ptspepoch:
+            # using the tf.function makes it slow
+            # using integrand_np is a lot faster, but only
+            # implemented for the Gaussian
+            first_run = False
+            current_result = vegas_integ(integrand, nitn=1, neval=ptspepoch)
+            vegas_means.append(current_result.mean)
+            vegas_stddevs.append(current_result.sdev)
+            vegas_results.append(current_result)
+            vegas_calls.append(func.calls - current_vegas_calls)
+            current_vegas_calls = func.calls
+
+            _, current_precision = variance_weighted_result(np.array(vegas_means),
+                                                            np.array(vegas_stddevs))
+            if epoch % 10 == 0:
+                print('Epoch: {:3d} Integral = '
+                      '{:8e} +/- {:8e} Total uncertainty = {:8e}'.format(epoch, current_result.mean,
+                                                                         current_result.sdev,
+                                                                         current_precision))
+            epoch += 1
+        vegas_calls = np.array(vegas_calls)
+        vegas_means = np.array(vegas_means)
+        vegas_stddevs = np.array(vegas_stddevs)
+
+        vegas_mean_wgt, vegas_err_wgt = variance_weighted_result(vegas_means, vegas_stddevs)
+        print("Weighted VEGAS result is {:.5e} +/- {:.5e}".format(
+            vegas_mean_wgt, vegas_err_wgt))
+        print("Relative Uncertainty VEGAS result is {:.3f}".format(
+            rel_unc(vegas_mean_wgt, vegas_err_wgt, target, 0.)))
+
         # plot relative integral uncertainty per epoch
         plt.figure(dpi=150, figsize=[5., 4.])
         plt.xlim(0., num_epochs * ptspepoch)
@@ -610,7 +636,10 @@ def main(argv):
         plt.yscale('log')
 
         # Plot iflow
-        plt.plot(x_values, err_t/np.abs(mean_t), color='r')
+        plt.plot(x_values, err_t/np.abs(mean_t), color='r', label='i-flow')
+        plt.plot(np.cumsum(vegas_calls), vegas_stddevs/np.abs(vegas_means), color='b',
+                 label='VEGAS')
+        plt.legend()
 
         plt.savefig('{}_unc_target.png'.format(FLAGS.function), bbox_inches='tight')
         plt.show()
@@ -622,7 +651,7 @@ def main(argv):
         plt.xscale('log')
         plt.xlim(ptspepoch, num_epochs * ptspepoch)
         plt.xlabel('Evaluations in training')
-        plt.ylim(target_precision, 1e0)
+        plt.ylim(target_precision/2., 1e0)
         plt.ylabel('Total integral uncertainty')
 
         # Plot iflow
@@ -630,12 +659,21 @@ def main(argv):
         for i in range(num_epochs):
             #print(variance_weighted_result(mean_t[:i+1], err_t[:i+1]))
             _, total_uncertainty[i] = variance_weighted_result(mean_t[:i+1], err_t[:i+1])
-        plt.plot(x_values, total_uncertainty, color='r')
+        plt.plot(x_values, total_uncertainty, color='r', label='i-flow')
+
+        # plot VEGAS
+        len_vegas = len(vegas_calls)
+        vegas_total_uncertainty = np.zeros(len_vegas)
+        for i in range(len_vegas):
+            _, vegas_total_uncertainty[i] = variance_weighted_result(vegas_means[:i+1],
+                                                                     vegas_stddevs[:i+1])
+        plt.plot(np.cumsum(vegas_calls), vegas_total_uncertainty, color='b', label='VEGAS')
         # background grid
-        start_values = np.logspace(-2, 4, 7)
+        start_values = np.logspace(-3, 4, 8)
         for start in start_values:
             plt.plot(x_values, start/np.sqrt(x_values), color='gray', lw=0.5, ls='dashed')
 
+        plt.legend()
         plt.savefig('{}_total_unc_target.png'.format(FLAGS.function), bbox_inches='tight')
         plt.show()
         plt.close()
