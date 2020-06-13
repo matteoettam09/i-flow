@@ -711,4 +711,6 @@ def main(argv):
 if __name__ == '__main__':
     app.run(main)
 
-    # TODO: test vegas in notebook, repeat steps as above
+    # foam reader: read file input as string
+    # get value with error by y = gvar.gvar(my_string.split(";")[0])
+    # n_calls = my_string.split(";")[1]
