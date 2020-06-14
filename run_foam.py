@@ -17,16 +17,16 @@
    msg_Info()<<"  "<<om::bold<<m_vname<<om::reset<<" = "<<om::blue
             <<Mean()*m_scale<<" "<<m_uname<<om::reset<<" +- ( "
             <<error*Mean()*m_scale<<" "<<m_uname<<" = "<<om::red
-@@ -490,15 +491,30 @@ double Foam::Update(const int mode)
+@@ -490,15 +491,31 @@ double Foam::Update(const int mode)
             <<Mean()/m_max*100.0<<" %, n = "<<m_np
             <<" ( "<<m_nvp/m_np*100.0<<" % ), "
             <<m_channels.size()-m_point.size()
 -           <<" cells      "<<mm(1,mm::up)<<bm::cr<<std::flush;
 +           <<" cells      "<<mm(1,mm::up)<<bm::cr<<std::endl;
 +  */
-+  msg_Info()<<Mean()*m_scale<<" +- "
-+           <<error*Mean()*m_scale<<" ; "<<m_np<<" ; eff = "
-+           <<Mean()/m_max*100.0<<" %, n = "<<m_np
++  msg_Info()<<std::setprecision(15)<<Mean()*m_scale<<" +- "
++           <<error*Mean()*m_scale<<" ; "<<m_np<<std::setprecision(6)
++           <<" ; eff = "<<Mean()/m_max*100.0<<" %, n = "<<m_np
 +           <<" ( "<<m_nvp/m_np*100.0<<" % ), "
 +           <<m_channels.size()-m_point.size()
 +           <<" cells      \n "<<mm(1,mm::up)<<bm::cr<<std::endl;
@@ -41,8 +41,9 @@
 -           <<" cells      "<<mm_up(1)<<bm_cr<<std::flush;
 +           <<" cells      "<<mm_up(1)<<bm_cr<<std::endl;
 +  */
-+  msg_Info()<<Mean()*m_scale<<" +-  "<<error*Mean()*m_scale
-+           <<" ; "<<m_np<<" ; eff = "
++  msg_Info()<<std::setprecision(15)<<Mean()*m_scale<<" +-  "
++           <<error*Mean()*m_scale
++           <<" ; "<<m_np<<std::setprecision(6)<<" ; eff = "
 +           <<Mean()/m_max*100.0<<" %, n = "<<m_np
 +           <<" ( "<<m_nvp/m_np*100.0<<" % ), "
 +           <<m_channels.size()-m_point.size()
@@ -107,6 +108,7 @@ class TestFunctions:
         Returns: np.array: functional values at the given points
 
         """
+        x = np.array([x])
         pre = 1.0/(self.alpha * np.sqrt(np.pi))**self.ndims
         exponent = -1.0*np.sum(((x-0.5)**2)/self.alpha**2, axis=-1)
         self.calls += 1
@@ -127,6 +129,7 @@ class TestFunctions:
         Returns: np.array: functional values at the given points
 
         """
+        x = np.array([x])
         pre = 1./(self.alpha*np.sqrt(np.pi))**self.ndims
         exponent1 = -1.*np.sum(((x-(1./3.))**2)/self.alpha**2, axis=-1)
         exponent2 = -1.*np.sum(((x-(2./3.))**2)/self.alpha**2, axis=-1)
@@ -292,6 +295,7 @@ class TestFunctions:
                     + 1.0/denominator3**2
                     + 1.0/denominator4**2)
 
+
 def main(argv):
     """ Main function to run Foam. """
     del argv
@@ -330,6 +334,7 @@ def main(argv):
                                      [0, 0, 0, 125],
                                      [175, 175, 175, 175])
 
+
     epochs = FLAGS.epochs
     ptspepoch = FLAGS.ptspepoch
     target_precision = FLAGS.precision
@@ -339,6 +344,15 @@ def main(argv):
 
     # tell Foam to store points for re-use
     integrator.SetStorePoints(True)
+
+    integrator.SetNCells(epochs)
+    integrator.SetNOpt(2*ptspepoch)
+    integrator.SetNMax(2*ptspepoch*epochs)
+    integrator.SetError(target_precision)
+    integrator.Initialize()
+    integrator.Integrate(integrand)
+
+    print(func.calls)
 
 if __name__ == '__main__':
     app.run(main)
