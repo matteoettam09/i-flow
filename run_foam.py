@@ -17,7 +17,7 @@
    msg_Info()<<"  "<<om::bold<<m_vname<<om::reset<<" = "<<om::blue
             <<Mean()*m_scale<<" "<<m_uname<<om::reset<<" +- ( "
             <<error*Mean()*m_scale<<" "<<m_uname<<" = "<<om::red
-@@ -490,15 +491,31 @@ double Foam::Update(const int mode)
+@@ -490,15 +491,33 @@ double Foam::Update(const int mode)
             <<Mean()/m_max*100.0<<" %, n = "<<m_np
             <<" ( "<<m_nvp/m_np*100.0<<" % ), "
             <<m_channels.size()-m_point.size()
@@ -25,7 +25,8 @@
 +           <<" cells      "<<mm(1,mm::up)<<bm::cr<<std::endl;
 +  */
 +  msg_Info()<<std::setprecision(15)<<Mean()*m_scale<<" +- "
-+           <<error*Mean()*m_scale<<" ; "<<m_np<<std::setprecision(6)
++           <<error*Mean()*m_scale<<" ; "<<m_np<<" ; "
++           <<m_channels.size()-m_point.size()<<" ; "<<std::setprecision(6)
 +           <<" ; eff = "<<Mean()/m_max*100.0<<" %, n = "<<m_np
 +           <<" ( "<<m_nvp/m_np*100.0<<" % ), "
 +           <<m_channels.size()-m_point.size()
@@ -43,7 +44,8 @@
 +  */
 +  msg_Info()<<std::setprecision(15)<<Mean()*m_scale<<" +-  "
 +           <<error*Mean()*m_scale
-+           <<" ; "<<m_np<<std::setprecision(6)<<" ; eff = "
++           <<" ; "<<m_np<<" ; "<<m_channels.size()-m_point.size()
++           <<std::setprecision(6)<<" ; eff = "
 +           <<Mean()/m_max*100.0<<" %, n = "<<m_np
 +           <<" ( "<<m_nvp/m_np*100.0<<" % ), "
 +           <<m_channels.size()-m_point.size()
