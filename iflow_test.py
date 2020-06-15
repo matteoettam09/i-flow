@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 import tensorflow_probability as tfp
 from scipy.special import erf
-import vegas
+import vegas, gvar
 
 from absl import app, flags
 
@@ -457,6 +457,8 @@ def main(argv):
     ndims = FLAGS.ndims
     alpha = FLAGS.alpha
 
+    plot_FOAM = True
+
     func = TestFunctions(ndims, alpha)
 
     # select function:
@@ -498,6 +500,41 @@ def main(argv):
     epochs = FLAGS.epochs
     ptspepoch = FLAGS.ptspepoch
     target_precision = FLAGS.precision
+
+    if plot_FOAM:
+        filename = "Foam_{:d}_{}.txt".format(ndims, FLAGS.function)
+        print("Reading in FOAM results of {}".format(filename))
+        foam_numcalls = []
+        foam_means = []
+        foam_stddevs = []
+        foam_results = []
+        try:
+            foam_file = open(filename, "r")
+        except:
+            raise NameError("{} not found!".format(filename))
+        num_cells = 1
+        for line in foam_file:
+            splitted_line = line.split(";")
+            # check if it is a proper line:
+            try:
+                splitted_line[1]
+            except:
+                continue
+            foam_results.append(gvar.gvar(splitted_line[0]))
+            foam_means.append(foam_results[-1].mean)
+            foam_stddevs.append(foam_results[-1].sdev)
+            foam_numcalls.append(np.int(splitted_line[1]))
+            if splitted_line[2] == num_cells:
+                break
+            else:
+                num_cells = splitted_line[2]
+            print(num_cells)
+        foam_file.close()
+        foam_numcalls = np.array(foam_numcalls)
+        foam_means = np.array(foam_means)
+        foam_stddevs = np.array(foam_stddevs)
+        foam_results = np.array(foam_results)
+        print(foam_numcalls)
 
     if not FLAGS.targetmode:
         # epoch mode
