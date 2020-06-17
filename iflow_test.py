@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 import tensorflow_probability as tfp
 from scipy.special import erf
-import vegas
+import vegas, gvar
 
 from absl import app, flags
 
@@ -480,6 +480,19 @@ def variance_weighted_result(means, stddevs):
     mean *= variance
     return mean, np.sqrt(variance)
 
+def variance_unweight(means_wgt, stddevs_wgt):
+    """ Computes mean and stddev of individual run given
+        means and stddevs arrays that are weighted with
+        Inverse-variance weighting up to that run
+    """
+    inv_var = 1./stddevs_wgt[1:]**2 - 1./stddevs_wgt[:-1]**2
+    stddevs = 1./np.sqrt(inv_var)
+    stddevs = np.insert(stddevs, 0, stddevs_wgt[0])
+    means = means_wgt[1:]/(stddevs_wgt[1:]**2) - means_wgt[:-1]/(stddevs_wgt[:-1]**2)
+    means *= stddevs[1:]**2
+    means = np.insert(means, 0, means_wgt[0])
+    return means, stddevs
+
 def main(argv):
     """ Main function for test runs. """
     del argv
@@ -491,6 +504,8 @@ def main(argv):
     # Box: ndims = 3, Triangle: ndims = 2
     ndims = FLAGS.ndims
     alpha = FLAGS.alpha
+
+    plot_FOAM = True
 
     func = TestFunctions(ndims, alpha)
 
@@ -533,6 +548,53 @@ def main(argv):
     epochs = FLAGS.epochs
     ptspepoch = FLAGS.ptspepoch
     target_precision = FLAGS.precision
+
+    if plot_FOAM:
+        filename = "FOAM_data/Foam_{:d}_{}.txt".format(ndims, FLAGS.function)
+        print("Reading in FOAM results of {}".format(filename))
+        foam_numcalls = []
+        foam_means = []
+        foam_stddevs = []
+        foam_results = []
+
+        one_cell_value = integrand(np.random.rand(ptspepoch, ndims))
+        foam_numcalls.append(ptspepoch)
+        foam_means.append(np.mean(one_cell_value))
+        foam_stddevs.append(np.std(one_cell_value)/np.sqrt(ptspepoch))
+        foam_results.append(gvar.gvar("{} +- {}".format(foam_means[-1], foam_stddevs[-1])))
+
+        try:
+            foam_file = open(filename, "r")
+        except:
+            raise NameError("{} not found!".format(filename))
+        num_cells = 1
+        for line in foam_file:
+            splitted_line = line.split(";")
+            # check if it is a proper line:
+            try:
+                splitted_line[1]
+            except:
+                continue
+            foam_results.append(gvar.gvar(splitted_line[0]))
+            foam_means.append(foam_results[-1].mean)
+            foam_stddevs.append(foam_results[-1].sdev)
+            foam_numcalls.append(np.int(splitted_line[1]))
+            if foam_stddevs[-1] < target_precision:
+                break
+            if splitted_line[2] == num_cells:
+                break
+            num_cells = splitted_line[2]
+        foam_file.close()
+        foam_calls = np.array(foam_numcalls)
+        foam_means = np.array(foam_means)
+        foam_stddevs = np.array(foam_stddevs)
+        foam_results = np.array(foam_results)
+        print("Done")
+        print("Weighted FOAM result is {:.5e} +/- {:.5e}".format(
+            foam_means[-1], foam_stddevs[-1]))
+        print("Relative Uncertainty FOAM result is {:.3f}".format(
+            rel_unc(foam_means[-1], foam_stddevs[-1], target, 0.)))
+        print("FOAM used {} cells and {:d} function calls".format(num_cells, foam_numcalls[-1]))
 
     if not FLAGS.targetmode:
         # epoch mode
@@ -595,11 +657,16 @@ def main(argv):
         plt.ylim(1e-5, 1e1)
         plt.ylabel('Integral uncertainty (%)')
         plt.yscale('log')
+        plt.xscale('log')
 
         # Plot Integral Uncertainty
         plt.plot(x_values, err_t/np.abs(mean_t), color='r', label='i-flow')
         plt.plot(np.cumsum(vegas_calls), vegas_stddevs/np.abs(vegas_means), color='b',
                  label='VEGAS')
+        if plot_FOAM:
+            foam_means_uwgt, foam_stddevs_uwgt = variance_unweight(foam_means, foam_stddevs)
+            plt.plot(foam_calls, foam_stddevs_uwgt/np.abs(foam_means_uwgt), color='green',
+                     label='FOAM')
         plt.legend()
 
         plt.savefig('{}_unc.png'.format(FLAGS.function), bbox_inches='tight')
@@ -616,10 +683,12 @@ def main(argv):
         iflow_mean_wgt, iflow_err_wgt = variance_weighted_result(mean_t, err_t)
 
         print("Results for {:d} dimensions:".format(ndims))
-        print("Weighted iflow result is {:.5e} +/- {:.5e} after {:d} epochs".format(
-            iflow_mean_wgt, iflow_err_wgt, num_epochs))
+        print("Weighted iflow result is {:.5e} +/- {:.5e}.".format(
+            iflow_mean_wgt, iflow_err_wgt))
         print("Relative Uncertainty iflow result is {:.3f}".format(
             rel_unc(iflow_mean_wgt, iflow_err_wgt, target, 0.)))
+        print("i-flow needed {:d} epochs and {:d} function calls".format(num_epochs,
+                                                                         num_epochs*ptspepoch))
 
         # vegas
         vegas_integ = vegas.Integrator(ndims* [[0, 1]])
@@ -632,7 +701,9 @@ def main(argv):
         first_run = True
 
         epoch = 0
-        while first_run or current_vegas_calls < num_epochs*ptspepoch:
+        current_vegas_precision = 1e99
+        #while first_run or current_vegas_calls < num_epochs*ptspepoch:
+        while current_vegas_precision > target_precision:
             # using the tf.function makes it slow
             # using integrand_np is a lot faster, but only
             # implemented for the Gaussian
@@ -644,13 +715,13 @@ def main(argv):
             vegas_calls.append(func.calls - current_vegas_calls)
             current_vegas_calls = func.calls
 
-            _, current_precision = variance_weighted_result(np.array(vegas_means),
-                                                            np.array(vegas_stddevs))
+            _, current_vegas_precision = variance_weighted_result(np.array(vegas_means),
+                                                                  np.array(vegas_stddevs))
             if epoch % 10 == 0:
                 print('Epoch: {:3d} Integral = '
                       '{:8e} +/- {:8e} Total uncertainty = {:8e}'.format(epoch, current_result.mean,
                                                                          current_result.sdev,
-                                                                         current_precision))
+                                                                         current_vegas_precision))
             epoch += 1
         vegas_calls = np.array(vegas_calls)
         vegas_means = np.array(vegas_means)
@@ -661,19 +732,26 @@ def main(argv):
             vegas_mean_wgt, vegas_err_wgt))
         print("Relative Uncertainty VEGAS result is {:.3f}".format(
             rel_unc(vegas_mean_wgt, vegas_err_wgt, target, 0.)))
+        print("VEGAS needed {:d} iterations and {:d} function calls".format(epoch,
+                                                                            np.sum(vegas_calls)))
 
         # plot relative integral uncertainty per epoch
         plt.figure(dpi=150, figsize=[5., 4.])
-        plt.xlim(0., num_epochs * ptspepoch)
+        plt.xlim(ptspepoch, num_epochs * ptspepoch)
         plt.xlabel('Evaluations in training')
         plt.ylim(1e-5, 1e1)
         plt.ylabel('Integral uncertainty (%)')
         plt.yscale('log')
+        plt.xscale('log')
 
         # Plot iflow
         plt.plot(x_values, err_t/np.abs(mean_t), color='r', label='i-flow')
         plt.plot(np.cumsum(vegas_calls), vegas_stddevs/np.abs(vegas_means), color='b',
                  label='VEGAS')
+        if plot_FOAM:
+            foam_means_uwgt, foam_stddevs_uwgt = variance_unweight(foam_means, foam_stddevs)
+            plt.plot(foam_calls, foam_stddevs_uwgt/np.abs(foam_means_uwgt), color='green',
+                     label='FOAM')
         plt.legend()
 
         plt.savefig('{}_unc_target.png'.format(FLAGS.function), bbox_inches='tight')
@@ -703,6 +781,9 @@ def main(argv):
             _, vegas_total_uncertainty[i] = variance_weighted_result(vegas_means[:i+1],
                                                                      vegas_stddevs[:i+1])
         plt.plot(np.cumsum(vegas_calls), vegas_total_uncertainty, color='b', label='VEGAS')
+        if plot_FOAM:
+            plt.plot(foam_calls, foam_stddevs, color='green', label='FOAM')
+
         # background grid
         start_values = np.logspace(-3, 4, 8)
         for start in start_values:
