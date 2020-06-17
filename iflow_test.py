@@ -256,6 +256,41 @@ class TestFunctions:
                     + 1.0/denominator3**2
                     + 1.0/denominator4**2)
 
+    class HOPathIntegral:
+        """ Class implementing the path integral of a harmonic oscillator """
+
+        def __init__(self, x0, T, a, m):
+            self.a = a
+            self.T = T
+            self.x0 = x0
+            self.m = m
+            self.N = T/a
+            self.ndims = int(N)
+            self.A = (m/(2*np.pi*a))**(N/2)
+
+        def call_tf(self, x):
+            x0 = self.x0*tf.ones((x.shape[0], 1))
+            x = tf.concat([x0, x], axis=-1)
+            diffx = tf.math.squared_difference(x[:, 1:], x[:, :-1])
+            diffx_last = (x[:, 0] - x[:, -1])**2
+            term1 = tf.reduce_sum(self.m/(2.0*a)*diffx, axis=-1)
+            term1 += self.m/(2.0*self.a)*diffx_last
+            term2 = tf.reduce_sum(self.a/2.0*x**2, axis=-1)
+            return self.A*tf.exp(-term1 - term2)
+
+        def call_np(self, x):
+            x0 = self.x0*np.ones((x.shape[0], 1))
+            x = np.concatenate([x0, x], axis=-1)
+            diffx = np.diff(x, axis=-1)
+            term1 = np.sum(self.m/(2.0*a)*diffx**2, axis=-1) 
+            term1 += (x[:, 0] - x[:, -1])**2*self.m/(2.0*self.a)
+            term2 = np.sum(a/2.0*x**2, axis=-1)
+            return A*np.exp(-term1 - term2)
+
+        def exact(self):
+            return (np.exp(-self.x0**2/2)/np.pi**(1/4))**2 * np.exp(-0.5*self.T)
+
+
 
 def build(in_features, out_features, options):
     """ Builds a dense NN.
