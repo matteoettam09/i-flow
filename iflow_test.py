@@ -259,7 +259,7 @@ class TestFunctions:
     class HOPathIntegral:
         """ Class implementing the path integral of a harmonic oscillator """
 
-        def __init__(self, x0, T, a, m):
+        def __init__(self, x0=0.0, T=4.0, a=0.5, m=1.0):
             self.a = a
             self.T = T
             self.x0 = x0
