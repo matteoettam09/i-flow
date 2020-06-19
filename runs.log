@@ -1,0 +1,121 @@
+protocoll of runs for i-flow paper v2
+=====================================
+
+ _________________________________
+|_relative_target_precision:_1e-4_|
+
+
+overview
+--------
+
+note: VEGAS out of the box (nbins, max_eval, etc.)
+note: FOAM probably needs more than 5k pts to "see" in high-dim
+
+id | function to evaluate | ndims | ran |    	 "epochs"       |
+   | 	      	 	  |  	    	| i-flow | VEGAS | FOAM |
+
+1  | 	      Gaussian	  |   2	  | yes |   462,    50,   1252
+2  |	      Gaussian    |   4	  | yes |   457,   200,   4819
+3  |	      Gaussian    |   8	  | yes |   619,   455, >10000
+4  |	      Gaussian    |   16  | yes |  1446,  1108, >10000 
+5  |	      Camel    	  |   2	  | yes |   445,   140,   1124
+6  |	      Camel    	  |   4	  | yes |  1644,  6849,   4364
+7  |	      Camel    	  |   8	  | yes	|  3892, 13250, >10000
+8  |	      Camel    	  |   16  | yes |  6573,   398,	>10000
+9  |	      Circles 	  |   2	  | yes |  4621, 10820,   3500
+10 |	      Annulus	  |   2	  | yes	|  3487,  1388,   2244
+11 |	      top-loop	  |   3	  | yes	|   137,    59,   1058
+12 |	      HOP	  |   ?	  |	|   see below
+	      		      7, 15, 50 
+
+results:
+--------
+
+calls to reach 1e-4
+
+id | i-flow | VEGAS | FOAM |
+
+1   2,310,000     164,436    6,259,812
+2   2,285,000     631,874   24,094,679
+3   3,095,000   1,299,718  >50,008,322
+4   7,230,000   2,772,216  >50,002,579
+5   2,225,000     421,475    5,619,646
+6   8,220,000  24,139,889   21,821,075	
+7  19,460,000 >50,001,768  >50,087,098
+8  32,865,000  	  995,796  >50,007,291
+9  23,105,000 43,367,192  17,499,823
+10 17,435,000  4,981,080  11,219,498
+11   685,000    152,957    5,290,142
+12
+
+
+
+rel uncertainty of that run
+
+id | i-flow | VEGAS | FOAM |
+
+1    0.056    0.666   0.635
+2    0.377    2.388  -0.207
+3    0.923    1.911  -6.444
+4    0.372    0.610  -188,479
+5   -0.091    0.902  -0.297 
+6   -0.016   -2.167  -0.457 
+7   -2.232  -13.339  -3.526
+8  -34.644  -5003.768 -72.137
+9   -1.425   -3.627  -0.714
+10   0.051  -13.630   0.992
+11  -0.998    0.744   0.616
+12
+
+
+integral result:
+
+id 1:  FOAM result is 9.99250e-01 +/- 9.99015e-05
+id 1:  iflow result is 9.99192e-01 +/- 9.98215e-05
+id 1:  VEGAS result is 9.99253e-01 +/- 9.98544e-05
+
+id 2:  FOAM result is 9.98353e-01 +/- 9.98316e-05
+id 2:  iflow result is 9.98411e-01 +/- 9.96193e-05
+id 2:  VEGAS result is 9.98612e-01 +/- 9.98363e-05
+
+id 3:  FOAM result is 9.94393e-01 +/- 3.65618e-04   !
+id 3:  iflow result is 9.96841e-01 +/- 9.95997e-05
+id 3:  VEGAS result is 9.96939e-01 +/- 9.96002e-05
+
+id 4:  FOAM result is 5.49861e-01 +/- 2.35383e-03   !
+id 4:  iflow result is 9.93545e-01 +/- 9.92990e-05
+id 4:  VEGAS result is 9.93569e-01 +/- 9.93130e-05
+
+id 5:  FOAM result is 9.81631e-01 +/- 9.80446e-05
+id 5:  iflow result is 9.81651e-01 +/- 9.79606e-05
+id 5:  VEGAS result is 9.81749e-01 +/- 9.80037e-05
+
+id 6:  FOAM result is 9.63613e-01 +/- 9.63592e-05
+id 6:  iflow result is 9.63655e-01 +/- 9.63470e-05
+id 6:  VEGAS result is 9.63448e-01 +/- 9.63617e-05
+
+id 7:  FOAM result is 9.27975e-01 +/- 1.87170e-04   !
+id 7:  iflow result is 9.28428e-01 +/- 9.28632e-05
+id 7:  VEGAS result is 9.24948e-01 +/- 2.76388e-04  !
+
+id 8:  FOAM result is 7.69211e-01 +/- 1.29131e-03   !
+id 8:  iflow result is 8.59375e-01 +/- 8.62273e-05 (!)
+id 8:  VEGAS result is 4.31172e-01 +/- 8.61731e-05  !
+
+id 9:  FOAM result is 1.36838e-02 +/- 1.36837e-06  
+id 9:  iflow result is 1.36829e-02 +/- 1.36819e-06
+id 9:  VEGAS result is 1.36798e-02 +/- 1.36845e-06
+
+id 10: FOAM result is 5.10559e-01 +/- 5.10178e-05
+id 10: iflow result is 5.10511e-01 +/- 5.10460e-05
+id 10: VEGAS result is 5.09813e-01 +/- 5.10385e-05
+
+id 11: FOAM result is 1.93708e-10 +/- 1.93550e-14
+id 11: iflow result is 1.93677e-10 +/- 1.91595e-14
+id 11: VEGAS result is 1.93711e-10 +/- 1.92602e-14
+
+id 12: 
+id 12: 
+id 12: 
+
+

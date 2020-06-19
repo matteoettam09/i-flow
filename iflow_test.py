@@ -120,8 +120,37 @@ class TestFunctions:
         res = (x[..., 1]**ee
                * tf.exp(-w1*tf.abs((x[..., 1]-dy1)**2
                                    + (x[..., 0]-dx1)**2-rr**2))
-               + (1.0-x[..., 1]**ee)
+               + ((1.0-x[..., 1])**ee)
                * tf.exp(-w1*tf.abs((x[..., 1]-1.0+dy1)**2
+                                   + (x[..., 0]-1.0+dx1)**2-rr**2)))
+        self.calls += 1
+        return res
+
+    def circle_np(self, x):
+        """ Based on eq. 14 of [1], two overlapping circles.
+
+        Thickness and height change along the circles.
+
+        Integral equals 0.0136848(1)
+
+        Args:
+            x (tf.Tensor): Tensor with batch of points to evaluate
+
+        Returns:
+            tf.Tensor: functional values at the given points.
+
+        Raises:
+            ValueError: If ndims is not equal to 2.
+
+        """
+        if self.ndims != 2:
+            raise ValueError("ndims must be equal to 2 for circle function!")
+        dx1, dy1, rr, w1, ee = 0.4, 0.6, 0.25, 1./0.004, 3.0
+        res = (x[..., 1]**ee
+               * np.exp(-w1*np.abs((x[..., 1]-dy1)**2
+                                   + (x[..., 0]-dx1)**2-rr**2))
+               + ((1.0-x[..., 1])**ee)
+               * np.exp(-w1*np.abs((x[..., 1]-1.0+dy1)**2
                                    + (x[..., 0]-1.0+dx1)**2-rr**2)))
         self.calls += 1
         return res
@@ -143,6 +172,7 @@ class TestFunctions:
 
             self.radius12 = radius1**2
             self.radius22 = radius2**2
+            self.calls = 0
 
         def __call__(self, pts):
             """ Calculate annulus function.
@@ -158,6 +188,7 @@ class TestFunctions:
             out_of_bounds = (radius < self.radius22) | (radius > self.radius12)
             ret = tf.where(out_of_bounds, tf.zeros_like(radius),
                            tf.ones_like(radius))
+            self.calls += 1
             return ret
 
         @property
@@ -175,6 +206,7 @@ class TestFunctions:
                 raise ValueError('Triangle requires 3 external masses')
             self.mass_ext = np.array(mass_ext)**2
             self.mass_int = np.array(mass_int)**2
+            self.calls = 0
 
         def FTri(self, t1, t2, perm):
             """ Helper function to evaluate the triangle. """
@@ -200,6 +232,7 @@ class TestFunctions:
             denominator2 = self.FTri(x[..., 0], x[..., 1], [2, 0, 1])
             denominator3 = self.FTri(x[..., 0], x[..., 1], [0, 1, 2])
 
+            self.calls += 1
             return (- numerator/denominator1
                     - numerator/denominator2
                     - numerator/denominator3)
@@ -216,6 +249,7 @@ class TestFunctions:
             self.mass_int = np.array(mass_int)**2
             self.s12 = s12
             self.s23 = s23
+            self.calls = 0
 
         def FBox(self, s12, s23, t1, t2, t3, perm):
             """ Helper function to evaluate the box. """
@@ -251,6 +285,7 @@ class TestFunctions:
                                      x[..., 0], x[..., 1], x[..., 2],
                                      [0, 1, 2, 3])
 
+            self.calls += 1
             return (1.0/denominator1**2
                     + 1.0/denominator2**2
                     + 1.0/denominator3**2
@@ -484,6 +519,7 @@ def main(argv):
     elif FLAGS.function == 'Circle':
         target = 0.0136848
         integrand = func.circle
+        integrand_np = func.circle_np
     elif FLAGS.function == 'Ring':
         func_ring = func.Ring(FLAGS.radius1, FLAGS.radius2)
         target = func_ring.area
@@ -510,9 +546,10 @@ def main(argv):
     print(format_string.format(FLAGS.function, ndims, npts, np.mean(value),
                                np.std(value)/np.sqrt(npts)))
 
+
     epochs = FLAGS.epochs
     ptspepoch = FLAGS.ptspepoch
-    target_precision = FLAGS.precision
+    target_precision = FLAGS.precision * target
 
     if plot_FOAM:
         filename = "FOAM_data/Foam_{:d}_{}.txt".format(ndims, FLAGS.function)
@@ -559,7 +596,7 @@ def main(argv):
             foam_means[-1], foam_stddevs[-1]))
         print("Relative Uncertainty FOAM result is {:.3f}".format(
             rel_unc(foam_means[-1], foam_stddevs[-1], target, 0.)))
-        print("FOAM used {} cells and {:d} function calls".format(num_cells, foam_numcalls[-1]))
+        print("FOAM used {} cells and {:d} function calls".format(int(num_cells)+1, foam_numcalls[-1]))
 
     if not FLAGS.targetmode:
         # epoch mode
@@ -640,7 +677,8 @@ def main(argv):
 
     else:
         # target mode
-        print("In target mode with absolute precision {}".format(target_precision))
+        print("In target mode with absolute precision {}, based on relative precision {}".format(
+            target_precision, FLAGS.precision))
         integrate = build_iflow(integrand, ndims)
         mean_t, err_t = train_iflow_target(integrate, ptspepoch, target_precision)
         num_epochs = len(mean_t)
@@ -658,6 +696,7 @@ def main(argv):
         # vegas
         vegas_integ = vegas.Integrator(ndims* [[0, 1]])
         current_vegas_calls = func.calls
+        #current_vegas_calls = integrand.calls
         vegas_calls = []
         vegas_results = []
         vegas_means = []
@@ -672,13 +711,15 @@ def main(argv):
             # using the tf.function makes it slow
             # using integrand_np is a lot faster, but only
             # implemented for the Gaussian
-            first_run = False
+            #first_run = False
             current_result = vegas_integ(integrand, nitn=1, neval=ptspepoch)
             vegas_means.append(current_result.mean)
             vegas_stddevs.append(current_result.sdev)
             vegas_results.append(current_result)
             vegas_calls.append(func.calls - current_vegas_calls)
             current_vegas_calls = func.calls
+            #vegas_calls.append(integrand.calls - current_vegas_calls)
+            #current_vegas_calls = integrand.calls
 
             _, current_vegas_precision = variance_weighted_result(np.array(vegas_means),
                                                                   np.array(vegas_stddevs))
@@ -688,6 +729,9 @@ def main(argv):
                                                                          current_result.sdev,
                                                                          current_vegas_precision))
             epoch += 1
+            if np.sum(vegas_calls) > 50000000:
+                break
+
         vegas_calls = np.array(vegas_calls)
         vegas_means = np.array(vegas_means)
         vegas_stddevs = np.array(vegas_stddevs)
@@ -719,7 +763,7 @@ def main(argv):
                      label='FOAM')
         plt.legend()
 
-        plt.savefig('{}_unc_target.png'.format(FLAGS.function), bbox_inches='tight')
+        plt.savefig('{}_{:d}_unc_target.png'.format(FLAGS.function, ndims), bbox_inches='tight')
         plt.show()
         plt.close()
 
@@ -729,15 +773,15 @@ def main(argv):
         plt.xscale('log')
         plt.xlim(ptspepoch, num_epochs * ptspepoch)
         plt.xlabel('Evaluations in training')
-        plt.ylim(target_precision/2., 1e0)
-        plt.ylabel('Total integral uncertainty')
+        plt.ylim(target_precision/(2.*target), 1e0)
+        plt.ylabel('Total relative integral uncertainty')
 
         # Plot iflow
         total_uncertainty = np.zeros(num_epochs)
         for i in range(num_epochs):
             #print(variance_weighted_result(mean_t[:i+1], err_t[:i+1]))
             _, total_uncertainty[i] = variance_weighted_result(mean_t[:i+1], err_t[:i+1])
-        plt.plot(x_values, total_uncertainty, color='r', label='i-flow')
+        plt.plot(x_values, total_uncertainty/target, color='r', label='i-flow')
 
         # plot VEGAS
         len_vegas = len(vegas_calls)
@@ -745,9 +789,9 @@ def main(argv):
         for i in range(len_vegas):
             _, vegas_total_uncertainty[i] = variance_weighted_result(vegas_means[:i+1],
                                                                      vegas_stddevs[:i+1])
-        plt.plot(np.cumsum(vegas_calls), vegas_total_uncertainty, color='b', label='VEGAS')
+        plt.plot(np.cumsum(vegas_calls), vegas_total_uncertainty/target, color='b', label='VEGAS')
         if plot_FOAM:
-            plt.plot(foam_calls, foam_stddevs, color='green', label='FOAM')
+            plt.plot(foam_calls, foam_stddevs/target, color='green', label='FOAM')
 
         # background grid
         start_values = np.logspace(-3, 4, 8)
@@ -755,7 +799,7 @@ def main(argv):
             plt.plot(x_values, start/np.sqrt(x_values), color='gray', lw=0.5, ls='dashed')
 
         plt.legend()
-        plt.savefig('{}_total_unc_target.png'.format(FLAGS.function), bbox_inches='tight')
+        plt.savefig('{}_{:d}_total_unc_target.png'.format(FLAGS.function, ndims), bbox_inches='tight')
         plt.show()
         plt.close()
 

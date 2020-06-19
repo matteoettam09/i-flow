@@ -79,9 +79,7 @@ flags.DEFINE_integer('epochs', 1000, 'Number of epochs to train',
 flags.DEFINE_integer('ptspepoch', 5000, 'Number of points to sample per epoch',
                      short_name='p')
 flags.DEFINE_float('precision', 1e-5, 'Target precision in integrator comparison',
-                   short_name='tp')
-flags.DEFINE_bool('targetmode', False, 'Flag to trigger training until target precision is reached',
-                  short_name='t')
+                   short_name='t')
 
 class TestFunctions:
     """ Contains the functions discussed in the reference above.
@@ -155,13 +153,14 @@ class TestFunctions:
             ValueError: If ndims is not equal to 2.
 
         """
+        x = np.array(x)
         if self.ndims != 2:
             raise ValueError("ndims must be equal to 2 for circle function!")
         dx1, dy1, rr, w1, ee = 0.4, 0.6, 0.25, 1./0.004, 3.0
         res = (x[..., 1]**ee
                * np.exp(-w1*np.abs((x[..., 1]-dy1)**2
                                    + (x[..., 0]-dx1)**2-rr**2))
-               + (1.0-x[..., 1]**ee)
+               + ((1.0-x[..., 1])**ee)
                * np.exp(-w1*np.abs((x[..., 1]-1.0+dy1)**2
                                    + (x[..., 0]-1.0+dx1)**2-rr**2)))
         self.calls += 1
@@ -195,6 +194,7 @@ class TestFunctions:
                 np.array: 1. if on annulus, 0. otherwise
 
             """
+            pts = np.array(pts)
             radius = np.sum((pts-0.5)**2, axis=-1)
             out_of_bounds = (radius < self.radius22) | (radius > self.radius12)
             ret = np.where(out_of_bounds, np.zeros_like(radius),
@@ -236,6 +236,7 @@ class TestFunctions:
             Returns: np.ndarray: functional values the given points
 
             """
+            x = np.array(x)
             numerator = (1 + x[..., 0] + x[..., 1])**-1.0
             denominator1 = self.FTri(x[..., 0], x[..., 1], [1, 2, 0])
             denominator2 = self.FTri(x[..., 0], x[..., 1], [2, 0, 1])
@@ -279,6 +280,7 @@ class TestFunctions:
             Returns: np.ndarray: functional values the given points
 
             """
+            x = np.array(x)
             denominator1 = self.FBox(self.s23, self.s12,
                                      x[..., 0], x[..., 1], x[..., 2],
                                      [1, 2, 3, 0])
@@ -296,6 +298,36 @@ class TestFunctions:
                     + 1.0/denominator2**2
                     + 1.0/denominator3**2
                     + 1.0/denominator4**2)
+
+    class HOPathIntegral:
+        """ Class implementing the path integral of a harmonic oscillator """
+
+        def __init__(self, x0=0.0, T=4.0, a=0.5, m=1.0):
+            self.a = a
+            self.T = T
+            self.x0 = x0
+            self.m = m
+            self.N = T/a
+            self.ndims = int(self.N)
+            self.A = (m/(2.*np.pi*a))**(self.N/2.)
+
+        def __call__(self, x):
+            x = np.array([x])
+            x0 = self.x0*np.ones((x.shape[0], 1))
+            x = np.concatenate([x0, x], axis=-1)
+            diffx = np.diff(x, axis=-1)
+            term1 = np.sum(self.m/(2.0*self.a)*diffx**2, axis=-1) 
+            term1 += (x[:, 0] - x[:, -1])**2*self.m/(2.0*self.a)
+            term2 = np.sum(self.a/2.0*x**2, axis=-1)
+            return self.A*np.exp(-term1 - term2)
+
+        def exact(self):
+            ret = (np.exp(-0.5*self.x0**2)/np.pi**(1./4.))**2 * np.exp(-0.5*self.T)
+            return ret
+
+
+
+
 
 
 def main(argv):
@@ -335,21 +367,32 @@ def main(argv):
         integrand = func.BoxIntegral(130**2, -130**2/2.0,
                                      [0, 0, 0, 125],
                                      [175, 175, 175, 175])
+    elif FLAGS.function == 'HarmOs':
+        integrand = func.HOPathIntegral(x0=0., T=4.0, a=0.5, m=1.0)
+        target = integrand.exact()
 
 
     epochs = FLAGS.epochs
     ptspepoch = FLAGS.ptspepoch
-    target_precision = FLAGS.precision
+    target_precision = FLAGS.precision * target
+
+    print("Aiming for a total precision of {}, based on a relative precision {} and an exact value of {}."\
+          .format(target_precision, FLAGS.precision, target))
 
     integrator = fm.Foam()
     integrator.SetDimension(ndims)
 
+    # RNG of foam:
+    fm.cvar.ran.SetSeed(12,34)
+    
     # tell Foam to store points for re-use
     integrator.SetStorePoints(True)
 
     integrator.SetNCells(epochs)
     integrator.SetNOpt(2*ptspepoch)
-    integrator.SetNMax(2*ptspepoch*epochs)
+    #integrator.SetNMax(2*ptspepoch*epochs)
+    nmax = np.minimum(int(1e8), 2*ptspepoch*epochs)
+    integrator.SetNMax(nmax)
     integrator.SetError(target_precision)
     integrator.Initialize()
     integrator.Integrate(integrand)
