@@ -685,7 +685,7 @@ def main(argv):
         if FLAGS.function == 'HarmOs':
             current_vegas_calls = hopi.calls
         elif FLAGS.function in ['Box', 'Ring', 'Triangle']:
-            current_vegas_calls = integrand.calls
+            current_vegas_calls = integrand_np.calls
         else:
             current_vegas_calls = func.calls
 
@@ -703,8 +703,8 @@ def main(argv):
                 vegas_calls.append(hopi.calls - current_vegas_calls)
                 current_vegas_calls = hopi.calls
             elif FLAGS.function in ['Box', 'Ring', 'Triangle']:
-                vegas_calls.append(integrand.calls - current_vegas_calls)
-                current_vegas_calls = integrand.calls
+                vegas_calls.append(integrand_np.calls - current_vegas_calls)
+                current_vegas_calls = integrand_np.calls
             else:
                 vegas_calls.append(func.calls - current_vegas_calls)
                 current_vegas_calls = func.calls
@@ -716,7 +716,6 @@ def main(argv):
                       '{:8e} +/- {:8e} Total uncertainty = {:8e}'.format(i, current_result.mean,
                                                                          current_result.sdev,
                                                                          current_precision))
-
         vegas_calls = np.array(vegas_calls)
         vegas_means = np.array(vegas_means)
         vegas_stddevs = np.array(vegas_stddevs)
@@ -809,7 +808,7 @@ def main(argv):
         if FLAGS.function == 'HarmOs':
             current_vegas_calls = hopi.calls
         elif FLAGS.function in ['Box', 'Ring', 'Triangle']:
-            current_vegas_calls = integrand.calls
+            current_vegas_calls = integrand_np.calls
         else:
             current_vegas_calls = func.calls
         vegas_calls = []
@@ -830,8 +829,8 @@ def main(argv):
                 vegas_calls.append(hopi.calls - current_vegas_calls)
                 current_vegas_calls = hopi.calls
             elif FLAGS.function in ['Box', 'Ring', 'Triangle']:
-                vegas_calls.append(integrand.calls - current_vegas_calls)
-                current_vegas_calls = integrand.calls
+                vegas_calls.append(integrand_np.calls - current_vegas_calls)
+                current_vegas_calls = integrand_np.calls
             else:
                 vegas_calls.append(func.calls - current_vegas_calls)
                 current_vegas_calls = func.calls
@@ -846,7 +845,6 @@ def main(argv):
             epoch += 1
             if np.sum(vegas_calls) > 50000000:
                 break
-
         vegas_calls = np.array(vegas_calls)
         vegas_means = np.array(vegas_means)
         vegas_stddevs = np.array(vegas_stddevs)
