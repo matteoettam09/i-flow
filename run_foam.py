@@ -80,6 +80,8 @@ flags.DEFINE_integer('ptspepoch', 5000, 'Number of points to sample per epoch',
                      short_name='p')
 flags.DEFINE_float('precision', 1e-5, 'Target precision in integrator comparison',
                    short_name='t')
+flags.DEFINE_float('x0', 0., 'x0 position of Harmonic Oscillator',
+                   short_name='x0')
 
 class TestFunctions:
     """ Contains the functions discussed in the reference above.
@@ -300,26 +302,31 @@ class TestFunctions:
                     + 1.0/denominator4**2)
 
     class HOPathIntegral:
-        """ Class implementing the path integral of a harmonic oscillator """
+        """ Class implementing the path integral of a harmonic oscillator
+            as discussed in [hep-lat/0506036]
+        """
 
-        def __init__(self, x0=0.0, T=4.0, a=0.5, m=1.0):
-            self.a = a
+        def __init__(self, x0, T=4.0, ndims=7, m=1.0):
+            self.a = T/(ndims +1.)
             self.T = T
             self.x0 = x0
             self.m = m
-            self.N = T/a
-            self.ndims = int(self.N)
-            self.A = (m/(2.*np.pi*a))**(self.N/2.)
+            self.N = T/self.a
+            self.ndims = int(ndims)
+            self.A = (m/(2.*np.pi*self.a))**(self.N/2.)
+            print("Setting lattice spacing to {}".format(self.a))
 
         def __call__(self, x):
             x = np.array([x])
+            # map to integration domain [-5,5]
+            x = (x -0.5) * 10.
             x0 = self.x0*np.ones((x.shape[0], 1))
             x = np.concatenate([x0, x], axis=-1)
             diffx = np.diff(x, axis=-1)
             term1 = np.sum(self.m/(2.0*self.a)*diffx**2, axis=-1) 
             term1 += (x[:, 0] - x[:, -1])**2*self.m/(2.0*self.a)
             term2 = np.sum(self.a/2.0*x**2, axis=-1)
-            return self.A*np.exp(-term1 - term2)
+            return self.A*np.exp(-term1 - term2 + self.ndims*np.log(10))
 
         def exact(self):
             ret = (np.exp(-0.5*self.x0**2)/np.pi**(1./4.))**2 * np.exp(-0.5*self.T)
@@ -341,6 +348,7 @@ def main(argv):
     # Box: ndims = 3, Triangle: ndims = 2
     ndims = FLAGS.ndims
     alpha = FLAGS.alpha
+    x0 = FLAGS.x0
 
     func = TestFunctions(ndims, alpha)
 
@@ -368,7 +376,7 @@ def main(argv):
                                      [0, 0, 0, 125],
                                      [175, 175, 175, 175])
     elif FLAGS.function == 'HarmOs':
-        integrand = func.HOPathIntegral(x0=0., T=4.0, a=0.5, m=1.0)
+        integrand = func.HOPathIntegral(x0=x0, T=4.0, ndims=ndims, m=1.0)
         target = integrand.exact()
 
 
@@ -383,8 +391,8 @@ def main(argv):
     integrator.SetDimension(ndims)
 
     # RNG of foam:
-    fm.cvar.ran.SetSeed(12,34)
-    
+    fm.cvar.ran.SetSeed(12, 12)
+
     # tell Foam to store points for re-use
     integrator.SetStorePoints(True)
 
@@ -397,7 +405,7 @@ def main(argv):
     integrator.Initialize()
     integrator.Integrate(integrand)
 
-    print(func.calls)
+    #print(func.calls)
 
 if __name__ == '__main__':
     app.run(main)

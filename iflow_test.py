@@ -41,6 +41,8 @@ flags.DEFINE_float('precision', 1e-5, 'Target precision in integrator comparison
                    short_name='tp')
 flags.DEFINE_bool('targetmode', False, 'Flag to trigger training until target precision is reached',
                   short_name='t')
+flags.DEFINE_float('x0', 0., 'x0 position of Harmonic Oscillator',
+                   short_name='x0')
 
 class TestFunctions:
     """ Contains the functions discussed in the reference above.
@@ -291,6 +293,53 @@ class TestFunctions:
                     + 1.0/denominator3**2
                     + 1.0/denominator4**2)
 
+    class HOPathIntegral:
+        """ Class implementing the path integral of a harmonic oscillator
+            as discussed in [hep-lat/0506036]
+        """
+
+        def __init__(self, x0, T=4.0, ndims=7, m=1.0):
+            self.a = T/(ndims + 1.)
+            self.T = T
+            self.x0 = x0
+            self.m = m
+            self.N = T/self.a
+            self.ndims = int(ndims)
+            self.A = (m/(2*np.pi*self.a))**(self.N/2)
+            self.calls = 0
+            # integration domain is [-integ_bound, +integ_bound]
+            self.integ_bound = 5.
+            print("Setting lattice spacing to {}".format(self.a))
+
+        def call_tf(self, x):
+            x0 = tf.cast(self.x0*tf.ones((x.shape[0], 1)), dtype=tf.float64)
+            x = (x - 0.5) * self.integ_bound * 2.
+            x = tf.concat([x0, x], axis=-1)
+            diffx = tf.math.squared_difference(x[:, 1:], x[:, :-1])
+            diffx_last = (x[:, 0] - x[:, -1])**2
+            term1 = tf.reduce_sum(self.m/(2.0*self.a)*diffx, axis=-1)
+            term1 += self.m/(2.0*self.a)*diffx_last
+            term2 = tf.reduce_sum(self.a/2.0*x**2, axis=-1)
+            integ_bound = tf.cast(self.integ_bound, dtype=tf.float64)
+            return self.A*tf.exp(-term1 - term2 + self.ndims*tf.math.log(integ_bound * 2.))
+
+        def call_np(self, x):
+            x = np.array([x])
+            x0 = self.x0*np.ones((x.shape[0], 1))
+            x = (x - 0.5) * self.integ_bound * 2.
+            x = np.concatenate([x0, x], axis=-1)
+            diffx = np.diff(x, axis=-1)
+            term1 = np.sum(self.m/(2.0*self.a)*diffx**2, axis=-1)
+            term1 += (x[:, 0] - x[:, -1])**2*self.m/(2.0*self.a)
+            term2 = np.sum(self.a/2.0*x**2, axis=-1)
+            self.calls += 1
+            return self.A*np.exp(-term1 - term2 + self.ndims*np.log(self.integ_bound * 2.))[0]
+
+        def exact(self):
+            return (np.exp(-self.x0**2/2.)/np.pi**(1./4.))**2 * np.exp(-0.5*self.T)
+
+
+
 
 def build(in_features, out_features, options):
     """ Builds a dense NN.
@@ -393,16 +442,19 @@ def train_iflow(integrate, ptspepoch, epochs):
         numpy.ndarray(float): value of loss (mean) and its uncertainty (standard deviation)
 
     """
-    means = np.zeros(epochs+1)
-    stddevs = np.zeros(epochs+1)
-    for epoch in range(epochs+1):
+    means = np.zeros(epochs)
+    stddevs = np.zeros(epochs)
+    for epoch in range(epochs):
         loss, integral, error = integrate.train_one_step(ptspepoch,
                                                          integral=True)
         means[epoch] = integral
         stddevs[epoch] = error
+        _, current_precision = variance_weighted_result(means[:epoch+1], stddevs[:epoch+1])
         if epoch % 10 == 0:
             print('Epoch: {:3d} Loss = {:8e} Integral = '
-                  '{:8e} +/- {:8e}'.format(epoch, loss, integral, error))
+                  '{:8e} +/- {:8e} Total uncertainty = {:8e}'.format(epoch, loss,
+                                                                     integral, error,
+                                                                     current_precision))
 
     return means, stddevs
 
@@ -504,8 +556,9 @@ def main(argv):
     # Box: ndims = 3, Triangle: ndims = 2
     ndims = FLAGS.ndims
     alpha = FLAGS.alpha
+    x0 = np.float64(FLAGS.x0)
 
-    plot_FOAM = True
+    plot_FOAM = False
 
     func = TestFunctions(ndims, alpha)
 
@@ -513,9 +566,11 @@ def main(argv):
     if FLAGS.function == 'Gauss':
         target = erf(1/(2.*alpha))**ndims
         integrand = func.gauss
+        integrand_np = func.gauss
     elif FLAGS.function == 'Camel':
         target = (0.5*(erf(1/(3.*alpha))+erf(2/(3.*alpha))))**ndims
         integrand = func.camel
+        integrand_np = func.camel
     elif FLAGS.function == 'Circle':
         target = 0.0136848
         integrand = func.circle
@@ -524,15 +579,26 @@ def main(argv):
         func_ring = func.Ring(FLAGS.radius1, FLAGS.radius2)
         target = func_ring.area
         integrand = func_ring
+        integrand_np = func_ring
     elif FLAGS.function == 'Triangle':
         target = -1.70721682537767509e-5
         integrand = func.TriangleIntegral([0, 0, 125],
                                           [175, 175, 175])
+        integrand_np = func.TriangleIntegral([0, 0, 125],
+                                             [175, 175, 175])
     elif FLAGS.function == 'Box':
         target = 1.93696402386819321e-10
         integrand = func.BoxIntegral(130**2, -130**2/2.0,
                                      [0, 0, 0, 125],
                                      [175, 175, 175, 175])
+        integrand_np = func.BoxIntegral(130**2, -130**2/2.0,
+                                        [0, 0, 0, 125],
+                                        [175, 175, 175, 175])
+    elif FLAGS.function == 'HarmOs':
+        hopi = func.HOPathIntegral(x0=x0, T=4.0, ndims=ndims, m=1.0)
+        integrand = hopi.call_tf
+        integrand_np = hopi.call_np
+        target = hopi.exact()
 
     print("Target value of the Integral in {:d} dimensions is {:.6e}".format(
         ndims, target))
@@ -600,14 +666,14 @@ def main(argv):
 
     if not FLAGS.targetmode:
         # epoch mode
-        x_values = np.arange(0, (epochs + 1) * ptspepoch, ptspepoch)
+        x_values = np.arange(ptspepoch, (epochs + 1) * ptspepoch, ptspepoch)
 
         # i-flow
         integrate = build_iflow(integrand, ndims)
         mean_t, err_t = train_iflow(integrate, ptspepoch, epochs)
-        mean_e, err_e = sample_iflow(integrate, ptspepoch, epochs)
+        #mean_e, err_e = sample_iflow(integrate, ptspepoch, epochs)
 
-        iflow_mean_wgt, iflow_err_wgt = variance_weighted_result(mean_e, err_e)
+        iflow_mean_wgt, iflow_err_wgt = variance_weighted_result(mean_t, err_t)
 
         print("Results for {:d} dimensions:".format(ndims))
         print("Weighted iflow result is {:.5e} +/- {:.5e}".format(
@@ -618,21 +684,32 @@ def main(argv):
 
         # vegas
         vegas_integ = vegas.Integrator(ndims* [[0, 1]])
-        current_vegas_calls = func.calls
+        if FLAGS.function == 'HarmOs':
+            current_vegas_calls = hopi.calls
+        elif FLAGS.function in ['Box', 'Ring', 'Triangle']:
+            current_vegas_calls = integrand.calls
+        else:
+            current_vegas_calls = func.calls
+
         vegas_calls = []
         vegas_results = []
         vegas_means = []
         vegas_stddevs = []
         for i in range(epochs):
-            # using the tf.function makes it slow
-            # using a numpy version would be a lot faster, but is
-            # currently not implemented
-            current_result = vegas_integ(integrand, nitn=1, neval=ptspepoch)
+            current_result = vegas_integ(integrand_np, nitn=1, neval=ptspepoch)
             vegas_means.append(current_result.mean)
             vegas_stddevs.append(current_result.sdev)
             vegas_results.append(current_result)
-            vegas_calls.append(func.calls - current_vegas_calls)
-            current_vegas_calls = func.calls
+
+            if FLAGS.function == 'HarmOs':
+                vegas_calls.append(hopi.calls - current_vegas_calls)
+                current_vegas_calls = hopi.calls
+            elif FLAGS.function in ['Box', 'Ring', 'Triangle']:
+                vegas_calls.append(integrand.calls - current_vegas_calls)
+                current_vegas_calls = integrand.calls
+            else:
+                vegas_calls.append(func.calls - current_vegas_calls)
+                current_vegas_calls = func.calls
 
             _, current_precision = variance_weighted_result(np.array(vegas_means),
                                                             np.array(vegas_stddevs))
@@ -654,7 +731,7 @@ def main(argv):
 
 
         plt.figure(dpi=150, figsize=[5., 4.])
-        plt.xlim(0., epochs * ptspepoch)
+        plt.xlim(ptspepoch, epochs * ptspepoch)
         plt.xlabel('Evaluations in training')
         plt.ylim(1e-5, 1e1)
         plt.ylabel('Integral uncertainty (%)')
@@ -672,6 +749,42 @@ def main(argv):
         plt.legend()
 
         plt.savefig('{}_unc.png'.format(FLAGS.function), bbox_inches='tight')
+        plt.show()
+        plt.close()
+
+        # plot total precision
+        plt.figure(dpi=150, figsize=[5., 4.])
+        plt.yscale('log')
+        plt.xscale('log')
+        plt.xlim(ptspepoch, epochs * ptspepoch)
+        plt.xlabel('Evaluations in training')
+        plt.ylim(target_precision/(2.*target), 1e0)
+        plt.ylabel('Total relative integral uncertainty')
+
+        # Plot iflow
+        total_uncertainty = np.zeros(epochs)
+        for i in range(epochs):
+            #print(variance_weighted_result(mean_t[:i+1], err_t[:i+1]))
+            _, total_uncertainty[i] = variance_weighted_result(mean_t[:i+1], err_t[:i+1])
+        plt.plot(x_values, total_uncertainty/target, color='r', label='i-flow')
+
+        # plot VEGAS
+        len_vegas = len(vegas_calls)
+        vegas_total_uncertainty = np.zeros(len_vegas)
+        for i in range(len_vegas):
+            _, vegas_total_uncertainty[i] = variance_weighted_result(vegas_means[:i+1],
+                                                                     vegas_stddevs[:i+1])
+        plt.plot(np.cumsum(vegas_calls), vegas_total_uncertainty/target, color='b', label='VEGAS')
+        if plot_FOAM:
+            plt.plot(foam_calls, foam_stddevs/target, color='green', label='FOAM')
+
+        # background grid
+        start_values = np.logspace(-3, 4, 8)
+        for start in start_values:
+            plt.plot(x_values, start/np.sqrt(x_values), color='gray', lw=0.5, ls='dashed')
+
+        plt.legend()
+        plt.savefig('{}_{:d}_total_unc.png'.format(FLAGS.function, ndims), bbox_inches='tight')
         plt.show()
         plt.close()
 
@@ -695,8 +808,12 @@ def main(argv):
 
         # vegas
         vegas_integ = vegas.Integrator(ndims* [[0, 1]])
-        current_vegas_calls = func.calls
-        #current_vegas_calls = integrand.calls
+        if FLAGS.function == 'HarmOs':
+            current_vegas_calls = hopi.calls
+        elif FLAGS.function in ['Box', 'Ring', 'Triangle']:
+            current_vegas_calls = integrand.calls
+        else:
+            current_vegas_calls = func.calls
         vegas_calls = []
         vegas_results = []
         vegas_means = []
@@ -706,20 +823,20 @@ def main(argv):
 
         epoch = 0
         current_vegas_precision = 1e99
-        #while first_run or current_vegas_calls < num_epochs*ptspepoch:
         while current_vegas_precision > target_precision:
-            # using the tf.function makes it slow
-            # using integrand_np is a lot faster, but only
-            # implemented for the Gaussian
-            #first_run = False
-            current_result = vegas_integ(integrand, nitn=1, neval=ptspepoch)
+            current_result = vegas_integ(integrand_np, nitn=1, neval=ptspepoch)
             vegas_means.append(current_result.mean)
             vegas_stddevs.append(current_result.sdev)
             vegas_results.append(current_result)
-            vegas_calls.append(func.calls - current_vegas_calls)
-            current_vegas_calls = func.calls
-            #vegas_calls.append(integrand.calls - current_vegas_calls)
-            #current_vegas_calls = integrand.calls
+            if FLAGS.function == 'HarmOs':
+                vegas_calls.append(hopi.calls - current_vegas_calls)
+                current_vegas_calls = hopi.calls
+            elif FLAGS.function in ['Box', 'Ring', 'Triangle']:
+                vegas_calls.append(integrand.calls - current_vegas_calls)
+                current_vegas_calls = integrand.calls
+            else:
+                vegas_calls.append(func.calls - current_vegas_calls)
+                current_vegas_calls = func.calls
 
             _, current_vegas_precision = variance_weighted_result(np.array(vegas_means),
                                                                   np.array(vegas_stddevs))
