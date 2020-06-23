@@ -157,6 +157,18 @@ class TestFunctions:
         self.calls += 1
         return res
 
+    def polynom(self, x):
+        """ Test polynomial"""
+        res = tf.reduce_sum(-x**2 + x, axis=-1)
+        self.calls += 1
+        return res
+
+    def polynom_np(self, x):
+        """ Numpy Test polynomial"""
+        res = np.sum(-x**2 + x, axis=-1)
+        self.calls += 1
+        return res
+
     class Ring:
         """ Class to store the annulus (ring) function.
 
@@ -556,7 +568,7 @@ def main(argv):
     alpha = FLAGS.alpha
     x0 = np.float64(FLAGS.x0)
 
-    plot_FOAM = False
+    plot_FOAM = True
 
     func = TestFunctions(ndims, alpha)
 
@@ -597,6 +609,10 @@ def main(argv):
         integrand = hopi.call_tf
         integrand_np = hopi.call_np
         target = hopi.exact()
+    elif FLAGS.function == 'Poly':
+        integrand = func.polynom
+        integrand_np = func.polynom_np
+        target = (1./6.) * ndims
 
     print("Target value of the Integral in {:d} dimensions is {:.6e}".format(
         ndims, target))
@@ -728,6 +744,7 @@ def main(argv):
 
 
         plt.figure(dpi=150, figsize=[5., 4.])
+        #plt.xlim(ptspepoch, np.maximum(epochs * ptspepoch, np.sum(vegas_calls)))
         plt.xlim(ptspepoch, epochs * ptspepoch)
         plt.xlabel('Evaluations in training')
         plt.ylim(1e-5, 1e1)
@@ -753,6 +770,7 @@ def main(argv):
         plt.figure(dpi=150, figsize=[5., 4.])
         plt.yscale('log')
         plt.xscale('log')
+        #plt.xlim(ptspepoch, np.maximum(epochs * ptspepoch, np.sum(vegas_calls)))
         plt.xlim(ptspepoch, epochs * ptspepoch)
         plt.xlabel('Evaluations in training')
         plt.ylim(target_precision/(2.*target), 1e0)
@@ -859,6 +877,7 @@ def main(argv):
 
         # plot relative integral uncertainty per epoch
         plt.figure(dpi=150, figsize=[5., 4.])
+        #plt.xlim(ptspepoch, np.maximum(epochs * ptspepoch, np.sum(vegas_calls)))
         plt.xlim(ptspepoch, num_epochs * ptspepoch)
         plt.xlabel('Evaluations in training')
         plt.ylim(1e-5, 1e1)
@@ -884,6 +903,7 @@ def main(argv):
         plt.figure(dpi=150, figsize=[5., 4.])
         plt.yscale('log')
         plt.xscale('log')
+        #plt.xlim(ptspepoch, np.maximum(epochs * ptspepoch, np.sum(vegas_calls)))
         plt.xlim(ptspepoch, num_epochs * ptspepoch)
         plt.xlabel('Evaluations in training')
         plt.ylim(target_precision/(2.*target), 1e0)

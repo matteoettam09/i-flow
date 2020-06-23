@@ -168,6 +168,13 @@ class TestFunctions:
         self.calls += 1
         return res
 
+    def polynom(self, x):
+        """ Test polynomial"""
+        x = np.array(x)
+        res = np.sum(-x**2 + x, axis=-1)
+        self.calls += 1
+        return res
+
     class Ring:
         """ Class to store the annulus (ring) function.
 
@@ -378,6 +385,9 @@ def main(argv):
     elif FLAGS.function == 'HarmOs':
         integrand = func.HOPathIntegral(x0=x0, T=4.0, ndims=ndims, m=1.0)
         target = integrand.exact()
+    elif FLAGS.function == 'Poly':
+        integrand = func.polynom
+        target = (1./6.) * ndims
 
 
     epochs = FLAGS.epochs
@@ -390,8 +400,8 @@ def main(argv):
     integrator = fm.Foam()
     integrator.SetDimension(ndims)
 
-    # RNG of foam:
-    fm.cvar.ran.SetSeed(12, 12)
+    # RNG seed of foam:
+    fm.cvar.ran.SetSeed(12, 34)
 
     # tell Foam to store points for re-use
     integrator.SetStorePoints(True)
