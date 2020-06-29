@@ -67,10 +67,10 @@ class Integrator():
             for dim in shape:
                 variable_parameters *= dim
             self.total_parameters += variable_parameters
-        self.max_events = int(self.memory.free_memory/(15*(1+self.total_parameters)))
+        self.max_events = int(self.memory.free_memory/(7*(1+self.total_parameters)))
         print(f"Total Memory Available: {self.memory.total_memory} bytes")
         print(f"Free Memory Available: {self.memory.free_memory} bytes")
-        print(f"Integrator memory footprint / event: {self.total_parameters*16} bytes")
+        print(f"Integrator memory footprint / event: {self.total_parameters*8} bytes")
         print(f"Max number of events per iteration: {self.max_events}")
 
     def manager(self, ckpt_manager):

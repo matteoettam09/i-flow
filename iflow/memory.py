@@ -15,7 +15,7 @@ class Memory:
         return getattr(self.virtual, 'total')
 
     def calculate_usage(self, ndoubles):
-        return 16*ndoubles
+        return 8*ndoubles
 
     def remaining_memory(self, ndoubles):
         return self.free_memory - self.calculate_usage(ndoubles)
