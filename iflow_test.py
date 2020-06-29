@@ -41,8 +41,6 @@ flags.DEFINE_float('precision', 1e-5, 'Target precision in integrator comparison
                    short_name='tp')
 flags.DEFINE_bool('targetmode', False, 'Flag to trigger training until target precision is reached',
                   short_name='t')
-flags.DEFINE_float('x0', 0., 'x0 position of Harmonic Oscillator',
-                   short_name='x0')
 
 class TestFunctions:
     """ Contains the functions discussed in the reference above.
@@ -61,7 +59,7 @@ class TestFunctions:
         self.calls = 0
 
     def gauss(self, x):
-        """ Based on eq. 10 of [1], Gaussian function.
+        """ Based on eq. 15 of [1], Gaussian function.
 
         Integral equals erf(1/(2*alpha)) ** ndims
 
@@ -78,7 +76,7 @@ class TestFunctions:
         return pre * tf.exp(exponent)
 
     def camel(self, x):
-        """ Based on eq. 12 of [1], Camel function.
+        """ Based on eq. 17 of [1], Camel function.
 
         The Camel function consists of two Gaussians, centered at
         (1/3, 2/3) in each dimension.
@@ -100,7 +98,7 @@ class TestFunctions:
         return 0.5*pre*(tf.exp(exponent1)+tf.exp(exponent2))
 
     def circle(self, x):
-        """ Based on eq. 14 of [1], two overlapping circles.
+        """ Based on eq. 19 of [1], two overlapping circles.
 
         Thickness and height change along the circles.
 
@@ -129,17 +127,17 @@ class TestFunctions:
         return res
 
     def circle_np(self, x):
-        """ Based on eq. 14 of [1], two overlapping circles.
+        """ Based on eq. 19 of [1], two overlapping circles, using numpy.
 
         Thickness and height change along the circles.
 
         Integral equals 0.0136848(1)
 
         Args:
-            x (tf.Tensor): Tensor with batch of points to evaluate
+            x (np.array): Array with batch of points to evaluate
 
         Returns:
-            tf.Tensor: functional values at the given points.
+            np.array: functional values at the given points.
 
         Raises:
             ValueError: If ndims is not equal to 2.
@@ -158,13 +156,32 @@ class TestFunctions:
         return res
 
     def polynom(self, x):
-        """ Test polynomial"""
+        """ Based on eq. 22 of [1], a polynomial
+
+        Integral equals ndims/6.
+
+        Args:
+            x (tf.Tensor): Tensor with batch of points to evaluate
+
+        Returns:
+            tf.Tensor: functional values at the given points.
+        """
+
         res = tf.reduce_sum(-x**2 + x, axis=-1)
         self.calls += 1
         return res
 
     def polynom_np(self, x):
-        """ Numpy Test polynomial"""
+        """ Based on eq. 22 of [1], a polynomial, using numpy
+
+        Integral equals ndims/6.
+
+        Args:
+            x (np.array): Array with batch of points to evaluate
+
+        Returns:
+            np.array: functional values at the given points.
+        """
         res = np.sum(-x**2 + x, axis=-1)
         self.calls += 1
         return res
@@ -305,51 +322,6 @@ class TestFunctions:
                     + 1.0/denominator3**2
                     + 1.0/denominator4**2)
 
-    class HOPathIntegral:
-        """ Class implementing the path integral of a harmonic oscillator
-            as discussed in [hep-lat/0506036]
-        """
-
-        def __init__(self, x0, T=4.0, ndims=7, m=1.0):
-            self.a = T/(ndims + 1.)
-            self.T = T
-            self.x0 = x0
-            self.m = m
-            self.N = T/self.a
-            self.ndims = int(ndims)
-            self.A = (m/(2*np.pi*self.a))**(self.N/2)
-            self.calls = 0
-            # integration domain is [-integ_bound, +integ_bound]
-            self.integ_bound = 5.
-            print("Setting lattice spacing to {}".format(self.a))
-
-        def call_tf(self, x):
-            x0 = tf.cast(self.x0*tf.ones((x.shape[0], 1)), dtype=tf.float64)
-            x = (x - 0.5) * self.integ_bound * 2.
-            x = tf.concat([x0, x], axis=-1)
-            diffx = tf.math.squared_difference(x[:, 1:], x[:, :-1])
-            diffx_last = (x[:, 0] - x[:, -1])**2
-            term1 = tf.reduce_sum(self.m/(2.0*self.a)*diffx, axis=-1)
-            term1 += self.m/(2.0*self.a)*diffx_last
-            term2 = tf.reduce_sum(self.a/2.0*x**2, axis=-1)
-            integ_bound = tf.cast(self.integ_bound, dtype=tf.float64)
-            return self.A*tf.exp(-term1 - term2 + self.ndims*tf.math.log(integ_bound * 2.))
-
-        def call_np(self, x):
-            x = np.array([x])
-            x0 = self.x0*np.ones((x.shape[0], 1))
-            x = (x - 0.5) * self.integ_bound * 2.
-            x = np.concatenate([x0, x], axis=-1)
-            diffx = np.diff(x, axis=-1)
-            term1 = np.sum(self.m/(2.0*self.a)*diffx**2, axis=-1)
-            term1 += (x[:, 0] - x[:, -1])**2*self.m/(2.0*self.a)
-            term2 = np.sum(self.a/2.0*x**2, axis=-1)
-            self.calls += 1
-            return self.A*np.exp(-term1 - term2 + self.ndims*np.log(self.integ_bound * 2.))[0]
-
-        def exact(self):
-            return (np.exp(-self.x0**2/2.)/np.pi**(1./4.))**2 * np.exp(-0.5*self.T)
-
 
 def build(in_features, out_features, options):
     """ Builds a dense NN.
@@ -480,7 +452,6 @@ def train_iflow_target(integrate, ptspepoch, target):
         numpy.ndarray(float): integral estimations and its uncertainty of each epoch
 
     """
-    # monitor accumulated integral and uncertainty
     means = []
     stddevs = []
     current_precision = 1e99
@@ -564,11 +535,11 @@ def main(argv):
     # circle: 2
     # annulus: 2
     # Box: ndims = 3, Triangle: ndims = 2
+    # Poly: 18, 54, or 96
     ndims = FLAGS.ndims
     alpha = FLAGS.alpha
-    x0 = np.float64(FLAGS.x0)
 
-    plot_FOAM = True
+    plot_FOAM = False
 
     func = TestFunctions(ndims, alpha)
 
@@ -604,11 +575,6 @@ def main(argv):
         integrand_np = func.BoxIntegral(130**2, -130**2/2.0,
                                         [0, 0, 0, 125],
                                         [175, 175, 175, 175])
-    elif FLAGS.function == 'HarmOs':
-        hopi = func.HOPathIntegral(x0=x0, T=4.0, ndims=ndims, m=1.0)
-        integrand = hopi.call_tf
-        integrand_np = hopi.call_np
-        target = hopi.exact()
     elif FLAGS.function == 'Poly':
         integrand = func.polynom
         integrand_np = func.polynom_np
@@ -685,7 +651,6 @@ def main(argv):
         # i-flow
         integrate = build_iflow(integrand, ndims)
         mean_t, err_t = train_iflow(integrate, ptspepoch, epochs)
-        #mean_e, err_e = sample_iflow(integrate, ptspepoch, epochs)
 
         iflow_mean_wgt, iflow_err_wgt = variance_weighted_result(mean_t, err_t)
 
@@ -698,9 +663,7 @@ def main(argv):
 
         # vegas
         vegas_integ = vegas.Integrator(ndims* [[0, 1]])
-        if FLAGS.function == 'HarmOs':
-            current_vegas_calls = hopi.calls
-        elif FLAGS.function in ['Box', 'Ring', 'Triangle']:
+        if FLAGS.function in ['Box', 'Ring', 'Triangle']:
             current_vegas_calls = integrand_np.calls
         else:
             current_vegas_calls = func.calls
@@ -715,10 +678,7 @@ def main(argv):
             vegas_stddevs.append(current_result.sdev)
             vegas_results.append(current_result)
 
-            if FLAGS.function == 'HarmOs':
-                vegas_calls.append(hopi.calls - current_vegas_calls)
-                current_vegas_calls = hopi.calls
-            elif FLAGS.function in ['Box', 'Ring', 'Triangle']:
+            if FLAGS.function in ['Box', 'Ring', 'Triangle']:
                 vegas_calls.append(integrand_np.calls - current_vegas_calls)
                 current_vegas_calls = integrand_np.calls
             else:
@@ -823,9 +783,7 @@ def main(argv):
 
         # vegas
         vegas_integ = vegas.Integrator(ndims* [[0, 1]])
-        if FLAGS.function == 'HarmOs':
-            current_vegas_calls = hopi.calls
-        elif FLAGS.function in ['Box', 'Ring', 'Triangle']:
+        if FLAGS.function in ['Box', 'Ring', 'Triangle']:
             current_vegas_calls = integrand_np.calls
         else:
             current_vegas_calls = func.calls
@@ -843,10 +801,7 @@ def main(argv):
             vegas_means.append(current_result.mean)
             vegas_stddevs.append(current_result.sdev)
             vegas_results.append(current_result)
-            if FLAGS.function == 'HarmOs':
-                vegas_calls.append(hopi.calls - current_vegas_calls)
-                current_vegas_calls = hopi.calls
-            elif FLAGS.function in ['Box', 'Ring', 'Triangle']:
+            if FLAGS.function in ['Box', 'Ring', 'Triangle']:
                 vegas_calls.append(integrand_np.calls - current_vegas_calls)
                 current_vegas_calls = integrand_np.calls
             else:
