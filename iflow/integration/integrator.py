@@ -67,7 +67,7 @@ class Integrator():
             for dim in shape:
                 variable_parameters *= dim
             self.total_parameters += variable_parameters
-        self.max_events = int(self.memory.free_memory/(7*(1+self.total_parameters)))
+        self.max_events = int(self.memory.free_memory/(8*(1+self.total_parameters)))+1
         print(f"Total Memory Available: {self.memory.total_memory} bytes")
         print(f"Free Memory Available: {self.memory.free_memory} bytes")
         print(f"Integrator memory footprint / event: {self.total_parameters*8} bytes")
