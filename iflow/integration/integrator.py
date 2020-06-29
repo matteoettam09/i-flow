@@ -6,6 +6,7 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 
 from . import divergences
+from .. import memory
 # from . import sinkhorn
 
 # pylint: disable=invalid-name
@@ -58,6 +59,19 @@ class Integrator():
         self.loss_func = self.divergence(loss_func)
         # self.samples = tf.constant(self.dist.sample(1))
         self.ckpt_manager = None
+        self.memory = memory.Memory()
+        self.total_parameters = 0
+        for variable in self.dist.trainable_variables:
+            shape = variable.get_shape()
+            variable_parameters = 1
+            for dim in shape:
+                variable_parameters *= dim
+            self.total_parameters += variable_parameters
+        self.max_events = int(self.memory.free_memory/(15*(1+self.total_parameters)))
+        print(f"Total Memory Available: {self.memory.total_memory} bytes")
+        print(f"Free Memory Available: {self.memory.free_memory} bytes")
+        print(f"Integrator memory footprint / event: {self.total_parameters*16} bytes")
+        print(f"Max number of events per iteration: {self.max_events}")
 
     def manager(self, ckpt_manager):
         """ Set the check point manager """
@@ -77,6 +91,10 @@ class Integrator():
             - uncertainty (optional): Integral statistical uncertainty
 
         """
+        if nsamples > self.max_events:
+            raise MemoryError(
+                "Too many events requested based on memory requirements. "
+                "Please reduce and run again.")
         samples = self.dist.sample(nsamples)
         # self.samples = tf.concat([self.samples, samples], 0)
         # if self.samples.shape[0] > 5001:
