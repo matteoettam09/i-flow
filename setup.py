@@ -49,6 +49,7 @@ setup(
         'matplotlib',
         'corner',
         'absl-py',
+        'psutil',
         ],
     # Provide executable script to run the main code
     entry_points={},
